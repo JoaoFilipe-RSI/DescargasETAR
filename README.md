@@ -8,7 +8,7 @@ Este projeto consiste num sistema integrado para digitalização, centralizaçã
 
 1.  **Digitalização**: Eliminação do papel através de formulários digitais padronizados.
 2.  **Centralização**: Histórico estruturado de descargas por cliente, ETAR e transportador.
-3.  **Controlo de Acessos**: Diferentes perfis de utilizadores (Clientes, Operadores ETAR, Técnicos de Laboratório, Gestão de Clientes).
+3.  **Controlo de Acessos**: Diferentes perfis de utilizadores (Clientes, Operadores ETAR, Técnicos de Laboratório, Gestão de Clientes/ETAR).
 4.  **Motor de Regras**:
     *   **Auto-Aprovação**: Validação de Whitelists e quotas diárias contratadas.
     *   **Gestão de Contingência**: Bloqueio e reencaminhamento automático em caso de indisponibilidade súbita de uma ETAR.
@@ -18,10 +18,13 @@ Este projeto consiste num sistema integrado para digitalização, centralizaçã
 
 ## 🛠️ Stack Tecnológica
 
-*   **Backend**: Node.js com Express (API RESTful).
+*   **Backend**: Node.js com Express (API RESTful) e HTTP Nativo.
 *   **Base de Dados**: PostgreSQL (gerido com pgAdmin 4).
+*   **Comunicação em Tempo Real**: Socket.io (servidor) e Socket.io-client (cliente).
+*   **Frontend**: React.js 18 + Vite 5 (PWA - Progressive Web App).
+*   **Estilização**: CSS Vanilla (Design System com variáveis personalizadas HSL e Glassmorphism).
 *   **Segurança**: JSON Web Tokens (JWT) e hashing de passwords com Bcrypt.
-*   **Alojamento (Planeado)**: AWS RDS (PostgreSQL) e AWS EC2/Elastic Beanstalk (API).
+*   **Alojamento (Planeado)**: AWS RDS (PostgreSQL) e AWS EC2/Elastic Beanstalk (API/Frontend).
 
 ---
 
@@ -31,15 +34,24 @@ Este projeto consiste num sistema integrado para digitalização, centralizaçã
 DescargasETAR/
 ├── Backend/                 # Código-fonte da API Node.js/Express
 │   ├── src/
-│   │   ├── config/          # Configurações de ligações (ex: db.js)
+│   │   ├── config/          # Ligações ao banco de dados e socket initializer
 │   │   ├── controllers/     # Controladores das rotas
 │   │   ├── middlewares/     # Middlewares globais e de segurança (JWT/RBAC)
 │   │   ├── routes/          # Definição dos endpoints da API
-│   │   ├── services/        # Lógica de negócio e regras (Services)
 │   │   ├── app.js           # Configuração da app Express
-│   │   └── server.js        # Inicialização do servidor HTTP
+│   │   └── server.js        # Inicialização conjunta Express e HTTP/Socket.io
 │   ├── .env                 # Variáveis de ambiente locais (não versionado)
 │   └── package.json         # Definições de dependências e scripts npm
+├── Frontend/                # Aplicação Cliente Single Page (PWA)
+│   ├── public/              # Ativos estáticos e ícones do manifesto PWA
+│   ├── src/
+│   │   ├── services/        # Consumo de API (Axios wrapper) e serviços WebSocket
+│   │   ├── views/           # Vistas/Dashboards (Login, Cliente, Operador, Técnico, Responsável)
+│   │   ├── App.css          # Estilos globais e componentes gráficos
+│   │   ├── index.css        # Variáveis de tema e design system
+│   │   └── App.jsx          # Controlador de rotas e ligação ao Socket global
+│   ├── package.json         # Scripts de compilação da PWA (workaround Node 18)
+│   └── vite.config.js       # Configuração do Vite e plugin de PWA offline
 ├── SQL/                     # Scripts de modelação do PostgreSQL
 │   ├── ER.png               # Diagrama Entidade-Relação
 │   ├── schema_gestao_descargas.sql  # Estrutura de tabelas e enums
@@ -82,12 +94,32 @@ DescargasETAR/
 *   Leitura/Validação de QR Code no portão da ETAR por Operadores autorizados (`GET /api/descargas/validar/:token`).
 *   Confirmação física de receção na ETAR com atualização de volume real, observações, idempotência e despoletamento automático de criação de amostras (`PUT /api/descargas/:id/receber`).
 
-### 5. Módulo de Laboratório & Amostras (Novo)
+### 5. Módulo de Laboratório & Amostras
 *   Instalação da dependência `pdfkit` para geração dinâmica de relatórios em formato PDF.
-*   **Check-in físico com triagem inteligente** (`PUT /api/amostras/receber/:token`): Triagem automática que decide se a amostra recolhida deve ser analisada (`EM_ANALISE`) ou descartada (`DESCARTADA`) com base nas regras de periodicidade do contrato do cliente (`POR_DESCARGA`, `SEMANAL`, `QUINZENAL`, `MENSAL`, etc.) e na sua última análise concluída.
+*   **Check-in físico com triagem inteligente** (`PUT /api/amostras/receber/:token`): Triagem automática que decide se a amostra recolhida deve ser analisada (`EM_ANALISE`) ou descartada (`DESCARTADA`) com base nas regras de periodicidade do contrato do cliente e na sua última análise concluída.
 *   **Introdução de Resultados** (`POST /api/amostras/:id/resultados`): Grelha de entrada de dados para o Técnico de Laboratório com validação física (ex: pH entre 0 e 14) e verificação rigorosa de parâmetros obrigatórios por cliente.
 *   **Validação Técnica e Conclusão** (`PUT /api/amostras/:id/validar`): Validação pelo Responsável, concluindo o fluxo e atualizando simultaneamente o estado da descarga para `CONCLUIDA` e a ficha do cliente com a data de recolha.
 *   **Boletim Analítico em PDF** (`GET /api/amostras/:id/boletim`): Geração automática do Boletim de Resultados analíticos oficial com assinatura e carimbo digital do responsável.
+
+### 6. Frontend React & PWA (Novo)
+*   **Design Harmonioso e Premium**: Baseado em CSS nativo, com uma paleta de cores moderna (azul marinho e verde-esmeralda), fontes do Google (Outfit e Inter) e suporte a modo escuro integrado.
+*   **Progressive Web App (PWA)**: Registado via `vite-plugin-pwa`. Inclui ícones adaptados a smartphones, manifesto de aplicação instalável e um Service Worker configurado para estratégias de caching offline.
+*   **Dashboards Baseados em Funções (RBAC)**:
+    *   **Cliente/Produtor**: Consulta de histórico, criação de pedidos de descarga, agendamento de veículos, exibição de QR Code e descarga direta de boletins em PDF.
+    *   **Operador da ETAR**: Scanner virtual (por token de segurança ou câmara simulada) e preenchimento de ficha de receção física com recolha ou não de amostra.
+    *   **Técnico de Laboratório**: Check-in de frascos na entrada e introdução simples de resultados de ensaio de bancada com validação automática.
+    *   **Responsável**: Ecrã consolidado para tomada de decisões e validação de relatórios (carimbo digital).
+
+### 7. Notificações WebSockets em Tempo Real (Novo)
+*   **Comunicação Instantânea**: Conexão bidirecional mantida pelo cliente Socket.io de forma global. O token JWT é enviado no momento da ligação para validação e posicionamento seguro do utilizador nas respetivas salas.
+*   **Encaminhamento Baseado em Salas**:
+    *   Clientes na sala `cliente-<id_cliente>`
+    *   Operadores na sala `etar-<id_etar>`
+    *   Técnicos na sala `laboratorio-tecnicos`
+    *   Responsáveis na sala `laboratorio-responsaveis`
+    *   Gestores de Clientes na sala `gestores-clientes`
+*   **Fluxo em Tempo Real**: Sempre que há uma alteração de estado relevante no backend (criação de pedidos, aprovações, agendamentos, check-ins ou análises concluídas), é disparada uma notificação para a sala correta.
+*   **Atualização de UI Transparente**: Ao receber uma notificação via WebSocket, os dashboards mostram um banner de alerta informativo verde e atualizam o estado local recarregando os dados em segundo plano, sem necessidade de atualizar manualmente a página.
 
 ---
 
@@ -110,12 +142,18 @@ Para correr os testes:
 
 ## 📋 Planeamento Próximas Etapas
 
-*   [ ] **Desenvolvimento do Frontend (React)**:
-    *   Criação da interface do Operador ETAR para leitura de QR Code/Receção de cargas.
-    *   Painel do Cliente para registo de pedidos de descarga, agendamento e download de Boletins Analíticos.
-    *   Painel de Bancada para o Técnico de Laboratório inserir ensaios.
-    *   Painel Administrativo/Gestor para decisão e validação de relatórios.
+*   [x] **Desenvolvimento do Frontend (React)**:
+    *   [x] Interface de login facilitada com atalhos de simulação.
+    *   [x] Painel do Cliente e geração de códigos QR.
+    *   [x] Ecrã de registo físico para o Operador da ETAR.
+    *   [x] Lista de bancada e entrada de ensaios do Técnico de Lab.
+    *   [x] Validações e assinaturas eletrónicas de Boletins.
+*   [x] **Notificações WebSockets em Tempo Real**:
+    *   [x] Inicializador do socket no backend com aperto de mão JWT.
+    *   [x] Lógica de Rooms baseada nos perfis e filiações.
+    *   [x] Emissão de gatilhos automáticos nos controladores de descargas/amostras.
+    *   [x] Subscrições e atualização automática da interface com alertas toasts.
 *   [ ] **Alojamento & Cloud (AWS)**:
-    *   Migração da BD local para AWS RDS (PostgreSQL).
-    *   Deploy da API REST para AWS Elastic Beanstalk ou EC2.
-
+    *   [ ] Migração da BD local para AWS RDS (PostgreSQL).
+    *   [ ] Deploy da API REST para AWS Elastic Beanstalk ou EC2.
+    *   [ ] Configuração do Frontend para produção na AWS S3/CloudFront.
