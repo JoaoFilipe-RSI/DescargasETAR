@@ -73,15 +73,19 @@ DescargasETAR/
 *   Implementação de middlewares para validar tokens JWT e aplicar controlo de acesso baseado em perfis (RBAC).
 *   Configuração e teste de conectividade e validação da segurança (pedidos com token válido vs bloqueios de acessos não autorizados).
 
+### 4. Módulo de Descargas
+*   Migração de esquema de BD para adicionar as colunas `qr_code_token` (UUID/Hash) às tabelas `descarga` e `amostra`.
+*   Associação física de operadores às suas respetivas ETARs na BD para fins de validação RBAC e de integridade territorial.
+*   Criação de pedidos de descarga (`POST /api/descargas`) com validação automática de disponibilidade da ETAR, Whitelists contratuais e quotas de descargas diárias (auto-aprovação).
+*   Aprovação/Rejeição manual de pedidos excedentes ou sem whitelist (`PUT /api/descargas/:id/decisao`).
+*   Agendamento logístico por clientes com gravação de matrículas, transportadora e geração do QR Code Token (`PUT /api/descargas/:id/agendar`).
+*   Leitura/Validação de QR Code no portão da ETAR por Operadores autorizados (`GET /api/descargas/validar/:token`).
+*   Confirmação física de receção na ETAR com atualização de volume real, observações, idempotência e despoletamento automático de criação de amostras (`PUT /api/descargas/:id/receber`).
+
 ---
 
 ## 📋 Planeamento Próximas Etapas (Backend)
 
-*   [ ] **Módulo de Descargas**:
-    *   Criação de pedidos de descarga (Produtor/Transportador).
-    *   Implementação das regras de Whitelist (auto-aprovação) e quota.
-    *   Agendamento logístico com geração do token para QR Code.
-    *   Confirmar receção física na ETAR e trigger de criação da amostra.
 *   [ ] **Módulo de Laboratório & Amostras**:
     *   Receção de amostras com verificação inteligente de periodicidade (analisar vs descartar).
     *   Introdução de resultados de parâmetros analíticos.
