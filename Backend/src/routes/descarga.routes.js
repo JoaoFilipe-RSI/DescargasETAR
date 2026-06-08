@@ -24,4 +24,7 @@ router.get('/validar/:token', verificarPerfis(['OPERADOR_ETAR', 'GESTOR_CLIENTES
 // PUT /api/descargas/:id/receber - Registar receção física na ETAR (Apenas Operadores de ETAR)
 router.put('/:id/receber', verificarPerfis(['OPERADOR_ETAR']), descargaController.registarRececao);
 
+// GET /api/descargas/:id/ficha - Download da Ficha de Descarga em PDF
+router.get('/:id/ficha', verificarPerfis(['CLIENTE', 'GESTOR_CLIENTES', 'OPERADOR_ETAR']), descargaController.gerarFichaDescargaPDF);
+
 module.exports = router;

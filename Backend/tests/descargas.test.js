@@ -273,4 +273,26 @@ describe('Módulo de Descargas - Testes de Integração', () => {
       });
     });
   });
+
+  describe('7. Download da Ficha de Descarga (GET /api/descargas/:id/ficha)', () => {
+    test('Deve gerar o PDF da Ficha de Descarga com sucesso', async () => {
+      const res = await request(app)
+        .get(`/api/descargas/${idDescargaSolicitada}/ficha`)
+        .set('Authorization', `Bearer ${tokens.gestorClientes}`);
+
+      expect(res.status).toBe(200);
+      expect(res.headers['content-type']).toBe('application/pdf');
+      
+      const pdfHeader = res.body.toString('binary', 0, 4);
+      expect(pdfHeader).toBe('%PDF');
+    });
+
+    test('Deve impedir (403) outro cliente de aceder à Ficha de Descarga', async () => {
+      const res = await request(app)
+        .get(`/api/descargas/${idDescargaSolicitada}/ficha`)
+        .set('Authorization', `Bearer ${tokens.clienteAAA}`); // idDescargaSolicitada é do clienteBBB (cliente 2)
+
+      expect(res.status).toBe(403);
+    });
+  });
 });

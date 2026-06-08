@@ -27,10 +27,13 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
   const [etarsList, setEtarsList] = useState([]);
   const [autorizacoesList, setAutorizacoesList] = useState([]);
   const [parametrosList, setParametrosList] = useState([]);
+  const [descargasConcluidas, setDescargasConcluidas] = useState([]);
+  const [amostrasConcluidas, setAmostrasConcluidas] = useState([]);
 
   // Modais de Criação
   const [showAddCliente, setShowAddCliente] = useState(false);
   const [showAddAutorizacao, setShowAddAutorizacao] = useState(false);
+  const [editingAutorizacaoId, setEditingAutorizacaoId] = useState(null);
 
   // Estados de Formulário
   const [newClienteData, setNewClienteData] = useState({
@@ -77,6 +80,12 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
         } else if (activeTab === 'etars') {
           const ets = await adminService.obterEtars();
           setEtarsList(ets);
+        } else if (activeTab === 'historicoDescargas') {
+          const data = await descargaService.obterDescargas({ estado: 'CONCLUIDA' });
+          setDescargasConcluidas(data);
+        } else if (activeTab === 'historicoAmostras') {
+          const data = await amostraService.obterAmostras({ estado: 'CONCLUIDA' });
+          setAmostrasConcluidas(data);
         }
       } else {
         // Responsável de Lab/ETAR
@@ -133,15 +142,28 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
     }
   };
 
-  // Gestor de Clientes: Criar Regra de Whitelist (Autorização)
-  const handleCreateAutorizacao = async (e) => {
+  // Gestor de Clientes: Criar/Editar Regra de Whitelist (Autorização)
+  const handleSaveAutorizacao = async (e) => {
     e.preventDefault();
     setError('');
     setSuccess('');
     try {
-      await adminService.criarAutorizacao(newAutorizacaoData);
-      setSuccess('Nova regra de whitelist registada com sucesso!');
+      if (editingAutorizacaoId) {
+        const currentAut = autorizacoesList.find(a => a.id_autorizacao === editingAutorizacaoId);
+        const activeState = currentAut ? currentAut.ativo : true;
+
+        await adminService.atualizarAutorizacao(editingAutorizacaoId, {
+          quota: newAutorizacaoData.quota,
+          auto_aprovacao: newAutorizacaoData.auto_aprovacao,
+          ativo: activeState
+        });
+        setSuccess('Regra de whitelist atualizada com sucesso!');
+      } else {
+        await adminService.criarAutorizacao(newAutorizacaoData);
+        setSuccess('Nova regra de whitelist registada com sucesso!');
+      }
       setShowAddAutorizacao(false);
+      setEditingAutorizacaoId(null);
       setNewAutorizacaoData({
         id_cliente: '',
         id_etar: '',
@@ -150,7 +172,7 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
       });
       loadData();
     } catch (err) {
-      setError(err.message || 'Erro ao criar regra de whitelist.');
+      setError(err.message || 'Erro ao processar regra de whitelist.');
     }
   };
 
@@ -293,6 +315,29 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
     }
   };
 
+  // Disponibilizar Boletim Analítico ao Cliente
+  const handleDisponibilizarBoletim = async (amostraId) => {
+    setError('');
+    setSuccess('');
+    try {
+      await amostraService.disponibilizarBoletim(amostraId);
+      setSuccess('Boletim Analítico disponibilizado para o cliente com sucesso!');
+      loadData();
+    } catch (err) {
+      setError(err.message || 'Erro ao disponibilizar Boletim.');
+    }
+  };
+
+  // Descarregar PDF da Ficha de Descarga
+  const handleDownloadFichaDescarga = async (idDescarga) => {
+    setError('');
+    try {
+      await descargaService.descarregarFichaPDF(idDescarga);
+    } catch (err) {
+      setError(err.message || 'Erro ao descarregar Ficha de Descarga.');
+    }
+  };
+
   // Carregar os resultados de uma amostra antes de abrir o modal de validação
   const handleOpenValidacao = async (amostra) => {
     setError('');
@@ -352,6 +397,12 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
               </button>
               <button className={`tab-btn ${activeTab === 'etars' ? 'active' : ''}`} onClick={() => { setActiveTab('etars'); setError(''); setSuccess(''); }}>
                 Disponibilidade ETARs
+              </button>
+              <button className={`tab-btn ${activeTab === 'historicoDescargas' ? 'active' : ''}`} onClick={() => { setActiveTab('historicoDescargas'); setError(''); setSuccess(''); }}>
+                Descargas Concluídas
+              </button>
+              <button className={`tab-btn ${activeTab === 'historicoAmostras' ? 'active' : ''}`} onClick={() => { setActiveTab('historicoAmostras'); setError(''); setSuccess(''); }}>
+                Boletins Analíticos
               </button>
             </div>
 
@@ -460,7 +511,16 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
                 <div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
                     <h3>Whitelists e Quotas Diárias</h3>
-                    <button className="btn btn-primary" onClick={() => setShowAddAutorizacao(true)}>
+                    <button className="btn btn-primary" onClick={() => {
+                      setEditingAutorizacaoId(null);
+                      setNewAutorizacaoData({
+                        id_cliente: '',
+                        id_etar: '',
+                        quota: '5',
+                        auto_aprovacao: true
+                      });
+                      setShowAddAutorizacao(true);
+                    }}>
                       <PlusCircle size={16} style={{ verticalAlign: 'middle', marginRight: '4px' }} /> Configurar Whitelist
                     </button>
                   </div>
@@ -496,9 +556,27 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
                                 </span>
                               </td>
                               <td>
-                                <button className="btn btn-secondary" style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem' }} onClick={() => handleToggleAutorizacaoStatus(a)}>
-                                  {a.ativo ? 'Desativar' : 'Ativar'}
-                                </button>
+                                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                  <button 
+                                    className="btn btn-primary" 
+                                    style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem' }}
+                                    onClick={() => {
+                                      setEditingAutorizacaoId(a.id_autorizacao);
+                                      setNewAutorizacaoData({
+                                        id_cliente: a.id_cliente,
+                                        id_etar: a.id_etar,
+                                        quota: a.quota.toString(),
+                                        auto_aprovacao: a.auto_aprovacao
+                                      });
+                                      setShowAddAutorizacao(true);
+                                    }}
+                                  >
+                                    Editar
+                                  </button>
+                                  <button className="btn btn-secondary" style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem' }} onClick={() => handleToggleAutorizacaoStatus(a)}>
+                                    {a.ativo ? 'Desativar' : 'Ativar'}
+                                  </button>
+                                </div>
                               </td>
                             </tr>
                           ))}
@@ -599,6 +677,123 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
                                 {e.disponivel ? <ToggleLeft size={16} /> : <ToggleRight size={16} />}
                                 {e.disponivel ? 'Suspender Receção' : 'Ativar Receção'}
                               </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* TAB: HISTÓRICO DE DESCARGAS CONCLUÍDAS */}
+            {activeTab === 'historicoDescargas' && (
+              <div>
+                <h3 style={{ marginBottom: '1.5rem' }}>Histórico de Descargas Concluídas</h3>
+                {loading ? (
+                  <p>A carregar descargas...</p>
+                ) : descargasConcluidas.length === 0 ? (
+                  <p>Não existem descargas concluídas registadas no sistema.</p>
+                ) : (
+                  <div className="table-container">
+                    <table className="data-table">
+                      <thead>
+                        <tr>
+                          <th>Ref/Data</th>
+                          <th>Cliente</th>
+                          <th>ETAR Destino</th>
+                          <th>Efluente</th>
+                          <th>Qtd. Real (Solicitada)</th>
+                          <th>Data Receção</th>
+                          <th>Ações</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {descargasConcluidas.map((d) => (
+                          <tr key={d.id_descarga}>
+                            <td>
+                              <strong>#{d.id_descarga}</strong>
+                              <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                                {new Date(d.data_pedido).toLocaleDateString()}
+                              </div>
+                            </td>
+                            <td>{d.cliente_nome}</td>
+                            <td>{d.etar_nome || `ETAR ${d.id_etar}`}</td>
+                            <td>{d.tipo_efluente}</td>
+                            <td>
+                              <strong>{d.quantidade_real ? `${d.quantidade_real} L` : 'N/A'}</strong>
+                              <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginLeft: '4px' }}>
+                                ({d.quantidade} L)
+                              </span>
+                            </td>
+                            <td>{d.data_rececao ? new Date(d.data_rececao).toLocaleString() : 'N/A'}</td>
+                            <td>
+                              <button 
+                                className="btn btn-primary" 
+                                style={{ padding: '0.35rem 0.7rem', fontSize: '0.8rem', backgroundColor: 'var(--success)' }} 
+                                onClick={() => handleDownloadFichaDescarga(d.id_descarga)}
+                              >
+                                <Download size={14} style={{ verticalAlign: 'middle', marginRight: '4px' }} /> Ficha PDF
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* TAB: HISTÓRICO DE BOLETINS ANALÍTICOS (AMOSTRAS CONCLUÍDAS) */}
+            {activeTab === 'historicoAmostras' && (
+              <div>
+                <h3 style={{ marginBottom: '1.5rem' }}>Boletins Analíticos de Amostras Concluídas</h3>
+                {loading ? (
+                  <p>A carregar boletins...</p>
+                ) : amostrasConcluidas.length === 0 ? (
+                  <p>Não existem amostras concluídas ou boletins validados no sistema.</p>
+                ) : (
+                  <div className="table-container">
+                    <table className="data-table">
+                      <thead>
+                        <tr>
+                          <th>Ref. Amostra</th>
+                          <th>Cliente</th>
+                          <th>ETAR Origem</th>
+                          <th>Data Conclusão</th>
+                          <th>Ações</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {amostrasConcluidas.map((am) => (
+                          <tr key={am.id_amostra}>
+                            <td><strong>{am.qr_code_token}</strong></td>
+                            <td>{am.cliente_nome}</td>
+                            <td>{am.etar_nome}</td>
+                            <td>{new Date(am.data_validacao).toLocaleDateString()}</td>
+                            <td style={{ display: 'flex', gap: '0.5rem' }}>
+                              <button 
+                                className="btn btn-primary" 
+                                style={{ padding: '0.35rem 0.7rem', fontSize: '0.8rem', backgroundColor: 'var(--success)' }} 
+                                onClick={() => handleDownloadBoletim(am)}
+                              >
+                                <Download size={14} style={{ verticalAlign: 'middle', marginRight: '4px' }} /> Boletim PDF
+                              </button>
+                              {am.boletim_publico ? (
+                                <span className="badge" style={{ backgroundColor: 'var(--success-light)', color: 'var(--success)', border: '1px solid var(--success)', padding: '0.35rem 0.7rem', fontSize: '0.8rem', display: 'inline-flex', alignItems: 'center', gap: '4px', borderRadius: 'var(--radius-sm)' }}>
+                                  <Check size={14} /> Disponibilizado
+                                </span>
+                              ) : (
+                                <button
+                                  className="btn btn-secondary"
+                                  style={{ padding: '0.35rem 0.7rem', fontSize: '0.8rem' }}
+                                  onClick={() => handleDisponibilizarBoletim(am.id_amostra)}
+                                >
+                                  Disponibilizar ao Cliente
+                                </button>
+                              )}
                             </td>
                           </tr>
                         ))}
@@ -833,18 +1028,18 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
           </div>
         )}
 
-        {/* Modal: Adicionar Autorização Whitelist */}
+        {/* Modal: Adicionar/Editar Autorização Whitelist */}
         {showAddAutorizacao && (
           <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: '1rem' }}>
             <div className="card" style={{ width: '100%', maxWidth: '450px', marginBottom: 0 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-                <h3>Configurar Whitelist / Limites</h3>
+                <h3>{editingAutorizacaoId ? 'Editar Whitelist / Limites' : 'Configurar Whitelist / Limites'}</h3>
                 <button style={{ background: 'none', border: 'none', cursor: 'pointer' }} onClick={() => setShowAddAutorizacao(false)}><X size={20} /></button>
               </div>
-              <form onSubmit={handleCreateAutorizacao}>
+              <form onSubmit={handleSaveAutorizacao}>
                 <div className="form-group">
                   <label className="form-label">Selecionar Cliente contratado *</label>
-                  <select className="form-input" required value={newAutorizacaoData.id_cliente} onChange={e => setNewAutorizacaoData({ ...newAutorizacaoData, id_cliente: e.target.value })}>
+                  <select className="form-input" required disabled={!!editingAutorizacaoId} value={newAutorizacaoData.id_cliente} onChange={e => setNewAutorizacaoData({ ...newAutorizacaoData, id_cliente: e.target.value })}>
                     <option value="">-- Escolha um cliente --</option>
                     {clientesList.map(c => (
                       <option key={c.id_cliente} value={c.id_cliente}>{c.nome}</option>
@@ -853,7 +1048,7 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
                 </div>
                 <div className="form-group">
                   <label className="form-label">Selecionar ETAR autorizada *</label>
-                  <select className="form-input" required value={newAutorizacaoData.id_etar} onChange={e => setNewAutorizacaoData({ ...newAutorizacaoData, id_etar: e.target.value })}>
+                  <select className="form-input" required disabled={!!editingAutorizacaoId} value={newAutorizacaoData.id_etar} onChange={e => setNewAutorizacaoData({ ...newAutorizacaoData, id_etar: e.target.value })}>
                     <option value="">-- Escolha uma ETAR --</option>
                     {etarsList.map(e => (
                       <option key={e.id_etar} value={e.id_etar}>{e.nome}</option>
@@ -877,7 +1072,7 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
                   </label>
                 </div>
                 <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem' }}>
-                  <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>Gravar Regra</button>
+                  <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>{editingAutorizacaoId ? 'Gravar Alterações' : 'Gravar Regra'}</button>
                   <button type="button" className="btn btn-secondary" onClick={() => setShowAddAutorizacao(false)}>Cancelar</button>
                 </div>
               </form>

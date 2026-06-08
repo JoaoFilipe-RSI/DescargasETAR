@@ -104,6 +104,30 @@ export const descargaService = {
       method: 'PUT',
       body: rececaoData
     });
+  },
+  
+  async descarregarFichaPDF(id) {
+    const token = localStorage.getItem('token');
+    const response = await fetch(`${API_URL}/descargas/${id}/ficha`, {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.erro || 'Erro ao descarregar PDF.');
+    }
+    
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Ficha_Descarga_${id}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
   }
 };
 
@@ -161,6 +185,12 @@ export const amostraService = {
     a.click();
     document.body.removeChild(a);
     window.URL.revokeObjectURL(url);
+  },
+
+  disponibilizarBoletim(id) {
+    return request(`/amostras/${id}/disponibilizar`, {
+      method: 'PUT'
+    });
   }
 };
 

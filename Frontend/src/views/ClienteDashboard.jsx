@@ -11,7 +11,7 @@ export default function ClienteDashboard({ user, onLogout, notifications, onMark
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  
+
   // Form para nova descarga
   const [newDescarga, setNewDescarga] = useState({
     id_etar: '1',
@@ -83,7 +83,7 @@ export default function ClienteDashboard({ user, onLogout, notifications, onMark
         nome_produtor_externo: newDescarga.nome_produtor_externo || null,
         morada_produtor_externo: newDescarga.morada_produtor_externo || null
       };
-      
+
       const res = await descargaService.criarPedido(payload);
       setSuccess(res.mensagem);
       setNewDescarga({
@@ -123,7 +123,7 @@ export default function ClienteDashboard({ user, onLogout, notifications, onMark
       // Obter amostra concluída correspondente à descarga
       const amostras = await amostraService.obterAmostras({ estado: 'CONCLUIDA' });
       const amostra = amostras.find(a => a.id_descarga === idDescarga);
-      
+
       if (!amostra) {
         throw new Error('Nenhum Boletim Analítico validado para esta descarga.');
       }
@@ -131,6 +131,16 @@ export default function ClienteDashboard({ user, onLogout, notifications, onMark
       await amostraService.descarregarBoletimPDF(amostra.id_amostra, amostra.qr_code_token);
     } catch (err) {
       setError(err.message || 'Erro ao efetuar download do Boletim.');
+    }
+  };
+
+  // Descarregar PDF da Ficha de Descarga
+  const handleDownloadFicha = async (idDescarga) => {
+    setError('');
+    try {
+      await descargaService.descarregarFichaPDF(idDescarga);
+    } catch (err) {
+      setError(err.message || 'Erro ao efetuar download da Ficha de Descarga.');
     }
   };
 
@@ -145,10 +155,10 @@ export default function ClienteDashboard({ user, onLogout, notifications, onMark
           <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
             Olá, <strong>{user.nome}</strong> (Cliente)
           </span>
-          <NotificationBell 
-            notifications={notifications} 
-            onMarkAsRead={onMarkAsRead} 
-            onMarkAllAsRead={onMarkAllAsRead} 
+          <NotificationBell
+            notifications={notifications}
+            onMarkAsRead={onMarkAsRead}
+            onMarkAllAsRead={onMarkAllAsRead}
           />
           <button className="btn btn-secondary" style={{ padding: '0.4rem 0.8rem' }} onClick={onLogout}>
             <LogOut size={16} /> Sair
@@ -215,8 +225,8 @@ export default function ClienteDashboard({ user, onLogout, notifications, onMark
                         <td>{d.tipo_efluente}</td>
                         <td>{d.quantidade} L</td>
                         <td>
-                          <span className={`badge badge-${d.estado_descarga.toLowerCase()}`}>
-                            {d.estado_descarga}
+                          <span className={`badge badge-${d.estado_descarga === 'RECEBIDA' ? 'concluida' : d.estado_descarga.toLowerCase()}`}>
+                            {d.estado_descarga === 'RECEBIDA' ? 'CONCLUIDA' : d.estado_descarga}
                           </span>
                         </td>
                         <td>
@@ -233,19 +243,31 @@ export default function ClienteDashboard({ user, onLogout, notifications, onMark
                               </button>
                             </div>
                           )}
-                          {d.estado_descarga === 'CONCLUIDA' && (
-                            <button className="btn btn-primary" style={{ padding: '0.35rem 0.7rem', fontSize: '0.8rem', backgroundColor: 'var(--success)' }} onClick={() => handleDownloadBoletim(d.id_descarga)}>
-                              <Download size={14} /> Boletim
-                            </button>
+                          {(d.estado_descarga === 'CONCLUIDA' || d.estado_descarga === 'RECEBIDA') && (
+                            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                              <button
+                                className="btn btn-primary"
+                                style={{ padding: '0.35rem 0.7rem', fontSize: '0.8rem', backgroundColor: 'var(--success)' }}
+                                onClick={() => handleDownloadFicha(d.id_descarga)}
+                              >
+                                <Download size={14} style={{ verticalAlign: 'middle', marginRight: '4px' }} /> Ficha
+                              </button>
+                              {d.id_amostra && d.boletim_publico && (
+                                <button
+                                  className="btn btn-primary"
+                                  style={{ padding: '0.35rem 0.7rem', fontSize: '0.8rem', backgroundColor: 'var(--success)' }}
+                                  onClick={() => handleDownloadBoletim(d.id_descarga)}
+                                >
+                                  <Download size={14} style={{ verticalAlign: 'middle', marginRight: '4px' }} /> Boletim
+                                </button>
+                              )}
+                            </div>
                           )}
                           {d.estado_descarga === 'SOLICITADA' && (
                             <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>A aguardar aprovação</span>
                           )}
                           {d.estado_descarga === 'REJEITADA' && (
-                            <span style={{ fontSize: '0.8rem', color: 'var(--danger)' }}>Rejeitada</span>
-                          )}
-                          {d.estado_descarga === 'RECEBIDA' && (
-                            <span style={{ fontSize: '0.8rem', color: 'var(--success)' }}>Recebida (Em análise)</span>
+                            <span style={{ fontSize: '0.8rem', color: 'var(--danger)', fontWeight: 600 }}>Descarga rejeitada</span>
                           )}
                         </td>
                       </tr>
@@ -319,7 +341,7 @@ export default function ClienteDashboard({ user, onLogout, notifications, onMark
                   {selectedDescarga.estado_descarga === 'AUTORIZADA' ? 'Agendar Camião Cisterna' : 'Guia Digital / QR Code'}
                 </h3>
               </div>
-              
+
               {selectedDescarga.estado_descarga === 'AUTORIZADA' ? (
                 <form onSubmit={handleSchedule}>
                   <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '1rem' }}>
@@ -347,7 +369,7 @@ export default function ClienteDashboard({ user, onLogout, notifications, onMark
                   <p style={{ fontSize: '0.9rem', marginBottom: '1rem' }}>
                     Apresente este código QR ao portão da <strong>{selectedDescarga.etar_nome}</strong> para validação de entrada do veículo.
                   </p>
-                  
+
                   <div className="qr-container" style={{ margin: '1rem 0' }}>
                     <div className="qr-code-box">
                       <QRCodeSVG value={selectedDescarga.qr_code_token} size={200} />
@@ -363,7 +385,7 @@ export default function ClienteDashboard({ user, onLogout, notifications, onMark
                     <div>Veículo: Trator {selectedDescarga.matricula_trator} {selectedDescarga.matricula_cisterna ? `| Cisterna ${selectedDescarga.matricula_cisterna}` : ''}</div>
                     <div>Volume Autorizado: {selectedDescarga.quantidade} Litros</div>
                   </div>
-                  
+
                   <button className="btn btn-secondary" style={{ width: '100%' }} onClick={() => setSelectedDescarga(null)}>Fechar</button>
                 </div>
               )}

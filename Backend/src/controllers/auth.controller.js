@@ -13,13 +13,15 @@ exports.login = async (req, res) => {
   }
 
   try {
-    // Procurar utilizador, o seu perfil e o id_cliente associado se for cliente
+    // Procurar utilizador, o seu perfil, o id_cliente associado se for cliente, e o nome da etar
     const query = `
       SELECT u.id_utilizador, u.nome, u.email, u.password_hash, u.ativo, u.id_etar,
-             p.nome AS perfil, c.id_cliente
+             p.nome AS perfil, c.id_cliente,
+             e.nome AS etar_nome
       FROM utilizador u
       JOIN perfil p ON u.id_perfil = p.id_perfil
       LEFT JOIN cliente c ON u.id_utilizador = c.id_utilizador
+      LEFT JOIN etar e ON u.id_etar = e.id_etar
       WHERE LOWER(u.email) = LOWER($1)
     `;
     const result = await pool.query(query, [email.toLowerCase().trim()]);
@@ -48,6 +50,7 @@ exports.login = async (req, res) => {
       email: user.email,
       perfil: user.perfil,
       id_etar: user.id_etar,
+      etar_nome: user.etar_nome,
       id_cliente: user.id_cliente
     };
 
@@ -64,6 +67,7 @@ exports.login = async (req, res) => {
         email: user.email,
         perfil: user.perfil,
         id_etar: user.id_etar,
+        etar_nome: user.etar_nome,
         id_cliente: user.id_cliente
       }
     });

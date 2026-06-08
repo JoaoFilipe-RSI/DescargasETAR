@@ -127,12 +127,13 @@ DescargasETAR/
 *   **Parametrização Analítica Contratual**: Associação dinâmica de parâmetros adicionais específicos que devem ser analisados para as amostras de cada cliente.
 *   **Contingência de ETARs**: Ativação/suspensão manual e imediata de receção física de efluentes numa ETAR, com envio automático de alertas via WebSockets para os operadores e gestores envolvidos.
 *   **Sininho de Alertas**: Painel de notificações interativo com registo persistente local das notificações recebidas (com data, hora e marcação de leitura).
+*   **Ficha de Descarga em PDF**: Geração e download automático de relatórios em formato PDF sintetizando os dados de logística, transportador, volumes (solicitado e real) e observações de receção na ETAR.
 
 ---
 
 ## 🧪 Como Executar os Testes
 
-Foi desenvolvida uma suite de **32 testes integrados** de ponta a ponta (Jest + Supertest) que validam todas as rotas e regras de negócio com limpeza automática da base de dados pós-execução.
+Foi desenvolvida uma suite de **34 testes integrados** de ponta a ponta (Jest + Supertest) que validam todas as rotas e regras de negócio com limpeza automática da base de dados pós-execução.
 
 Para correr os testes:
 1. Certifique-se de que a base de dados Postgres está ativa e configurada no ficheiro `Backend/.env`.

@@ -1,4 +1,5 @@
 const crypto = require('crypto');
+const PDFDocument = require('pdfkit');
 const pool = require('../config/db');
 
 /**
@@ -113,10 +114,12 @@ exports.obterDescargas = async (req, res) => {
   const { perfil, id_cliente: userClienteId, id_etar: userEtarId } = req.user;
 
   let query = `
-    SELECT d.*, c.nome AS cliente_nome, e.nome AS etar_nome
+    SELECT d.*, c.nome AS cliente_nome, e.nome AS etar_nome,
+           am.boletim_publico, am.id_amostra
     FROM descarga d
     JOIN cliente c ON d.id_cliente = c.id_cliente
     LEFT JOIN etar e ON d.id_etar = e.id_etar
+    LEFT JOIN amostra am ON d.id_descarga = am.id_descarga
     WHERE 1=1
   `;
   const values = [];
@@ -302,12 +305,12 @@ exports.validarTokenQR = async (req, res) => {
       FROM descarga d
       JOIN cliente c ON d.id_cliente = c.id_cliente
       LEFT JOIN etar e ON d.id_etar = e.id_etar
-      WHERE d.qr_code_token = $1
+      WHERE d.qr_code_token = $1 OR CAST(d.id_descarga AS TEXT) = $1
     `;
     const result = await pool.query(query, [token.trim()]);
 
     if (result.rows.length === 0) {
-      return res.status(404).json({ erro: 'QR Code inválido ou descarga não encontrada.' });
+      return res.status(404).json({ erro: 'QR Code ou ID inválido ou descarga não encontrada.' });
     }
 
     const descarga = result.rows[0];
@@ -318,13 +321,13 @@ exports.validarTokenQR = async (req, res) => {
     }
 
     return res.json({
-      mensagem: 'Código QR lido com sucesso.',
+      mensagem: 'Código QR ou ID validado com sucesso.',
       descarga
     });
 
   } catch (err) {
-    console.error('Erro ao validar token QR:', err);
-    return res.status(500).json({ erro: 'Erro interno ao validar QR Code.' });
+    console.error('Erro ao validar token/ID:', err);
+    return res.status(500).json({ erro: 'Erro interno ao validar QR Code ou ID.' });
   }
 };
 
@@ -438,5 +441,244 @@ exports.registarRececao = async (req, res) => {
     return res.status(500).json({ erro: 'Erro interno ao registar receção de descarga.' });
   } finally {
     client.release();
+  }
+};
+
+/**
+ * Gera a Ficha de Descarga em PDF (GET /api/descargas/:id/ficha).
+ */
+exports.gerarFichaDescargaPDF = async (req, res) => {
+  const { id } = req.params;
+  const { perfil, id_cliente: userClienteId } = req.user;
+
+  try {
+    const query = `
+      SELECT d.*, c.nome AS cliente_nome, c.email AS cliente_email, c.contacto AS cliente_contacto, c.morada AS cliente_morada,
+             e.nome AS etar_nome,
+             u_dec.nome AS decisor_nome, u_rec.nome AS operador_nome
+      FROM descarga d
+      JOIN cliente c ON d.id_cliente = c.id_cliente
+      LEFT JOIN etar e ON d.id_etar = e.id_etar
+      LEFT JOIN utilizador u_dec ON d.id_utilizador_decisao = u_dec.id_utilizador
+      LEFT JOIN utilizador u_rec ON d.id_utilizador_rececao = u_rec.id_utilizador
+      WHERE d.id_descarga = $1
+    `;
+    const descargaRes = await pool.query(query, [id]);
+
+    if (descargaRes.rows.length === 0) {
+      return res.status(404).json({ erro: 'Descarga não encontrada.' });
+    }
+
+    const d = descargaRes.rows[0];
+
+    if (perfil === 'CLIENTE' && d.id_cliente !== userClienteId) {
+      return res.status(403).json({ erro: 'Não tem permissão para aceder a este documento.' });
+    }
+
+    // Determinar se o cliente atua como Produtor ou Transportador
+    const isTransportador = d.nome_produtor_externo && d.nome_produtor_externo.trim().length > 0;
+
+    const formatarDataPT = (date) => {
+      if (!date) return '-';
+      const dt = new Date(date);
+      const dia = String(dt.getDate()).padStart(2, '0');
+      const mes = String(dt.getMonth() + 1).padStart(2, '0');
+      const ano = dt.getFullYear();
+      return `${dia}/${mes}/${ano}`;
+    };
+
+    const doc = new PDFDocument({ size: 'A4', margin: 40 });
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename=Ficha_Descarga_${d.id_descarga}.pdf`);
+    doc.pipe(res);
+
+    // --- 1. CABEÇALHO ---
+    // Logótipo simulado
+    doc.strokeColor('#CCCCCC').lineWidth(1);
+    doc.rect(40, 40, 90, 45).stroke();
+    doc.fontSize(8).fillColor('#666666').text('ENTIDADE GESTORA', 40, 58, { width: 90, align: 'center', bold: true });
+
+    // Título Principal
+    doc.fillColor('#1A365D').fontSize(12).text('FICHA DE DESCARGA DE ÁGUAS RESIDUAIS', 150, 48, { bold: true });
+    doc.fontSize(10).fillColor('#333333').text(`AUTOPORTANTES – Cliente / ${isTransportador ? 'Transportador' : 'Produtor'}`, 150, 64, { bold: true });
+    doc.fontSize(8.5).fillColor('#666666').text(`Documento N.º: DESC-${d.id_descarga}/${new Date(d.data_pedido).getFullYear()} | Token: ${d.qr_code_token || 'N/A'}`, 150, 78);
+
+    doc.strokeColor('#DDDDDD').moveTo(40, 95).lineTo(555, 95).stroke();
+
+    // --- 2. SECÇÃO PRODUTOR (Y=105) ---
+    doc.fillColor('#1A365D').fontSize(10).text('PRODUTOR', 40, 105, { bold: true });
+    doc.fontSize(8.5).fillColor('#333333');
+
+    let produtorNome = '';
+    let produtorMorada = '';
+    let produtorContacto = '';
+    let produtorTelefone = '';
+    let produtorEmail = '';
+
+    if (isTransportador) {
+      // Se o cliente é transportador, o produtor é o externo preenchido
+      produtorNome = d.nome_produtor_externo;
+      produtorMorada = d.morada_produtor_externo || 'Morada não especificada';
+      produtorContacto = 'N/A';
+      produtorTelefone = 'N/A';
+      produtorEmail = 'N/A';
+    } else {
+      // Se o cliente é o próprio produtor
+      produtorNome = d.cliente_nome;
+      produtorMorada = d.cliente_morada || 'Morada não especificada';
+      produtorContacto = d.cliente_contacto || 'N/A';
+      produtorTelefone = d.cliente_contacto || 'N/A'; // Usar contacto como telefone
+      produtorEmail = d.cliente_email || 'N/A';
+    }
+
+    doc.text(`Empresa: ${produtorNome}`, 45, 120);
+    doc.text(`Morada: ${produtorMorada}`, 45, 132);
+    doc.text(`Pessoa a contactar: ${produtorContacto}`, 45, 144);
+    doc.text(`Telefone: ${produtorTelefone}`, 280, 144);
+    doc.text(`E-mail: ${produtorEmail}`, 410, 144);
+
+    // Sub-secção Águas Residuais
+    doc.fillColor('#1A365D').fontSize(9).text('ÁGUAS RESIDUAIS', 45, 162, { bold: true });
+    doc.fontSize(8.5).fillColor('#333333');
+    doc.text('Tipo de água residual entregue para tratamento:', 45, 175);
+
+    // Checkboxes Tipo de Efluente
+    const tipo = d.tipo_efluente ? d.tipo_efluente.toLowerCase() : '';
+    const isInd = tipo.includes('industrial');
+    const isDom = tipo.includes('domest') || tipo.includes('domést');
+    const isMis = tipo.includes('mist');
+    const isLam = tipo.includes('lamas') || tipo.includes('fossa');
+
+    doc.text(`${isInd ? '[X]' : '[ ]'} Industrial`, 60, 190);
+    doc.text(`${isDom ? '[X]' : '[ ]'} Doméstica`, 170, 190);
+    doc.text(`${isMis ? '[X]' : '[ ]'} Mista`, 280, 190);
+    doc.text(`${isLam ? '[X]' : '[ ]'} Lamas Fossa Séptica`, 370, 190);
+
+    // Checkboxes ETAR
+    doc.text('ETAR utilizada:', 45, 208);
+    const etarNome = d.etar_nome ? d.etar_nome.toLowerCase() : '';
+    const isEtarNorte = etarNome.includes('norte');
+    const isEtarCentro = etarNome.includes('centro');
+    const isEtarSul = etarNome.includes('sul');
+
+    doc.text(`${isEtarNorte ? '[X]' : '[ ]'} ETAR Norte`, 60, 222);
+    doc.text(`${isEtarCentro ? '[X]' : '[ ]'} ETAR Centro`, 170, 222);
+    doc.text(`${isEtarSul ? '[X]' : '[ ]'} ETAR Sul`, 280, 222);
+
+    // Quantidade Solicitada e Recipientes
+    doc.text('Quantidade solicitada:', 45, 240);
+    doc.text(`${d.quantidade} litros`, 60, 252, { bold: true });
+    const quantM3 = d.quantidade ? (Number(d.quantidade) / 1000).toFixed(2) : '0.00';
+    doc.text(`${quantM3} m³`, 170, 252, { bold: true });
+
+    doc.text('N.º Embalagens ou Recipientes:', 280, 240);
+    doc.text(`${d.numero_recipientes || 'N/A'}`, 280, 252, { bold: true });
+
+    // Declaração do Produtor se for layout de Produtor
+    if (!isTransportador) {
+      doc.fillColor('#666666').fontSize(7.5).text('Declaração: certifico a exactidão das declarações prestadas e que a água residual/lama fossa séptica está conforme acordado na autorização de descarga concedida.', 45, 272, { width: 500 });
+      doc.fontSize(8.5).fillColor('#333333').text(`Ass. Cliente (Produtor): ${d.cliente_nome}`, 45, 292);
+      doc.text(`Data: ${formatarDataPT(d.data_pedido)}`, 400, 292);
+      doc.strokeColor('#EEEEEE').moveTo(40, 312).lineTo(555, 312).stroke();
+    } else {
+      doc.strokeColor('#EEEEEE').moveTo(40, 272).lineTo(555, 272).stroke();
+    }
+
+    // --- 3. SECÇÃO TRANSPORTADOR (Y dinâmico) ---
+    const transY = isTransportador ? 285 : 325;
+    doc.fillColor('#1A365D').fontSize(10).text('TRANSPORTADOR', 40, transY, { bold: true });
+    doc.fontSize(8.5).fillColor('#333333');
+
+    let transportadorNome = '';
+    let transportadorMorada = '';
+    let transportadorContacto = '';
+    let transportadorTelefone = '';
+    let transportadorEmail = '';
+
+    if (isTransportador) {
+      // Se for transportador, o transportador é o cliente
+      transportadorNome = d.cliente_nome;
+      transportadorMorada = d.cliente_morada || 'Morada não especificada';
+      transportadorContacto = d.cliente_contacto || 'N/A';
+      transportadorTelefone = d.cliente_contacto || 'N/A';
+      transportadorEmail = d.cliente_email || 'N/A';
+    } else {
+      // Se for produtor, a transportadora é externa
+      transportadorNome = d.empresa_transportadora || 'N/A';
+      transportadorMorada = 'N/A';
+      transportadorContacto = 'N/A';
+      transportadorTelefone = 'N/A';
+      transportadorEmail = 'N/A';
+    }
+
+    doc.text(`Empresa / Nome: ${transportadorNome}`, 45, transY + 15);
+    doc.text(`Morada: ${transportadorMorada}`, 45, transY + 27);
+    doc.text(`Pessoa a contactar: ${transportadorContacto}`, 45, transY + 39);
+    doc.text(`Telefone: ${transportadorTelefone}`, 280, transY + 39);
+    doc.text(`E-mail: ${transportadorEmail}`, 410, transY + 39);
+    doc.text(`Matrícula Camião/Tractor: ${d.matricula_trator || 'N/A'}`, 45, transY + 51);
+    doc.text(`Matrícula Cisterna: ${d.matricula_cisterna || 'N/A'}`, 280, transY + 51);
+
+    // Declaração se for Transportador
+    if (isTransportador) {
+      doc.fillColor('#666666').fontSize(7.5).text('Declaração: certifico a exactidão das declarações prestadas e que a água residual/lama fossa séptica está conforme acordado na autorização de descarga concedida.', 45, transY + 67, { width: 500 });
+      doc.fontSize(8.5).fillColor('#333333').text(`Ass. Transportador: ${d.cliente_nome}`, 45, transY + 87);
+      doc.text(`Data: ${formatarDataPT(d.data_agendamento || d.data_pedido)}`, 400, transY + 87);
+      doc.strokeColor('#EEEEEE').moveTo(40, transY + 107).lineTo(555, transY + 107).stroke();
+    } else {
+      doc.strokeColor('#EEEEEE').moveTo(40, transY + 68).lineTo(555, transY + 68).stroke();
+    }
+
+    // --- 4. SECÇÃO ENTIDADE GESTORA (Y dinâmico) ---
+    const gestoraY = isTransportador ? 405 : 405;
+    doc.fillColor('#1A365D').fontSize(10).text('ENTIDADE GESTORA', 40, gestoraY, { bold: true });
+    doc.fontSize(8.5).fillColor('#333333');
+    doc.text('Pessoa a contactar: Gestor de cliente', 45, gestoraY + 15);
+    doc.text('Telefone: +351 252 000 000', 45, gestoraY + 27);
+    doc.text('E-mail: gestao.clientes@entidadegestora.pt', 280, gestoraY + 27);
+
+    // Recepção Aceite
+    doc.fillColor('#1A365D').fontSize(9).text('Receção Aceite na ETAR', 45, gestoraY + 45, { bold: true });
+    doc.fontSize(8.5).fillColor('#333333');
+    doc.text('Quantidade real recebida:', 45, gestoraY + 58);
+    const quantRealLitros = d.quantidade_real ? `${d.quantidade_real} litros` : 'Ainda não recebida';
+    const quantRealM3 = d.quantidade_real ? `${(Number(d.quantidade_real) / 1000).toFixed(2)} m³` : '-';
+    doc.text(quantRealLitros, 60, gestoraY + 70, { bold: true });
+    doc.text(quantRealM3, 170, gestoraY + 70, { bold: true });
+
+    doc.text(`Data da Receção: ${formatarDataPT(d.data_rececao)}`, 280, gestoraY + 58);
+    doc.text(`Operador Recetor: ${d.operador_nome || 'N/A'}`, 280, gestoraY + 70);
+
+    doc.strokeColor('#EEEEEE').moveTo(40, gestoraY + 90).lineTo(555, gestoraY + 90).stroke();
+
+    // --- 5. OBSERVAÇÕES (Y dinâmico) ---
+    const obsY = gestoraY + 102;
+    doc.fillColor('#1A365D').fontSize(10).text('OBSERVAÇÕES', 40, obsY, { bold: true });
+    doc.fontSize(8.5).fillColor('#333333');
+    doc.text(d.observacoes || 'Nenhuma observação registada.', 45, obsY + 15, { width: 500 });
+
+    // --- 6. ASSINATURAS E VALIDAÇÃO DIGITAL ---
+    const signY = obsY + 55;
+    doc.fontSize(8.5).fillColor('#333333');
+    doc.text('Validação da Entidade Gestora:', 40, signY);
+    doc.fontSize(9).text(d.decisor_nome || 'Gestor de Contratos', 40, signY + 15, { bold: true });
+    doc.fontSize(7.5).fillColor('#666666').text('Documento autorizado digitalmente pelo Gestor.', 40, signY + 27, { italic: true });
+
+    doc.fontSize(8.5).fillColor('#333333').text('Operador de Receção ETAR:', 330, signY);
+    doc.fontSize(9).text(d.operador_nome || 'Operador ETAR', 330, signY + 15, { bold: true });
+    doc.fontSize(7.5).fillColor('#666666').text(d.data_rececao ? 'Receção física assinada digitalmente na ETAR.' : 'A aguardar receção física.', 330, signY + 27, { italic: true });
+
+    // Rodapé de cópias
+    doc.fontSize(7).fillColor('#999999').text('Este impresso foi assinado eletronicamente e emitido pelo sistema centralizado de gestão de descargas.', 40, 775, { align: 'center' });
+    doc.text('Pág. 1 de 1', 510, 790);
+
+    doc.end();
+
+  } catch (err) {
+    console.error('Erro ao gerar PDF da ficha de descarga:', err);
+    if (!res.headersSent) {
+      return res.status(500).json({ erro: 'Erro interno ao gerar PDF da ficha de descarga.' });
+    }
   }
 };

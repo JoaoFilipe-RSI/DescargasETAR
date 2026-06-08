@@ -223,9 +223,14 @@ exports.obterDetalhesAmostra = async (req, res) => {
 
     const amostra = result.rows[0];
 
-    // Verificar se o cliente tem acesso a esta amostra
-    if (perfil === 'CLIENTE' && amostra.id_cliente !== userClienteId) {
-      return res.status(403).json({ erro: 'Não tem permissão para aceder aos dados desta amostra.' });
+    // Verificar se o cliente tem acesso a esta amostra e se foi disponibilizada
+    if (perfil === 'CLIENTE') {
+      if (amostra.id_cliente !== userClienteId) {
+        return res.status(403).json({ erro: 'Não tem permissão para aceder aos dados desta amostra.' });
+      }
+      if (!amostra.boletim_publico) {
+        return res.status(403).json({ erro: 'Este boletim ainda não foi disponibilizado para consulta.' });
+      }
     }
 
     // Obter resultados analíticos
@@ -481,12 +486,6 @@ exports.validarAmostra = async (req, res) => {
     await client.query('COMMIT');
 
     const { enviarNotificacao } = require('../config/socket');
-    enviarNotificacao(`cliente-${amostra.id_cliente}`, 'boletim-disponivel', {
-      id_amostra: id,
-      id_descarga: amostra.id_descarga,
-      mensagem: 'O Boletim Analítico da sua descarga foi validado e encontra-se disponível para download.'
-    });
-
     enviarNotificacao('gestores-clientes', 'amostra-concluida', {
       id_amostra: id,
       id_descarga: amostra.id_descarga,
@@ -514,17 +513,20 @@ exports.gerarBoletimPDF = async (req, res) => {
   try {
     // Buscar todos os dados para o boletim
     const query = `
-      SELECT a.id_amostra, a.estado_amostra, a.data_recolha, a.data_validacao, a.qr_code_token AS amostra_token,
+      SELECT a.id_amostra, a.estado_amostra, a.data_recolha, a.data_rececao_lab, a.data_inicio_analise, a.data_fim_analise, a.data_validacao, a.qr_code_token AS amostra_token,
+             a.boletim_publico,
              d.id_descarga, d.id_cliente, d.data_rececao, d.tipo_efluente, d.quantidade_real, d.matricula_trator, d.empresa_transportadora,
              c.nome AS cliente_nome, c.morada AS cliente_morada, c.contacto AS cliente_contacto,
              e.nome AS etar_nome,
-             u_tec.nome AS tecnico_nome, u_resp.nome AS responsavel_nome
+             u_tec.nome AS tecnico_nome, u_resp.nome AS responsavel_nome,
+             u_rec.nome AS operador_nome
       FROM amostra a
       JOIN descarga d ON a.id_descarga = d.id_descarga
       JOIN cliente c ON d.id_cliente = c.id_cliente
       LEFT JOIN etar e ON d.id_etar = e.id_etar
       LEFT JOIN utilizador u_tec ON a.id_tecnico = u_tec.id_utilizador
       LEFT JOIN utilizador u_resp ON a.id_responsavel = u_resp.id_utilizador
+      LEFT JOIN utilizador u_rec ON d.id_utilizador_rececao = u_rec.id_utilizador
       WHERE a.id_amostra = $1
     `;
     const sampleRes = await pool.query(query, [id]);
@@ -535,9 +537,14 @@ exports.gerarBoletimPDF = async (req, res) => {
 
     const info = sampleRes.rows[0];
 
-    // Verificar se o cliente tem acesso a esta amostra
-    if (perfil === 'CLIENTE' && info.id_cliente !== userClienteId) {
-      return res.status(403).json({ erro: 'Não tem permissão para aceder a este boletim.' });
+    // Verificar se o cliente tem acesso a esta amostra e se foi disponibilizada
+    if (perfil === 'CLIENTE') {
+      if (info.id_cliente !== userClienteId) {
+        return res.status(403).json({ erro: 'Não tem permissão para aceder a este boletim.' });
+      }
+      if (!info.boletim_publico) {
+        return res.status(403).json({ erro: 'Este boletim analítico ainda não foi disponibilizado pela gestão.' });
+      }
     }
 
     if (info.estado_amostra !== 'CONCLUIDA') {
@@ -554,120 +561,272 @@ exports.gerarBoletimPDF = async (req, res) => {
     const resultsRes = await pool.query(resQuery, [id]);
     const resultados = resultsRes.rows;
 
-    // Iniciar o documento PDF
-    const doc = new PDFDocument({ margin: 50 });
+    // Utilitários de formatação de valores PT-PT
+    const formatarDataPT = (date) => {
+      if (!date) return '-';
+      const d = new Date(date);
+      const dia = String(d.getDate()).padStart(2, '0');
+      const mes = String(d.getMonth() + 1).padStart(2, '0');
+      const ano = d.getFullYear();
+      return `${dia}-${mes}-${ano}`;
+    };
 
-    // Enviar cabeçalhos HTTP para download do ficheiro
+    const formatarNumeroPT = (val) => {
+      if (val === undefined || val === null) return '-';
+      const num = Number(val);
+      if (isNaN(num)) return val;
+      
+      // Se for >= 100, formatar em notação científica: ex. 120 -> 1,2E+2
+      if (num >= 100) {
+        const exponent = Math.floor(Math.log10(num));
+        const base = num / Math.pow(10, exponent);
+        const baseStr = base.toFixed(1).replace('.', ',');
+        return `${baseStr}E+${exponent}`;
+      }
+      
+      return num.toFixed(1).replace('.', ',');
+    };
+
+    const formatarIncerteza = (val) => {
+      if (val === undefined || val === null) return '-';
+      const num = Number(val);
+      if (isNaN(num) || num <= 0) return '-';
+      if (num < 1) {
+        return `±${Math.round(num * 100)}%`;
+      }
+      return `±${Math.round(num)}%`;
+    };
+
+    // Iniciar o documento PDF (A4 com margens de 40pt)
+    const doc = new PDFDocument({ size: 'A4', margin: 40 });
+
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename=Boletim_Analitico_Amostra_${info.id_amostra}.pdf`);
     doc.pipe(res);
 
-    // Layout do PDF
+    // --- 1. CABEÇALHO (Y=40 a Y=95) ---
+    // Logótipos SGS (Simulados à esquerda)
+    doc.strokeColor('#CCCCCC').lineWidth(1);
+    doc.circle(55, 60, 12).stroke();
+    doc.circle(72, 60, 12).stroke();
+    doc.fontSize(6).fillColor('#666666').text('SGS', 49, 58, { width: 12, align: 'center' });
+    doc.fontSize(6).fillColor('#666666').text('SGS', 66, 58, { width: 12, align: 'center' });
 
-    // Título Principal
-    doc.fillColor('#1A365D')
-       .fontSize(20)
-       .text('BOLETIM ANALÍTICO DE DESCARGA', { align: 'center', bold: true });
+    // Informação do Laboratório
+    doc.fontSize(7.5).fillColor('#333333');
+    doc.text('Laboratório de Ensaios Analíticos da Entidade Gestora', 100, 42, { bold: true });
+    doc.text('Localização: Zona Industrial de Santo Tirso', 100, 52);
+    doc.text('Morada completa: Rua dos Trigos, Pavilhão G', 100, 62);
+    doc.text('4780 - 143 Santo Tirso', 100, 72);
+
+    // Bloco de Acreditação IPAC/ilac-MRA (Simulados à direita)
+    // Caixa IPAC
+    doc.rect(415, 42, 60, 45).stroke();
+    doc.fontSize(6.5).fillColor('#333333').text('IPAC', 415, 46, { width: 60, align: 'center', bold: true });
+    doc.fontSize(5).text('acreditação', 415, 54, { width: 60, align: 'center' });
+    doc.fontSize(5).text('L0336\nISO/IEC 17025\nEnsaios', 415, 62, { width: 60, align: 'center' });
+
+    // Caixa ilac-MRA
+    doc.rect(485, 42, 70, 45).stroke();
+    doc.fontSize(7).fillColor('#111111').text('ilac-MRA', 485, 47, { width: 70, align: 'center', bold: true });
+    doc.fontSize(4).text('-------------------------', 485, 56, { width: 70, align: 'center' });
+    doc.fontSize(5.5).text('Accredited\nCalibration & Testing', 485, 62, { width: 70, align: 'center' });
+
+    // --- 2. BANNER DE TÍTULO (Y=100 a Y=125) ---
+    const anoVal = info.data_validacao ? new Date(info.data_validacao).getFullYear() : new Date().getFullYear();
+    doc.rect(40, 100, 515, 22).fill('#0B5A96');
+    doc.fillColor('#FFFFFF').fontSize(11).text(`BOLETIM DE ENSAIOS N.º ${info.id_amostra}/${anoVal}`, 40, 106, { align: 'center', bold: true });
+
+    // --- 3. METADADOS E INFORMAÇÃO GERAL (Y=132 a Y=225) ---
+    // Caixa da Esquerda (Origem e Colheita)
+    doc.strokeColor('#DDDDDD').lineWidth(1).rect(40, 132, 250, 93).stroke();
+    doc.fontSize(7.5).fillColor('#333333');
+    doc.text(`Referência do cliente: -`, 46, 138);
+    doc.text(`Produto: Água residual (Efluente não tratado)`, 46, 150);
+    doc.text(`Especificação a cumprir: Não aplicável`, 46, 162);
+    doc.text(`Origem da amostra: Efluente ${info.tipo_efluente}`, 46, 174);
+    doc.text(`Local de amostragem: Durante a descarga na ${info.etar_nome}`, 46, 186);
+    doc.text(`Colheita de amostra: Amostragem não incluída na acreditação`, 46, 198, { width: 240 });
+    doc.text(`Amostra pontual - Realizada pelo Operador (${info.operador_nome || 'N/A'})`, 46, 208, { width: 240 });
+
+    // Caixa da Direita (Dados de Cliente e Datas)
+    doc.strokeColor('#DDDDDD').rect(305, 132, 250, 93).stroke();
+    doc.fontSize(8.5).text(info.cliente_nome, 312, 138, { bold: true });
+    doc.fontSize(7.5).text(info.cliente_morada || 'Morada não registada', 312, 150, { width: 236 });
     
-    doc.fontSize(10)
-       .fillColor('#4A5568')
-       .text(`Amostra Ref: ${info.amostra_token}`, { align: 'center' })
-       .moveDown(1.5);
+    // Divisória interna na caixa direita
+    doc.strokeColor('#EEEEEE').moveTo(305, 170).lineTo(555, 170).stroke();
 
-    // Linha divisória
-    doc.strokeColor('#E2E8F0').lineWidth(1).moveTo(50, 100).lineTo(562, 100).stroke();
+    doc.fontSize(7.5).fillColor('#333333');
+    doc.text(`Amostragem: ${formatarDataPT(info.data_recolha)}`, 312, 175);
+    doc.text(`Receção da amostra: ${formatarDataPT(info.data_rececao)}`, 312, 186);
+    doc.text(`Início dos ensaios: ${formatarDataPT(info.data_rececao_lab || info.data_recolha)}`, 312, 197);
+    doc.text(`Conclusão dos ensaios: ${formatarDataPT(info.data_validacao)}`, 312, 208);
+    doc.fontSize(8).text(`N.º Amostra: ${info.id_amostra}/${anoVal}`, 440, 175, { bold: true });
 
-    // 1. Dados do Cliente e ETAR
-    doc.moveDown(1);
-    doc.fontSize(12).fillColor('#2B6CB0').text('1. Informação Geral', { bold: true }).moveDown(0.3);
-    
-    doc.fontSize(10).fillColor('#2D3748');
-    
-    // Tabela de Informações Gerais
-    const col1Left = 50;
-    const col2Left = 300;
-    let currentY = doc.y;
-
-    doc.text(`Cliente: ${info.cliente_nome}`, col1Left, currentY);
-    doc.text(`ETAR de Receção: ${info.etar_nome}`, col2Left, currentY);
-    currentY += 16;
-    doc.text(`Contacto: ${info.cliente_contacto || 'N/A'}`, col1Left, currentY);
-    doc.text(`Tipo de Efluente: ${info.tipo_efluente}`, col2Left, currentY);
-    currentY += 16;
-    doc.text(`Transportadora: ${info.empresa_transportadora || 'N/A'}`, col1Left, currentY);
-    doc.text(`Matrícula Trator: ${info.matricula_trator || 'N/A'}`, col2Left, currentY);
-    currentY += 16;
-    doc.text(`Volume Real: ${info.quantidade_real} Litros`, col1Left, currentY);
-    doc.text(`Data de Recolha: ${new Date(info.data_recolha).toLocaleString()}`, col2Left, currentY);
-    currentY += 16;
-    doc.text(`Data de Receção: ${new Date(info.data_rececao).toLocaleString()}`, col1Left, currentY);
-    doc.text(`Data de Validação: ${new Date(info.data_validacao).toLocaleString()}`, col2Left, currentY);
-
-    doc.y = currentY + 30;
-
-    // Linha divisória
-    doc.strokeColor('#E2E8F0').lineWidth(1).moveTo(50, doc.y).lineTo(562, doc.y).stroke();
-    doc.moveDown(1.5);
-
-    // 2. Tabela de Parâmetros Analíticos
-    doc.fontSize(12).fillColor('#2B6CB0').text('2. Parâmetros Analíticos Obtidos', { bold: true }).moveDown(0.5);
-
+    // --- 4. TABELA DE RESULTADOS (Y=235 em diante) ---
     // Cabeçalho da Tabela
-    const tableTop = doc.y;
-    doc.fontSize(9).fillColor('#718096');
-    
-    doc.text('Parâmetro', 55, tableTop, { width: 120, bold: true });
-    doc.text('Valor', 180, tableTop, { width: 60, align: 'right', bold: true });
-    doc.text('Unidade', 260, tableTop, { width: 60, bold: true });
-    doc.text('Método Analítico', 340, tableTop, { width: 140, bold: true });
-    doc.text('Incerteza', 500, tableTop, { width: 60, align: 'right', bold: true });
+    doc.rect(40, 235, 515, 18).fill('#5E5E5E');
+    doc.fillColor('#FFFFFF').fontSize(7.5);
+    doc.text('Parâmetro', 46, 240, { bold: true });
+    doc.text('Método de ensaio / Técnica analítica', 46, 240, { bold: true, align: 'center', width: 260 });
+    doc.text('Resultado', 310, 240, { bold: true, align: 'right', width: 60 });
+    doc.text('Incerteza expandida', 380, 240, { bold: true, align: 'center', width: 75 });
+    doc.text('Unidades', 465, 240, { bold: true, align: 'center', width: 55 });
+    doc.text('VL', 525, 240, { bold: true, align: 'center', width: 25 });
 
-    doc.strokeColor('#A0AEC0').lineWidth(1.5).moveTo(50, tableTop + 15).lineTo(562, tableTop + 15).stroke();
-    
-    let rowY = tableTop + 22;
-    doc.fillColor('#2D3748');
+    let rowY = 258;
+    doc.fillColor('#333333');
 
     resultados.forEach((resItem) => {
-      // Adicionar linha se o espaço acabar
-      if (rowY > 700) {
+      if (rowY > 600) {
         doc.addPage();
         rowY = 50;
       }
 
-      doc.text(resItem.parametro_name || 'N/A', 55, rowY, { width: 120 });
-      doc.text(Number(resItem.valor).toFixed(2), 180, rowY, { width: 60, align: 'right' });
-      doc.text(resItem.unidade || 'mg/L', 260, rowY, { width: 60 });
-      doc.text(resItem.metodo || 'SMEWW / Interno', 340, rowY, { width: 140 });
-      doc.text(resItem.incerteza ? `± ${Number(resItem.incerteza).toFixed(2)}` : 'N/A', 500, rowY, { width: 60, align: 'right' });
+      // Parâmetro e Método
+      doc.fontSize(7.5).text(resItem.parametro_nome || 'N/A', 46, rowY, { bold: true });
+      doc.fontSize(6.5).fillColor('#666666').text(resItem.metodo || 'SMEWW / Interno', 46, rowY + 9, { italic: true });
+      doc.fillColor('#333333');
 
-      // Linha fina separadora de registos
-      doc.strokeColor('#EDF2F7').lineWidth(0.8).moveTo(50, rowY + 14).lineTo(562, rowY + 14).stroke();
-      rowY += 20;
+      // Resultado
+      doc.fontSize(7.5).text(formatarNumeroPT(resItem.valor), 310, rowY + 3, { align: 'right', width: 60 });
+      // Incerteza
+      doc.text(formatarIncerteza(resItem.incerteza), 380, rowY + 3, { align: 'center', width: 75 });
+      // Unidades
+      doc.text(resItem.unidade || 'mg/L', 465, rowY + 3, { align: 'center', width: 55 });
+      // VL
+      doc.text('-', 525, rowY + 3, { align: 'center', width: 25 });
+
+      rowY += 23;
     });
 
-    doc.y = rowY + 20;
-    doc.moveDown(2);
+    rowY += 10;
+    
+    // --- 5. OBSERVAÇÕES E FIM (Y dinâmico) ---
+    if (rowY > 650) {
+      doc.addPage();
+      rowY = 50;
+    }
 
-    // 3. Assinatura/Validação Digital
-    const signY = doc.y;
-    doc.strokeColor('#E2E8F0').lineWidth(1).moveTo(50, signY).lineTo(562, signY).stroke();
-    doc.moveDown(1.5);
+    doc.fontSize(8).fillColor('#333333');
+    doc.text(`Observações: ${info.observacoes || 'Sem observações adicionais a registar.'}`, 40, rowY);
+    
+    rowY += 20;
+    doc.fontSize(8).fillColor('#999999').text('------- FIM DO DOCUMENTO -------', 40, rowY, { align: 'center' });
 
-    doc.fontSize(10).fillColor('#718096').text('Documento eletrónico validado digitalmente por:', 50, doc.y);
-    doc.fontSize(11).fillColor('#1A202C').text(info.responsavel_nome || 'Diretor de Laboratório', 50, doc.y + 15, { bold: true });
-    doc.fontSize(9).fillColor('#718096').text('Responsável Técnico / Responsável de Laboratório', 50, doc.y + 15);
+    // --- 6. ASSINATURAS (Y fixo ou dinâmico dependendo da página, vamos colocar dinâmico ou no fundo) ---
+    rowY += 25;
+    if (rowY > 680) {
+      doc.addPage();
+      rowY = 50;
+    }
 
-    doc.fontSize(10).fillColor('#718096').text('Técnico Executor:', 350, signY + 18);
-    doc.fontSize(11).fillColor('#1A202C').text(info.tecnico_nome || 'Técnico de Laboratório', 350, signY + 33, { bold: true });
+    doc.fontSize(8).fillColor('#666666');
+    doc.text(`Emitido em: ${new Date().toLocaleString('pt-PT')}`, 40, rowY);
+    doc.text('Relatório de Ensaio emitido eletronicamente.', 40, rowY + 12, { italic: true });
 
-    // Fim do documento
+    // Área do Técnico e Responsável
+    doc.fontSize(7.5).fillColor('#333333');
+    doc.text('Técnico Executor:', 280, rowY);
+    doc.fontSize(8).text(info.tecnico_nome || 'N/A', 280, rowY + 12, { bold: true });
+    
+    doc.fontSize(7.5).text('A Responsável Técnica e Qualidade do Laboratório:', 400, rowY, { width: 155 });
+    doc.fontSize(8).text(info.responsavel_nome || 'N/A', 400, rowY + 18, { bold: true });
+
+    // --- 7. RODAPÉ FIXO (Notas legais e contactos no fundo da folha) ---
+    // Usamos Y fixo no fundo da página (A4 tem 842 de altura)
+    const renderFooters = (pDoc) => {
+      pDoc.fontSize(6).fillColor('#777777');
+      pDoc.text('Legenda: SMEWW - Standard Methods for Examination of Water and Wastewater; ISO - International Standard Organization; EN - Norma Europeia; PIQ - Método interno do Laboratório da Entidade Gestora; WHO - World Health Organization; NP - Norma Portuguesa; EAM - Espectrometria de Absorção Molecular; EAA - Espectrometria de Absorção Atómica; VL - Valor limite.', 40, 725, { width: 515 });
+      pDoc.text('(1) O ensaio não está incluído no âmbito da acreditação; (2) Ensaio contratado a laboratório externo; (3) Os resultados aplicam-se exclusivamente à amostra ensaiada.', 40, 755, { width: 515 });
+      
+      pDoc.strokeColor('#DDDDDD').lineWidth(0.8).moveTo(40, 775).lineTo(555, 775).stroke();
+      pDoc.fontSize(6.5).fillColor('#555555').text('ENTIDADE GESTORA - Tratamento de Águas Residuais - Rua dos Trigos, Santo Tirso | Tel: +351 252 000 000 | geral@entidadegestora.pt', 40, 782, { align: 'center', width: 515 });
+      pDoc.fontSize(7).text('Lab 7.8A-08.20', 40, 798);
+      pDoc.text('Pág. 1 de 1', 505, 798);
+    };
+
+    renderFooters(doc);
+
     doc.end();
 
   } catch (err) {
     console.error('Erro ao gerar PDF do boletim:', err);
-    // Se ocorrer erro antes de enviar headers
     if (!res.headersSent) {
       return res.status(500).json({ erro: 'Erro interno ao gerar PDF do boletim.' });
     }
+  }
+};
+
+/**
+ * 7. Disponibilizar Boletim Analítico ao Cliente (PUT /api/amostras/:id/disponibilizar)
+ */
+exports.disponibilizarBoletim = async (req, res) => {
+  const { id } = req.params;
+  const id_gestor = req.user.id_utilizador;
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // Verificar se existe a amostra e se está CONCLUIDA
+    const checkQuery = `
+      SELECT a.*, d.id_cliente, d.id_descarga
+      FROM amostra a
+      JOIN descarga d ON a.id_descarga = d.id_descarga
+      WHERE a.id_amostra = $1
+      FOR UPDATE
+    `;
+    const checkRes = await client.query(checkQuery, [id]);
+
+    if (checkRes.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ erro: 'Amostra não encontrada.' });
+    }
+
+    const amostra = checkRes.rows[0];
+
+    if (amostra.estado_amostra !== 'CONCLUIDA') {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ erro: 'Apenas boletins de amostras concluídas podem ser disponibilizados.' });
+    }
+
+    if (amostra.boletim_publico) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ erro: 'Este boletim já se encontra disponível para o cliente.' });
+    }
+
+    // 1. Atualizar boletim_publico para true
+    await client.query('UPDATE amostra SET boletim_publico = TRUE WHERE id_amostra = $1', [id]);
+
+    // 2. Registar no histórico
+    const histQuery = `
+      INSERT INTO historico (entidade, id_entidade, acao, descricao, id_utilizador)
+      VALUES ('AMOSTRA', $1, 'DISPONIBILIZAR', 'Boletim analítico disponibilizado para o cliente pela gestão.', $2)
+    `;
+    await client.query(histQuery, [id, id_gestor]);
+
+    await client.query('COMMIT');
+
+    // 3. Enviar notificação em tempo real ao cliente
+    const { enviarNotificacao } = require('../config/socket');
+    enviarNotificacao(`cliente-${amostra.id_cliente}`, 'boletim-disponivel', {
+      id_amostra: id,
+      id_descarga: amostra.id_descarga,
+      mensagem: 'O Boletim Analítico da sua descarga foi disponibilizado para download.'
+    });
+
+    return res.json({
+      mensagem: 'Boletim analítico disponibilizado para o cliente com sucesso.',
+      id_amostra: id
+    });
+
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('Erro ao disponibilizar boletim:', err);
+    return res.status(500).json({ erro: 'Erro interno ao disponibilizar boletim.' });
+  } finally {
+    client.release();
   }
 };

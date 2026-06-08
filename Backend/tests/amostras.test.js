@@ -22,6 +22,11 @@ const tokens = {
     JWT_SECRET,
     { expiresIn: '1h' }
   ),
+  gestorClientes: jwt.sign(
+    { id_utilizador: 9, perfil: 'GESTOR_CLIENTES', nome: 'Mariana Costa' },
+    JWT_SECRET,
+    { expiresIn: '1h' }
+  ),
 };
 
 describe('Módulo de Laboratório & Amostras - Testes de Integração', () => {
@@ -170,7 +175,25 @@ describe('Módulo de Laboratório & Amostras - Testes de Integração', () => {
   });
 
   describe('4. Download do Boletim Analítico em PDF (GET /api/amostras/:id/boletim)', () => {
-    test('Deve gerar o ficheiro PDF do boletim com sucesso para download', async () => {
+    test('Deve falhar (403) para o cliente se o boletim ainda não foi disponibilizado pela gestão', async () => {
+      const res = await request(app)
+        .get(`/api/amostras/${testAmostraId}/boletim`)
+        .set('Authorization', `Bearer ${tokens.clienteAAA}`);
+
+      expect(res.status).toBe(403);
+      expect(res.body.erro).toContain('ainda não foi disponibilizado');
+    });
+
+    test('Deve permitir ao gestor disponibilizar o boletim analítico com sucesso', async () => {
+      const res = await request(app)
+        .put(`/api/amostras/${testAmostraId}/disponibilizar`)
+        .set('Authorization', `Bearer ${tokens.gestorClientes}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.mensagem).toContain('disponibilizado para o cliente com sucesso');
+    });
+
+    test('Deve gerar o ficheiro PDF do boletim com sucesso para download do cliente após disponibilização', async () => {
       const res = await request(app)
         .get(`/api/amostras/${testAmostraId}/boletim`)
         .set('Authorization', `Bearer ${tokens.clienteAAA}`);
@@ -178,7 +201,6 @@ describe('Módulo de Laboratório & Amostras - Testes de Integração', () => {
       expect(res.status).toBe(200);
       expect(res.headers['content-type']).toBe('application/pdf');
       
-      // O corpo da resposta deve ser um Buffer contendo a assinatura padrão do ficheiro PDF (%PDF)
       const pdfHeader = res.body.toString('binary', 0, 4);
       expect(pdfHeader).toBe('%PDF');
     });

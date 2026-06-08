@@ -21,6 +21,9 @@ router.post('/:id/resultados', verificarPerfis(['TECNICO_LAB']), amostraControll
 // PUT /api/amostras/:id/validar - Validação técnica (Responsável de Laboratório ou de ETAR)
 router.put('/:id/validar', verificarPerfis(['RESPONSAVEL_LAB', 'RESPONSAVEL_ETAR']), amostraController.validarAmostra);
 
+// PUT /api/amostras/:id/disponibilizar - Disponibilizar boletim ao cliente (Gestor de Clientes)
+router.put('/:id/disponibilizar', verificarPerfis(['GESTOR_CLIENTES']), amostraController.disponibilizarBoletim);
+
 // GET /api/amostras/:id/boletim - Download do Boletim Analítico em PDF
 router.get('/:id/boletim', verificarPerfis(['CLIENTE', 'RESPONSAVEL_LAB', 'RESPONSAVEL_ETAR', 'GESTOR_CLIENTES']), amostraController.gerarBoletimPDF);
 

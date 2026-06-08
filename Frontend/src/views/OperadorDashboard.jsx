@@ -64,15 +64,16 @@ export default function OperadorDashboard({ user, onLogout, notifications, onMar
   }, []);
 
   // Validar QR Code / Token
-  const handleValidateQR = async (e) => {
-    if (e) e.preventDefault();
-    if (!qrInput.trim()) return;
+  const handleValidateQR = async (e, overrideToken = null) => {
+    if (e && e.preventDefault) e.preventDefault();
+    const token = overrideToken || qrInput;
+    if (!token || !token.trim()) return;
 
     setLoading(true);
     setError('');
     setSuccess('');
     try {
-      const res = await descargaService.validarTokenQR(qrInput.trim());
+      const res = await descargaService.validarTokenQR(token.trim());
       setValidatedDescarga(res.descarga);
       setRececaoData({
         quantidade_real: res.descarga.quantidade.toString(), // Pré-preenche com o autorizado
@@ -119,7 +120,7 @@ export default function OperadorDashboard({ user, onLogout, notifications, onMar
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
           <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-            <strong>{user.nome}</strong> (Op. ETAR {user.id_etar})
+            <strong>{user.nome}</strong> ({user.etar_nome || `Op. ETAR ${user.id_etar}`})
           </span>
           <NotificationBell 
             notifications={notifications} 
@@ -295,9 +296,9 @@ export default function OperadorDashboard({ user, onLogout, notifications, onMar
                           </div>
                         </td>
                         <td>{a.quantidade} L</td>
-                        <td><code style={{ fontSize: '0.8rem', fontWeight: 'bold' }}>{a.qr_code_token}</code></td>
+                        <td><code style={{ fontSize: '0.8rem', fontWeight: 'bold' }}>{a.qr_code_token || `ID: ${a.id_descarga}`}</code></td>
                         <td>
-                          <button className="btn btn-primary" style={{ padding: '0.3rem 0.6rem', fontSize: '0.75rem' }} onClick={() => { setQrInput(a.qr_code_token); handleValidateQR(null); }}>
+                          <button className="btn btn-primary" style={{ padding: '0.3rem 0.6rem', fontSize: '0.75rem' }} onClick={() => { setQrInput(a.qr_code_token || a.id_descarga.toString()); handleValidateQR(null, a.qr_code_token || a.id_descarga.toString()); }}>
                             Receber
                           </button>
                         </td>

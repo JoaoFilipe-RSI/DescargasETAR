@@ -95,6 +95,7 @@ CREATE TABLE amostra (
     data_validacao TIMESTAMP,
     id_tecnico INT,
     id_responsavel INT,
+    boletim_publico BOOLEAN DEFAULT FALSE,
     FOREIGN KEY (id_descarga) REFERENCES descarga(id_descarga),
     FOREIGN KEY (id_tecnico) REFERENCES utilizador(id_utilizador),
     FOREIGN KEY (id_responsavel) REFERENCES utilizador(id_utilizador)

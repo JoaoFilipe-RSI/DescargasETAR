@@ -84,9 +84,9 @@ INSERT INTO autorizacao (id_cliente, id_etar, quota, ativo, auto_aprovacao) VALU
 
 -- SOLICITADA
 INSERT INTO descarga (
-    id_cliente, data_pedido, tipo_efluente, quantidade, numero_recipientes, estado_descarga
+    id_cliente, id_etar, data_pedido, tipo_efluente, quantidade, numero_recipientes, estado_descarga
 ) VALUES (
-    1, NOW() - INTERVAL '1 day', 'Domestico', 100, 2, 'SOLICITADA'
+    1, 1, NOW() - INTERVAL '1 day', 'Domestico', 100, 2, 'SOLICITADA'
 );
 
 -- AUTORIZADA
