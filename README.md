@@ -10,9 +10,9 @@ Este projeto consiste num sistema integrado para digitalização, centralizaçã
 2.  **Centralização**: Histórico estruturado de descargas por cliente, ETAR e transportador.
 3.  **Controlo de Acessos**: Diferentes perfis de utilizadores (Clientes, Operadores ETAR, Técnicos de Laboratório, Gestão de Clientes/ETAR).
 4.  **Motor de Regras**:
-    *   **Auto-Aprovação**: Validação de Whitelists e quotas diárias contratadas.
+    *   **Auto-Aprovação Semanal**: Validação de Whitelists e quotas diárias contratadas (válida de segunda a sexta-feira). Ao fim de semana, qualquer pedido entra em estado `SOLICITADA` para aprovação manual pelo Gestor de Clientes.
     *   **Gestão de Contingência**: Bloqueio e reencaminhamento automático em caso de indisponibilidade súbita de uma ETAR.
-    *   **Triagem de Amostras**: Motor para decidir se uma amostra deve ser analisada ou descartada com base na periodicidade contratada.
+    *   **Triagem de Amostras**: Motor para decidir se uma amostra deve ser analisada ou descartada com base na periodicidade contratada e data da última recolha.
 
 ---
 
@@ -87,8 +87,9 @@ DescargasETAR/
 
 ### 4. Módulo de Descargas
 *   Migração de esquema de BD para adicionar as colunas `qr_code_token` (UUID/Hash) às tabelas `descarga` e `amostra`.
-*   Associação física de operadores às suas respetivas ETARs na BD para fins de validação RBAC e de integridade territorial.
+*   Associação física de operadores/responsáveis às suas respetivas ETARs na BD para fins de validação RBAC e integridade territorial.
 *   Criação de pedidos de descarga (`POST /api/descargas`) com validação automática de disponibilidade da ETAR, Whitelists contratuais e quotas de descargas diárias (auto-aprovação).
+*   **Preenchimento Condicional**: Lógica condicional na submissão de pedidos. Para Clientes Transportadores, é obrigatório preencher os dados do Produtor Externo. Para Clientes Produtores, esta secção é totalmente omitida.
 *   Aprovação/Rejeição manual de pedidos excedentes ou sem whitelist (`PUT /api/descargas/:id/decisao`).
 *   Agendamento logístico por clientes com gravação de matrículas, transportadora e geração do QR Code Token (`PUT /api/descargas/:id/agendar`).
 *   Leitura/Validação de QR Code no portão da ETAR por Operadores autorizados (`GET /api/descargas/validar/:token`).
@@ -96,19 +97,21 @@ DescargasETAR/
 
 ### 5. Módulo de Laboratório & Amostras
 *   Instalação da dependência `pdfkit` para geração dinâmica de relatórios em formato PDF.
-*   **Check-in físico com triagem inteligente** (`PUT /api/amostras/receber/:token`): Triagem automática que decide se a amostra recolhida deve ser analisada (`EM_ANALISE`) ou descartada (`DESCARTADA`) com base nas regras de periodicidade do contrato do cliente e na sua última análise concluída.
-*   **Introdução de Resultados** (`POST /api/amostras/:id/resultados`): Grelha de entrada de dados para o Técnico de Laboratório com validação física (ex: pH entre 0 e 14) e verificação rigorosa de parâmetros obrigatórios por cliente.
+*   **Check-in físico com triagem inteligente e lista de recolhidas** (`PUT /api/amostras/receber/:token`): Triagem automática com base em periodicidade de contrato. Adicionado dropdown no Frontend que lista em tempo real as amostras recolhidas para facilidade de check-in.
+*   **Introdução de Resultados**: Grelha de entrada de dados para o Técnico de Laboratório (botão "Resultados") com ocultação automática dos ensaios adicionais (Azoto Kjeldahl e Zinco) quando não contratualizados. Ativação manual via checkbox e limpeza automática ao desmarcar.
 *   **Validação Técnica e Conclusão** (`PUT /api/amostras/:id/validar`): Validação pelo Responsável, concluindo o fluxo e atualizando simultaneamente o estado da descarga para `CONCLUIDA` e a ficha do cliente com a data de recolha.
 *   **Boletim Analítico em PDF** (`GET /api/amostras/:id/boletim`): Geração automática do Boletim de Resultados analíticos oficial com assinatura e carimbo digital do responsável.
 
 ### 6. Frontend React & PWA (Novo)
 *   **Design Harmonioso e Premium**: Baseado em CSS nativo, com uma paleta de cores moderna (azul marinho e verde-esmeralda), fontes do Google (Outfit e Inter) e suporte a modo escuro integrado.
+*   **Layout Confortável e Adaptativo**: Alargamento do bloco central dos dashboards do Técnico e do Operador/Responsável para `1000px` para acomodar convenientemente as colunas das tabelas e os ensaios analíticos.
 *   **Progressive Web App (PWA)**: Registado via `vite-plugin-pwa`. Inclui ícones adaptados a smartphones, manifesto de aplicação instalável e um Service Worker configurado para estratégias de caching offline.
 *   **Dashboards Baseados em Funções (RBAC)**:
-    *   **Cliente/Produtor**: Consulta de histórico, criação de pedidos de descarga, agendamento de veículos, exibição de QR Code e descarga direta de boletins em PDF.
+    *   **Cliente/Produtor**: Consulta de histórico, criação de pedidos de descarga, agendamento de veículos, exibição de QR Code e visualização inline da Ficha de Descarga (PDF) sem download forçado.
     *   **Operador da ETAR**: Scanner virtual (por token de segurança ou câmara simulada) e preenchimento de ficha de receção física com recolha ou não de amostra.
     *   **Técnico de Laboratório**: Check-in de frascos na entrada e introdução simples de resultados de ensaio de bancada com validação automática.
     *   **Responsável**: Ecrã consolidado para tomada de decisões e validação de relatórios (carimbo digital).
+    *   **Responsável da ETAR**: Dashboard unificado que inclui as funções do Operador de ETAR e um separador inicial de "Histórico de descargas" por mês e ano, exibindo cartões de estatísticas (volume e cisternas) e abrindo a Ficha de Descarga (PDF) diretamente no navegador (inline) sem download forçado.
 
 ### 7. Notificações WebSockets em Tempo Real (Novo)
 *   **Comunicação Instantânea**: Conexão bidirecional mantida pelo cliente Socket.io de forma global. O token JWT é enviado no momento da ligação para validação e posicionamento seguro do utilizador nas respetivas salas.
