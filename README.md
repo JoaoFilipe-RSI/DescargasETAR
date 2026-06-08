@@ -82,11 +82,40 @@ DescargasETAR/
 *   Leitura/Validação de QR Code no portão da ETAR por Operadores autorizados (`GET /api/descargas/validar/:token`).
 *   Confirmação física de receção na ETAR com atualização de volume real, observações, idempotência e despoletamento automático de criação de amostras (`PUT /api/descargas/:id/receber`).
 
+### 5. Módulo de Laboratório & Amostras (Novo)
+*   Instalação da dependência `pdfkit` para geração dinâmica de relatórios em formato PDF.
+*   **Check-in físico com triagem inteligente** (`PUT /api/amostras/receber/:token`): Triagem automática que decide se a amostra recolhida deve ser analisada (`EM_ANALISE`) ou descartada (`DESCARTADA`) com base nas regras de periodicidade do contrato do cliente (`POR_DESCARGA`, `SEMANAL`, `QUINZENAL`, `MENSAL`, etc.) e na sua última análise concluída.
+*   **Introdução de Resultados** (`POST /api/amostras/:id/resultados`): Grelha de entrada de dados para o Técnico de Laboratório com validação física (ex: pH entre 0 e 14) e verificação rigorosa de parâmetros obrigatórios por cliente.
+*   **Validação Técnica e Conclusão** (`PUT /api/amostras/:id/validar`): Validação pelo Responsável, concluindo o fluxo e atualizando simultaneamente o estado da descarga para `CONCLUIDA` e a ficha do cliente com a data de recolha.
+*   **Boletim Analítico em PDF** (`GET /api/amostras/:id/boletim`): Geração automática do Boletim de Resultados analíticos oficial com assinatura e carimbo digital do responsável.
+
 ---
 
-## 📋 Planeamento Próximas Etapas (Backend)
+## 🧪 Como Executar os Testes
 
-*   [ ] **Módulo de Laboratório & Amostras**:
-    *   Receção de amostras com verificação inteligente de periodicidade (analisar vs descartar).
-    *   Introdução de resultados de parâmetros analíticos.
-    *   Validação técnica e geração automática do Boletim Analítico em PDF.
+Foi desenvolvida uma suite de **23 testes integrados** de ponta a ponta (Jest + Supertest) que validam todas as rotas e regras de negócio com limpeza automática da base de dados pós-execução.
+
+Para correr os testes:
+1. Certifique-se de que a base de dados Postgres está ativa e configurada no ficheiro `Backend/.env`.
+2. Aceda à pasta do backend:
+   ```bash
+   cd Backend
+   ```
+3. Execute o comando de testes:
+   ```bash
+   npm test
+   ```
+
+---
+
+## 📋 Planeamento Próximas Etapas
+
+*   [ ] **Desenvolvimento do Frontend (React)**:
+    *   Criação da interface do Operador ETAR para leitura de QR Code/Receção de cargas.
+    *   Painel do Cliente para registo de pedidos de descarga, agendamento e download de Boletins Analíticos.
+    *   Painel de Bancada para o Técnico de Laboratório inserir ensaios.
+    *   Painel Administrativo/Gestor para decisão e validação de relatórios.
+*   [ ] **Alojamento & Cloud (AWS)**:
+    *   Migração da BD local para AWS RDS (PostgreSQL).
+    *   Deploy da API REST para AWS Elastic Beanstalk ou EC2.
+

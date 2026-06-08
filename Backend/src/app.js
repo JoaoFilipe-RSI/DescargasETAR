@@ -12,11 +12,13 @@ const testRoutes = require('./routes/test.routes');
 const dbRoutes = require('./routes/db.routes');
 const authRoutes = require('./routes/auth.routes');
 const descargaRoutes = require('./routes/descarga.routes');
+const amostraRoutes = require('./routes/amostra.routes');
 
 // Registo de Rotas
 app.use('/api/test', testRoutes);
 app.use('/api/db', dbRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/descargas', descargaRoutes);
+app.use('/api/amostras', amostraRoutes);
 
 module.exports = app;

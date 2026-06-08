@@ -186,7 +186,12 @@ UPDATE parametro
 SET obrigatorio = TRUE
 WHERE tipo_parametro = 'FISICO_QUIMICO';
 
+-- 4. Alteração à tabela DESCARGA e AMOSTRA
+	-- 4.1 Adicionar coluna qr_code_token à tabela descarga
+ALTER TABLE descarga ADD COLUMN IF NOT EXISTS qr_code_token TEXT UNIQUE;
 
+	-- 4.2 Adicionar coluna qr_code_token à tabela amostra
+ALTER TABLE amostra ADD COLUMN IF NOT EXISTS qr_code_token TEXT UNIQUE;
 	
 -- 5. Restrições para a tabela DESCARGA
 ALTER TABLE descarga ADD CONSTRAINT chk_data_rececao_agendamento 
