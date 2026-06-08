@@ -106,7 +106,7 @@ export const descargaService = {
     });
   },
   
-  async descarregarFichaPDF(id) {
+  async abrirFichaPDF(id) {
     const token = localStorage.getItem('token');
     const response = await fetch(`${API_URL}/descargas/${id}/ficha`, {
       headers: {
@@ -116,18 +116,12 @@ export const descargaService = {
     
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.erro || 'Erro ao descarregar PDF.');
+      throw new Error(errorData.erro || 'Erro ao obter PDF.');
     }
     
     const blob = await response.blob();
     const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `Ficha_Descarga_${id}.pdf`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    window.URL.revokeObjectURL(url);
+    window.open(url, '_blank');
   }
 };
 

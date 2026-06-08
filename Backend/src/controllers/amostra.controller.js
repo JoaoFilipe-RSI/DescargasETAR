@@ -138,6 +138,17 @@ exports.receberAmostra = async (req, res) => {
     `;
     await client.query(histQuery, [amostra.id_amostra, descricaoHist, id_tecnico]);
 
+    // Obter parâmetros obrigatórios + parâmetros específicos ativos do cliente para mostrar na triagem
+    const paramsQuery = `
+      SELECT p.id_parametro, p.nome, p.tipo_parametro, p.unidade_default, p.obrigatorio
+      FROM parametro p
+      LEFT JOIN cliente_parametro cp ON p.id_parametro = cp.id_parametro AND cp.id_cliente = $1 AND cp.ativo = TRUE
+      WHERE p.obrigatorio = TRUE OR (cp.id_parametro IS NOT NULL)
+      ORDER BY p.obrigatorio DESC, p.id_parametro ASC
+    `;
+    const paramsRes = await client.query(paramsQuery, [amostra.id_cliente]);
+    const parametrosCliente = paramsRes.rows;
+
     await client.query('COMMIT');
 
     return res.json({
@@ -145,7 +156,11 @@ exports.receberAmostra = async (req, res) => {
         ? 'Amostra recebida e triada para ANÁLISE.' 
         : 'Amostra recebida e DESCARTADA automaticamente (periodicidade cumprida).',
       triagem: deveAnalisar ? 'ANALISAR' : 'DESCARTAR',
-      amostra: amostraAtualizada
+      amostra: {
+        ...amostraAtualizada,
+        cliente_nome: amostra.cliente_nome
+      },
+      parametros: parametrosCliente
     });
 
   } catch (err) {
@@ -165,7 +180,13 @@ exports.obterAmostras = async (req, res) => {
   const { perfil, id_cliente: userClienteId } = req.user;
 
   let query = `
-    SELECT a.*, d.id_cliente, c.nome AS cliente_nome, d.tipo_efluente, e.nome AS etar_nome
+    SELECT a.*, d.id_cliente, c.nome AS cliente_nome, d.tipo_efluente, e.nome AS etar_nome,
+           COALESCE(
+             (SELECT json_agg(cp.id_parametro) 
+              FROM cliente_parametro cp 
+              WHERE cp.id_cliente = d.id_cliente AND cp.ativo = TRUE),
+             '[]'::json
+           ) AS parametros_contratuais
     FROM amostra a
     JOIN descarga d ON a.id_descarga = d.id_descarga
     JOIN cliente c ON d.id_cliente = c.id_cliente

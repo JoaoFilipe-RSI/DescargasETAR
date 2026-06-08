@@ -5,7 +5,9 @@ import { webSocketService } from '../services/websocket';
 import NotificationBell from '../components/NotificationBell';
 
 export default function OperadorDashboard({ user, onLogout, notifications, onMarkAsRead, onMarkAllAsRead }) {
-  const [activeView, setActiveView] = useState('scanner'); // 'scanner', 'receber', 'agendados', 'sucesso'
+  const [activeView, setActiveView] = useState(
+    user.perfil === 'RESPONSAVEL_ETAR' ? 'rececionadas' : 'scanner'
+  ); // 'scanner', 'receber', 'agendados', 'sucesso', 'rececionadas'
   const [qrInput, setQrInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -25,6 +27,12 @@ export default function OperadorDashboard({ user, onLogout, notifications, onMar
   // Lista de agendados para a ETAR do operador
   const [agendadasList, setAgendadasList] = useState([]);
 
+  // Histórico de descargas concluídas/recebidas
+  const [descargasRececionadas, setDescargasRececionadas] = useState([]);
+  const today = new Date();
+  const [selectedMonth, setSelectedMonth] = useState((today.getMonth() + 1).toString().padStart(2, '0'));
+  const [selectedYear, setSelectedYear] = useState(today.getFullYear().toString());
+
   // Carregar lista de descargas agendadas
   const loadAgendados = async () => {
     setLoading(true);
@@ -43,9 +51,37 @@ export default function OperadorDashboard({ user, onLogout, notifications, onMar
     }
   };
 
+  // Carregar lista de descargas concluídas/recebidas
+  const loadRececionadas = async () => {
+    setLoading(true);
+    try {
+      const data = await descargaService.obterDescargas();
+      const filtered = data.filter(d => 
+        d.estado_descarga === 'RECEBIDA' || d.estado_descarga === 'CONCLUIDA'
+      );
+      setDescargasRececionadas(filtered);
+      setError('');
+    } catch (err) {
+      setError(err.message || 'Erro ao obter histórico de descargas.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAbrirFichaDescarga = async (idDescarga) => {
+    setError('');
+    try {
+      await descargaService.abrirFichaPDF(idDescarga);
+    } catch (err) {
+      setError(err.message || 'Erro ao abrir Ficha de Descarga.');
+    }
+  };
+
   useEffect(() => {
     if (activeView === 'agendados') {
       loadAgendados();
+    } else if (activeView === 'rececionadas') {
+      loadRececionadas();
     }
   }, [activeView]);
 
@@ -111,6 +147,17 @@ export default function OperadorDashboard({ user, onLogout, notifications, onMar
     }
   };
 
+  const filteredDescargas = descargasRececionadas.filter(d => {
+    if (!d.data_rececao) return false;
+    const dateObj = new Date(d.data_rececao);
+    const m = (dateObj.getMonth() + 1).toString().padStart(2, '0');
+    const y = dateObj.getFullYear().toString();
+    return m === selectedMonth && y === selectedYear;
+  });
+
+  const totalVolume = filteredDescargas.reduce((sum, d) => sum + parseFloat(d.quantidade_real || d.quantidade || 0), 0);
+  const totalDescargas = filteredDescargas.length;
+
   return (
     <div className="app-container">
       <header className="navbar">
@@ -133,10 +180,15 @@ export default function OperadorDashboard({ user, onLogout, notifications, onMar
         </div>
       </header>
 
-      <main className="content-wrapper animate-fade-in" style={{ maxWidth: '600px' }}>
+      <main className="content-wrapper animate-fade-in" style={{ maxWidth: '1000px' }}>
         
         {/* Menu de Ações Rápido */}
         <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem' }}>
+          {user.perfil === 'RESPONSAVEL_ETAR' && (
+            <button className={`btn ${activeView === 'rececionadas' ? 'btn-primary' : 'btn-secondary'}`} style={{ flex: 1 }} onClick={() => { setActiveView('rececionadas'); setError(''); setSuccess(''); }}>
+              <FileText size={16} /> Histórico de descargas
+            </button>
+          )}
           <button className={`btn ${activeView === 'scanner' ? 'btn-primary' : 'btn-secondary'}`} style={{ flex: 1 }} onClick={() => { setActiveView('scanner'); setError(''); setSuccess(''); setQrInput(''); }}>
             <Camera size={16} /> Ler QR Code
           </button>
@@ -300,6 +352,120 @@ export default function OperadorDashboard({ user, onLogout, notifications, onMar
                         <td>
                           <button className="btn btn-primary" style={{ padding: '0.3rem 0.6rem', fontSize: '0.75rem' }} onClick={() => { setQrInput(a.qr_code_token || a.id_descarga.toString()); handleValidateQR(null, a.qr_code_token || a.id_descarga.toString()); }}>
                             Receber
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 5. Histórico de Descargas Rececionadas (Apenas Responsável de ETAR) */}
+        {activeView === 'rececionadas' && (
+          <div>
+            <h3 style={{ marginBottom: '1.5rem' }}>
+              Histórico de descargas rececionadas na {user.etar_nome || `ETAR ${user.id_etar}`}
+            </h3>
+            
+            {/* Filtros de Mês e Ano */}
+            <div className="card" style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', padding: '1rem', marginBottom: '1.5rem', alignItems: 'center' }}>
+              <div style={{ flex: 1, minWidth: '140px' }}>
+                <label className="form-label" style={{ marginBottom: '0.25rem', fontSize: '0.8rem' }}>Mês</label>
+                <select className="form-input" value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} style={{ padding: '0.4rem' }}>
+                  <option value="01">Janeiro</option>
+                  <option value="02">Fevereiro</option>
+                  <option value="03">Março</option>
+                  <option value="04">Abril</option>
+                  <option value="05">Maio</option>
+                  <option value="06">Junho</option>
+                  <option value="07">Julho</option>
+                  <option value="08">Agosto</option>
+                  <option value="09">Setembro</option>
+                  <option value="10">Outubro</option>
+                  <option value="11">Novembro</option>
+                  <option value="12">Dezembro</option>
+                </select>
+              </div>
+              <div style={{ flex: 1, minWidth: '100px' }}>
+                <label className="form-label" style={{ marginBottom: '0.25rem', fontSize: '0.8rem' }}>Ano</label>
+                <select className="form-input" value={selectedYear} onChange={(e) => setSelectedYear(e.target.value)} style={{ padding: '0.4rem' }}>
+                  <option value="2025">2025</option>
+                  <option value="2026">2026</option>
+                  <option value="2027">2027</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Quadro de Estatísticas Rápidas */}
+            <div style={{ 
+              display: 'grid', 
+              gridTemplateColumns: '1fr 1fr', 
+              gap: '1rem', 
+              marginBottom: '1.5rem' 
+            }}>
+              <div className="card" style={{ padding: '1rem', textAlign: 'center', marginBottom: 0 }}>
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Total de Descargas</span>
+                <div style={{ fontSize: '1.75rem', fontWeight: 'bold', color: 'var(--primary)', marginTop: '0.25rem' }}>{totalDescargas}</div>
+              </div>
+              <div className="card" style={{ padding: '1rem', textAlign: 'center', marginBottom: 0 }}>
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Volume Total Recebido</span>
+                <div style={{ fontSize: '1.75rem', fontWeight: 'bold', color: 'var(--accent)', marginTop: '0.25rem' }}>{totalVolume.toLocaleString()} L</div>
+              </div>
+            </div>
+
+            {loading ? (
+              <p>A ler histórico...</p>
+            ) : filteredDescargas.length === 0 ? (
+              <div className="card" style={{ textAlign: 'center', padding: '2rem' }}>
+                <p style={{ color: 'var(--text-secondary)' }}>Não existem descargas rececionadas para o mês e ano selecionados.</p>
+              </div>
+            ) : (
+              <div className="table-container">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Ref/Data</th>
+                      <th>Cliente</th>
+                      <th>Veículo/Matrícula</th>
+                      <th>Qtd. Real</th>
+                      <th>Ficha</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredDescargas.map((d) => (
+                      <tr key={d.id_descarga}>
+                        <td>
+                          <strong>#{d.id_descarga}</strong>
+                          <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                            {d.data_rececao ? new Date(d.data_rececao).toLocaleDateString() : ''}
+                          </div>
+                        </td>
+                        <td>
+                          <strong>{d.cliente_nome}</strong>
+                          <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>
+                            {d.tipo_efluente}
+                          </div>
+                        </td>
+                        <td>
+                          <span style={{ fontSize: '0.85rem' }}>{d.empresa_transportadora}</span>
+                          <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                            {d.matricula_trator} {d.matricula_cisterna ? `| ${d.matricula_cisterna}` : ''}
+                          </div>
+                        </td>
+                        <td>
+                          <strong>{d.quantidade_real ? `${d.quantidade_real} L` : `${d.quantidade} L`}</strong>
+                        </td>
+                        <td>
+                          <button 
+                            className="btn btn-secondary" 
+                            style={{ padding: '0.3rem 0.5rem', display: 'flex', alignItems: 'center' }}
+                            onClick={() => handleAbrirFichaDescarga(d.id_descarga)}
+                            title="Ver Ficha de Descarga PDF"
+                          >
+                            <FileText size={14} />
                           </button>
                         </td>
                       </tr>

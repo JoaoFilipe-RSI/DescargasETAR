@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { descargaService, amostraService } from '../services/api';
 import { webSocketService } from '../services/websocket';
 import { QRCodeSVG } from 'qrcode.react';
-import { PlusCircle, Calendar, ShieldCheck, Download, LogOut, Clock, Truck } from 'lucide-react';
+import { PlusCircle, Calendar, ShieldCheck, Download, LogOut, Clock, Truck, Eye } from 'lucide-react';
 import NotificationBell from '../components/NotificationBell';
 
 export default function ClienteDashboard({ user, onLogout, notifications, onMarkAsRead, onMarkAllAsRead }) {
@@ -74,14 +74,25 @@ export default function ClienteDashboard({ user, onLogout, notifications, onMark
     e.preventDefault();
     setError('');
     setSuccess('');
+
+    const isTransportador = user?.nome?.toLowerCase().includes('transportador');
+
+    // Validar produtor externo obrigatório se for transportador
+    if (isTransportador) {
+      if (!newDescarga.nome_produtor_externo?.trim() || !newDescarga.morada_produtor_externo?.trim()) {
+        setError('A informação do produtor externo (Nome e Morada) é obrigatória para clientes transportadores.');
+        return;
+      }
+    }
+
     try {
       const payload = {
         id_etar: parseInt(newDescarga.id_etar, 10),
         tipo_efluente: newDescarga.tipo_efluente,
         quantidade: parseFloat(newDescarga.quantidade),
         numero_recipientes: newDescarga.numero_recipientes ? parseInt(newDescarga.numero_recipientes, 10) : null,
-        nome_produtor_externo: newDescarga.nome_produtor_externo || null,
-        morada_produtor_externo: newDescarga.morada_produtor_externo || null
+        nome_produtor_externo: isTransportador ? newDescarga.nome_produtor_externo.trim() : null,
+        morada_produtor_externo: isTransportador ? newDescarga.morada_produtor_externo.trim() : null
       };
 
       const res = await descargaService.criarPedido(payload);
@@ -134,13 +145,13 @@ export default function ClienteDashboard({ user, onLogout, notifications, onMark
     }
   };
 
-  // Descarregar PDF da Ficha de Descarga
-  const handleDownloadFicha = async (idDescarga) => {
+  // Abrir PDF da Ficha de Descarga
+  const handleAbrirFicha = async (idDescarga) => {
     setError('');
     try {
-      await descargaService.descarregarFichaPDF(idDescarga);
+      await descargaService.abrirFichaPDF(idDescarga);
     } catch (err) {
-      setError(err.message || 'Erro ao efetuar download da Ficha de Descarga.');
+      setError(err.message || 'Erro ao abrir a Ficha de Descarga.');
     }
   };
 
@@ -248,9 +259,9 @@ export default function ClienteDashboard({ user, onLogout, notifications, onMark
                               <button
                                 className="btn btn-primary"
                                 style={{ padding: '0.35rem 0.7rem', fontSize: '0.8rem', backgroundColor: 'var(--success)' }}
-                                onClick={() => handleDownloadFicha(d.id_descarga)}
+                                onClick={() => handleAbrirFicha(d.id_descarga)}
                               >
-                                <Download size={14} style={{ verticalAlign: 'middle', marginRight: '4px' }} /> Ficha
+                                <Eye size={14} style={{ verticalAlign: 'middle', marginRight: '4px' }} /> Ver Ficha
                               </button>
                               {d.id_amostra && d.boletim_publico && (
                                 <button
@@ -329,17 +340,33 @@ export default function ClienteDashboard({ user, onLogout, notifications, onMark
                 <input type="number" className="form-input" placeholder="Ex: 1" value={newDescarga.numero_recipientes} onChange={(e) => setNewDescarga({ ...newDescarga, numero_recipientes: e.target.value })} />
               </div>
 
-              <div style={{ borderTop: '1px solid var(--border)', margin: '1.5rem 0', paddingTop: '1.5rem' }}>
-                <h4 style={{ fontSize: '0.95rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>Informação do Produtor Externo (se aplicável)</h4>
-                <div className="form-group">
-                  <label className="form-label">Nome do Produtor</label>
-                  <input type="text" className="form-input" placeholder="Ex: Lavandaria Sol Lda" value={newDescarga.nome_produtor_externo} onChange={(e) => setNewDescarga({ ...newDescarga, nome_produtor_externo: e.target.value })} />
+              {user?.nome?.toLowerCase().includes('transportador') && (
+                <div style={{ borderTop: '1px solid var(--border)', margin: '1.5rem 0', paddingTop: '1.5rem' }}>
+                  <h4 style={{ fontSize: '0.95rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>Informação do Produtor Externo *</h4>
+                  <div className="form-group">
+                    <label className="form-label">Nome do Produtor *</label>
+                    <input 
+                      type="text" 
+                      className="form-input" 
+                      placeholder="Ex: Lavandaria Sol Lda" 
+                      required 
+                      value={newDescarga.nome_produtor_externo} 
+                      onChange={(e) => setNewDescarga({ ...newDescarga, nome_produtor_externo: e.target.value })} 
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Morada do Produtor *</label>
+                    <input 
+                      type="text" 
+                      className="form-input" 
+                      placeholder="Ex: Zona Industrial Maia" 
+                      required 
+                      value={newDescarga.morada_produtor_externo} 
+                      onChange={(e) => setNewDescarga({ ...newDescarga, morada_produtor_externo: e.target.value })} 
+                    />
+                  </div>
                 </div>
-                <div className="form-group">
-                  <label className="form-label">Morada do Produtor</label>
-                  <input type="text" className="form-input" placeholder="Ex: Zona Industrial Maia" value={newDescarga.morada_produtor_externo} onChange={(e) => setNewDescarga({ ...newDescarga, morada_produtor_externo: e.target.value })} />
-                </div>
-              </div>
+              )}
 
               <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem' }}>
                 <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>Submeter Pedido</button>

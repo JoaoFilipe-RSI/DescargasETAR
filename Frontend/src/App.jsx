@@ -72,7 +72,7 @@ export default function App() {
           webSocketService.on('boletim-disponivel', handleBoletim);
           handlers.push({ event: 'decisao-pedido', cb: handleDecisao });
           handlers.push({ event: 'boletim-disponivel', cb: handleBoletim });
-        } else if (user.perfil === 'OPERADOR_ETAR') {
+        } else if (user.perfil === 'OPERADOR_ETAR' || user.perfil === 'RESPONSAVEL_ETAR') {
           const handleNovoAgendamento = (data) => 
             addNotification(`Novo agendamento recebido: ${data.empresa_transportadora} (${data.matricula_trator}).`);
 
@@ -84,7 +84,7 @@ export default function App() {
 
           webSocketService.on('nova-amostra', handleNovaAmostra);
           handlers.push({ event: 'nova-amostra', cb: handleNovaAmostra });
-        } else if (user.perfil === 'RESPONSAVEL_LAB' || user.perfil === 'RESPONSAVEL_ETAR') {
+        } else if (user.perfil === 'RESPONSAVEL_LAB') {
           const handleNovaAmostra = (data) => 
             addNotification(`Nova amostra recolhida: ${data.qr_code_token} (Descarga #${data.id_descarga}).`);
           const handleAmostraAnalisada = (data) => 
@@ -170,6 +170,7 @@ export default function App() {
       );
     
     case 'OPERADOR_ETAR':
+    case 'RESPONSAVEL_ETAR':
       return (
         <OperadorDashboard 
           user={user} 
@@ -192,7 +193,6 @@ export default function App() {
       );
     
     case 'RESPONSAVEL_LAB':
-    case 'RESPONSAVEL_ETAR':
     case 'GESTOR_CLIENTES':
       return (
         <ResponsavelDashboard 

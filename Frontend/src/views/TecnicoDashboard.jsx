@@ -32,6 +32,41 @@ export default function TecnicoDashboard({ user, onLogout, notifications, onMark
     7: { valor: '', unidade: 'mg/L', metodo: 'SMEWW 3111 B' }  // Zinco (Adicional Cliente BBB)
   });
 
+  // Parâmetros específicos (extra) selecionados/ativos para reportar
+  const [selectedExtraParams, setSelectedExtraParams] = useState({
+    6: false,
+    7: false
+  });
+
+  // Amostras recolhidas prontas para check-in
+  const [amostrasRecolhidas, setAmostrasRecolhidas] = useState([]);
+
+  const loadAmostrasRecolhidas = async () => {
+    try {
+      const data = await amostraService.obterAmostras({ estado: 'RECOLHIDA' });
+      setAmostrasRecolhidas(data);
+    } catch (err) {
+      console.error('Erro ao carregar amostras recolhidas:', err);
+    }
+  };
+
+  const toggleExtraParam = (id) => {
+    setSelectedExtraParams(prev => {
+      const newVal = !prev[id];
+      if (!newVal) {
+        // Limpar o valor quando ocultado
+        setResultadosData(current => ({
+          ...current,
+          [id]: { ...current[id], valor: '' }
+        }));
+      }
+      return {
+        ...prev,
+        [id]: newVal
+      };
+    });
+  };
+
   // Carregar lista de amostras em análise
   const loadAmostras = async () => {
     setLoading(true);
@@ -47,7 +82,9 @@ export default function TecnicoDashboard({ user, onLogout, notifications, onMark
   };
 
   useEffect(() => {
-    if (activeView === 'lista') {
+    if (activeView === 'checkin') {
+      loadAmostrasRecolhidas();
+    } else if (activeView === 'lista') {
       loadAmostras();
     }
   }, [activeView]);
@@ -57,6 +94,7 @@ export default function TecnicoDashboard({ user, onLogout, notifications, onMark
     const handleNovaAmostra = (data) => {
       setSuccess(`Nova amostra aguardando triagem/bancada: ${data.qr_code_token} (Descarga #${data.id_descarga}).`);
       loadAmostras();
+      loadAmostrasRecolhidas();
     };
 
     webSocketService.on('nova-amostra', handleNovaAmostra);
@@ -79,6 +117,7 @@ export default function TecnicoDashboard({ user, onLogout, notifications, onMark
       const res = await amostraService.receberAmostra(sampleTokenInput.trim());
       setTriagemData(res);
       setActiveView('triagem-res');
+      loadAmostrasRecolhidas(); // Atualizar lista de amostras recolhidas
     } catch (err) {
       setError(err.message || 'Código de amostra inválido ou já processado.');
     } finally {
@@ -95,6 +134,14 @@ export default function TecnicoDashboard({ user, onLogout, notifications, onMark
       resetResultados[key].valor = '';
     });
     setResultadosData(resetResultados);
+
+    // Determinar quais os parâmetros extra definidos no contrato da amostra
+    const contractParams = amostra.parametros_contratuais || [];
+    setSelectedExtraParams({
+      6: contractParams.includes(6),
+      7: contractParams.includes(7)
+    });
+
     setError('');
     setSuccess('');
     setActiveView('bancada');
@@ -171,7 +218,7 @@ export default function TecnicoDashboard({ user, onLogout, notifications, onMark
         </div>
       </header>
 
-      <main className="content-wrapper animate-fade-in" style={{ maxWidth: '650px' }}>
+      <main className="content-wrapper animate-fade-in" style={{ maxWidth: '1000px' }}>
         
         {/* Menu Rápido */}
         <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem' }}>
@@ -179,7 +226,7 @@ export default function TecnicoDashboard({ user, onLogout, notifications, onMark
             <ScanLine size={16} /> Check-in de Frascos
           </button>
           <button className={`btn ${activeView === 'lista' || activeView === 'bancada' ? 'btn-primary' : 'btn-secondary'}`} style={{ flex: 1 }} onClick={() => { setActiveView('lista'); setError(''); setSuccess(''); }}>
-            <ClipboardList size={16} /> Lista de Bancada
+            <ClipboardList size={16} /> Lista de amostras em análise
           </button>
         </div>
 
@@ -194,19 +241,43 @@ export default function TecnicoDashboard({ user, onLogout, notifications, onMark
               Faça a leitura do código QR no frasco da amostra recolhida na ETAR para registar a sua entrada e obter a triagem.
             </p>
 
-            <div className="scanner-viewport">
+            <div className="scanner-viewport" style={{ marginBottom: '1.5rem' }}>
               <div className="scanner-line"></div>
               <FlaskConical size={64} style={{ color: '#ffffff', opacity: 0.15, position: 'absolute', top: 'calc(50% - 32px)', left: 'calc(50% - 32px)' }} />
             </div>
 
             <form onSubmit={handleCheckin}>
-              <div className="form-group">
-                <label className="form-label">Introduzir Token da Amostra (Simulador)</label>
-                <div style={{ display: 'flex', gap: '0.5rem' }}>
-                  <input type="text" className="form-input" placeholder="Ex: AMOSTRA-2026-XXXXXX" required value={sampleTokenInput} onChange={(e) => setSampleTokenInput(e.target.value.toUpperCase())} />
-                  <button type="submit" className="btn btn-primary" disabled={loading}>
-                    {loading ? 'A ler...' : 'Registar Entrada'}
-                  </button>
+              {/* Opção para selecionar amostra da lista no estado RECOLHIDA */}
+              <div className="form-group" style={{ textAlign: 'left', marginBottom: '1.5rem' }}>
+                <label className="form-label" style={{ fontWeight: 600 }}>Selecionar Amostra Recolhida</label>
+                <select 
+                  className="form-input" 
+                  value={sampleTokenInput} 
+                  onChange={(e) => setSampleTokenInput(e.target.value)}
+                >
+                  <option value="">-- Selecione uma amostra (estado RECOLHIDA) --</option>
+                  {amostrasRecolhidas.map((am) => (
+                    <option key={am.id_amostra} value={am.qr_code_token}>
+                      {am.qr_code_token} - {am.cliente_nome} ({am.etar_nome || 'ETAR N/A'})
+                    </option>
+                  ))}
+                </select>
+                {amostrasRecolhidas.length === 0 && (
+                  <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontStyle: 'italic', marginTop: '0.25rem' }}>
+                    Nenhuma amostra no estado RECOLHIDA disponível neste momento.
+                  </p>
+                )}
+              </div>
+
+              <div style={{ borderTop: '1px dashed var(--border)', margin: '1.5rem 0', paddingTop: '1.5rem', textAlign: 'left' }}>
+                <div className="form-group">
+                  <label className="form-label">Introduzir Token da Amostra (Manual)</label>
+                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <input type="text" className="form-input" placeholder="Ex: AMOSTRA-2026-XXXXXX" required value={sampleTokenInput} onChange={(e) => setSampleTokenInput(e.target.value.toUpperCase())} />
+                    <button type="submit" className="btn btn-primary" disabled={loading}>
+                      {loading ? 'A ler...' : 'Registar Entrada'}
+                    </button>
+                  </div>
                 </div>
               </div>
             </form>
@@ -226,9 +297,36 @@ export default function TecnicoDashboard({ user, onLogout, notifications, onMark
               <div style={{ fontSize: '1.5rem', fontWeight: 800, textTransform: 'uppercase', color: triagemData.triagem === 'ANALISAR' ? 'var(--accent)' : 'var(--warning)' }}>
                 Triagem: {triagemData.triagem}
               </div>
-              <p style={{ fontSize: '0.85rem', color: 'var(--text-main)', marginTop: '0.5rem' }}>
+               <p style={{ fontSize: '0.85rem', color: 'var(--text-main)', marginTop: '0.5rem' }}>
                 {triagemData.mensagem}
               </p>
+
+              {triagemData.triagem === 'ANALISAR' && triagemData.parametros && triagemData.parametros.length > 0 && (
+                <div style={{ marginTop: '1.25rem', borderTop: '1px dashed var(--border)', paddingTop: '1.25rem', textAlign: 'left' }}>
+                  <h5 style={{ fontSize: '0.9rem', color: 'var(--primary)', marginBottom: '0.75rem', fontWeight: 600 }}>Parâmetros definidos para analisar ({triagemData.amostra.cliente_nome}):</h5>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                    {triagemData.parametros.map((p) => (
+                      <div key={p.id_parametro} style={{ fontSize: '0.85rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'var(--bg-base)', padding: '0.4rem 0.75rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
+                        <span>
+                          <strong>{p.nome}</strong> 
+                          <span style={{ color: 'var(--text-secondary)', marginLeft: '4px', fontSize: '0.75rem' }}>
+                            ({p.tipo_parametro.replace('_', ' ')})
+                          </span>
+                        </span>
+                        <span className="badge" style={{ 
+                          fontSize: '0.65rem', 
+                          padding: '0.15rem 0.5rem', 
+                          backgroundColor: p.obrigatorio ? 'var(--accent-light)' : 'var(--success-light)', 
+                          color: p.obrigatorio ? 'var(--accent)' : 'var(--success)',
+                          border: `1px solid ${p.obrigatorio ? 'var(--accent)' : 'var(--success)'}`
+                        }}>
+                          {p.obrigatorio ? 'Obrigatório' : 'Contratual'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             <button className="btn btn-secondary" style={{ width: '100%' }} onClick={() => { setActiveView('checkin'); setTriagemData(null); }}>
@@ -271,7 +369,7 @@ export default function TecnicoDashboard({ user, onLogout, notifications, onMark
                         <td>{am.etar_nome || 'N/A'}</td>
                         <td>
                           <button className="btn btn-primary" style={{ padding: '0.35rem 0.7rem', fontSize: '0.8rem' }} onClick={() => handleOpenBancada(am)}>
-                            <ClipboardList size={14} /> Bancada
+                            <ClipboardList size={14} /> Resultados
                           </button>
                         </td>
                       </tr>
@@ -326,19 +424,65 @@ export default function TecnicoDashboard({ user, onLogout, notifications, onMark
 
               {/* Parâmetros Adicionais */}
               <h4 style={{ fontSize: '1rem', color: 'var(--primary)', marginBottom: '1rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.25rem' }}>
-                Parâmetros Específicos do Contrato (Opcional se não aplicável)
+                Parâmetros Específicos (Extra)
               </h4>
+
+              {/* Opção para selecionar parâmetros extra manualmente se o técnico optar por analisar */}
+              <div style={{ 
+                marginBottom: '1.25rem', 
+                backgroundColor: 'var(--bg-base)', 
+                padding: '0.75rem 1rem', 
+                borderRadius: 'var(--radius-md)', 
+                border: '1px solid var(--border)',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.5rem'
+              }}>
+                <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+                  Selecione os parâmetros extra a reportar (ou ative manualmente se necessário):
+                </span>
+                <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem', cursor: 'pointer', fontWeight: 500 }}>
+                    <input 
+                      type="checkbox" 
+                      checked={selectedExtraParams[6] || false} 
+                      onChange={() => toggleExtraParam(6)} 
+                      style={{ cursor: 'pointer' }}
+                    />
+                    Azoto Kjeldahl
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem', cursor: 'pointer', fontWeight: 500 }}>
+                    <input 
+                      type="checkbox" 
+                      checked={selectedExtraParams[7] || false} 
+                      onChange={() => toggleExtraParam(7)} 
+                      style={{ cursor: 'pointer' }}
+                    />
+                    Zinco
+                  </label>
+                </div>
+              </div>
               
               <div className="results-grid" style={{ marginBottom: '1.5rem' }}>
-                <div className="form-group">
-                  <label className="form-label">Azoto Kjeldahl (mg/L)</label>
-                  <input type="number" step="0.1" className="form-input" placeholder="Ex: 35.5" value={resultadosData[6].valor} onChange={(e) => setResultadosData({ ...resultadosData, 6: { ...resultadosData[6], valor: e.target.value } })} />
-                </div>
+                {selectedExtraParams[6] && (
+                  <div className="form-group">
+                    <label className="form-label">Azoto Kjeldahl (mg/L)</label>
+                    <input type="number" step="0.1" className="form-input" placeholder="Ex: 35.5" value={resultadosData[6].valor} onChange={(e) => setResultadosData({ ...resultadosData, 6: { ...resultadosData[6], valor: e.target.value } })} />
+                  </div>
+                )}
 
-                <div className="form-group">
-                  <label className="form-label">Zinco (mg/L)</label>
-                  <input type="number" step="0.01" className="form-input" placeholder="Ex: 0.15" value={resultadosData[7].valor} onChange={(e) => setResultadosData({ ...resultadosData, 7: { ...resultadosData[7], valor: e.target.value } })} />
-                </div>
+                {selectedExtraParams[7] && (
+                  <div className="form-group">
+                    <label className="form-label">Zinco (mg/L)</label>
+                    <input type="number" step="0.01" className="form-input" placeholder="Ex: 0.15" value={resultadosData[7].valor} onChange={(e) => setResultadosData({ ...resultadosData, 7: { ...resultadosData[7], valor: e.target.value } })} />
+                  </div>
+                )}
+
+                {!selectedExtraParams[6] && !selectedExtraParams[7] && (
+                  <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '1rem', color: 'var(--text-secondary)', fontSize: '0.85rem', fontStyle: 'italic' }}>
+                    Nenhum parâmetro específico ativado para esta amostra. Ative acima se necessário.
+                  </div>
+                )}
               </div>
 
               <div style={{ display: 'flex', gap: '1rem', marginTop: '2rem' }}>

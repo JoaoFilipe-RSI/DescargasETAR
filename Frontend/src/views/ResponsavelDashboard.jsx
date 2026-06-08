@@ -336,13 +336,13 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
     }
   };
 
-  // Descarregar PDF da Ficha de Descarga
-  const handleDownloadFichaDescarga = async (idDescarga) => {
+  // Abrir PDF da Ficha de Descarga
+  const handleAbrirFichaDescarga = async (idDescarga) => {
     setError('');
     try {
-      await descargaService.descarregarFichaPDF(idDescarga);
+      await descargaService.abrirFichaPDF(idDescarga);
     } catch (err) {
-      setError(err.message || 'Erro ao descarregar Ficha de Descarga.');
+      setError(err.message || 'Erro ao abrir a Ficha de Descarga.');
     }
   };
 
@@ -740,9 +740,9 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
                               <button 
                                 className="btn btn-primary" 
                                 style={{ padding: '0.35rem 0.7rem', fontSize: '0.8rem', backgroundColor: 'var(--success)' }} 
-                                onClick={() => handleDownloadFichaDescarga(d.id_descarga)}
+                                onClick={() => handleAbrirFichaDescarga(d.id_descarga)}
                               >
-                                <Download size={14} style={{ verticalAlign: 'middle', marginRight: '4px' }} /> Ficha PDF
+                                <FileText size={14} style={{ verticalAlign: 'middle', marginRight: '4px' }} /> Ver Ficha
                               </button>
                             </td>
                           </tr>

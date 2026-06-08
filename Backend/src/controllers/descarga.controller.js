@@ -132,8 +132,8 @@ exports.obterDescargas = async (req, res) => {
   if (perfil === 'CLIENTE') {
     query += ` AND d.id_cliente = $${paramIndex++}`;
     values.push(userClienteId);
-  } else if (perfil === 'OPERADOR_ETAR') {
-    // Operadores só vêem descargas da sua ETAR e que já estejam agendadas ou em fases seguintes
+  } else if (perfil === 'OPERADOR_ETAR' || perfil === 'RESPONSAVEL_ETAR') {
+    // Operadores e Responsáveis de ETAR só vêem descargas da sua ETAR e que já estejam agendadas ou em fases seguintes
     query += ` AND d.id_etar = $${paramIndex++} AND d.estado_descarga IN ('AGENDADA', 'RECEBIDA', 'CONCLUIDA')`;
     values.push(userEtarId);
   }
@@ -143,9 +143,9 @@ exports.obterDescargas = async (req, res) => {
     query += ` AND d.estado_descarga = $${paramIndex++}`;
     values.push(estado.toUpperCase());
   }
-  if (id_etar && perfil !== 'OPERADOR_ETAR') {
+  if (id_etar && id_etar !== 'null' && id_etar !== 'undefined' && perfil !== 'OPERADOR_ETAR' && perfil !== 'RESPONSAVEL_ETAR') {
     query += ` AND d.id_etar = $${paramIndex++}`;
-    values.push(id_etar);
+    values.push(parseInt(id_etar, 10));
   }
   if (id_cliente && perfil !== 'CLIENTE') {
     query += ` AND d.id_cliente = $${paramIndex++}`;
@@ -518,7 +518,7 @@ exports.gerarFichaDescargaPDF = async (req, res) => {
     const doc = new PDFDocument({ size: 'A4', margin: 40 });
 
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename=Ficha_Descarga_${d.id_descarga}.pdf`);
+    res.setHeader('Content-Disposition', `inline; filename=Ficha_Descarga_${d.id_descarga}.pdf`);
     doc.pipe(res);
 
     // --- 1. CABEÇALHO ---

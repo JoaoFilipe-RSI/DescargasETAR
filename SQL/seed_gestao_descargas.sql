@@ -157,3 +157,8 @@ INSERT INTO historico (entidade, id_entidade, acao, descricao, id_utilizador) VA
 ('DESCARGA', 2, 'AUTORIZACAO', 'Descarga autorizada pelo gestor', 9),
 ('DESCARGA', 3, 'AGENDAMENTO', 'Descarga agendada pelo cliente', 1),
 ('DESCARGA', 4, 'RECECAO', 'Receção realizada pelo operador', 4);
+
+-- ASSOCIACAO DE ETARS A UTILIZADORES
+UPDATE utilizador SET id_etar = 1 WHERE email = 'carlos.silva@etar.pt';
+UPDATE utilizador SET id_etar = 2 WHERE email = 'jose.teixeira@etar.pt';
+UPDATE utilizador SET id_etar = 1 WHERE email = 'fernando.rocha@etar.pt';
