@@ -163,3 +163,54 @@ export const amostraService = {
     window.URL.revokeObjectURL(url);
   }
 };
+
+/**
+ * MÓDULO DE ADMINISTRAÇÃO E CONFIGURAÇÃO
+ */
+export const adminService = {
+  obterClientes() {
+    return request('/admin/clientes');
+  },
+  criarCliente(clienteData) {
+    return request('/admin/clientes', {
+      method: 'POST',
+      body: clienteData
+    });
+  },
+  obterEtars() {
+    return request('/admin/etars');
+  },
+  atualizarDisponibilidadeEtar(id, disponivel) {
+    return request(`/admin/etars/${id}/disponibilidade`, {
+      method: 'PUT',
+      body: { disponivel }
+    });
+  },
+  obterAutorizacoes() {
+    return request('/admin/autorizacoes');
+  },
+  criarAutorizacao(autorizacaoData) {
+    return request('/admin/autorizacoes', {
+      method: 'POST',
+      body: autorizacaoData
+    });
+  },
+  atualizarAutorizacao(id, autorizacaoData) {
+    return request(`/admin/autorizacoes/${id}`, {
+      method: 'PUT',
+      body: autorizacaoData
+    });
+  },
+  obterParametros() {
+    return request('/admin/parametros');
+  },
+  obterParametrosCliente(id) {
+    return request(`/admin/clientes/${id}/parametros`);
+  },
+  atualizarParametrosCliente(id, parametrosIdsArray) {
+    return request(`/admin/clientes/${id}/parametros`, {
+      method: 'POST',
+      body: { parametros: parametrosIdsArray }
+    });
+  }
+};

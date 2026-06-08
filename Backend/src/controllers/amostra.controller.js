@@ -487,6 +487,12 @@ exports.validarAmostra = async (req, res) => {
       mensagem: 'O Boletim Analítico da sua descarga foi validado e encontra-se disponível para download.'
     });
 
+    enviarNotificacao('gestores-clientes', 'amostra-concluida', {
+      id_amostra: id,
+      id_descarga: amostra.id_descarga,
+      mensagem: `Resultados validados: amostra #${id} concluída (Descarga #${amostra.id_descarga}).`
+    });
+
     return res.json({ mensagem: 'Amostra validada com sucesso. Ficha do cliente e descarga concluídas.' });
 
   } catch (err) {

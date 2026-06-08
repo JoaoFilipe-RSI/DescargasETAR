@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { descargaService } from '../services/api';
 import { Camera, Search, FileText, CheckCircle2, AlertTriangle, LogOut, Printer } from 'lucide-react';
 import { webSocketService } from '../services/websocket';
+import NotificationBell from '../components/NotificationBell';
 
-export default function OperadorDashboard({ user, onLogout }) {
+export default function OperadorDashboard({ user, onLogout, notifications, onMarkAsRead, onMarkAllAsRead }) {
   const [activeView, setActiveView] = useState('scanner'); // 'scanner', 'receber', 'agendados', 'sucesso'
   const [qrInput, setQrInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -120,6 +121,11 @@ export default function OperadorDashboard({ user, onLogout }) {
           <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
             <strong>{user.nome}</strong> (Op. ETAR {user.id_etar})
           </span>
+          <NotificationBell 
+            notifications={notifications} 
+            onMarkAsRead={onMarkAsRead} 
+            onMarkAllAsRead={onMarkAllAsRead} 
+          />
           <button className="btn btn-secondary" style={{ padding: '0.4rem 0.8rem' }} onClick={onLogout}>
             <LogOut size={16} /> Sair
           </button>

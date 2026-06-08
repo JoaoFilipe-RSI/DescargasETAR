@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { amostraService, descargaService } from '../services/api';
-import { ShieldCheck, ClipboardList, CheckSquare, XSquare, Download, LogOut, FileText } from 'lucide-react';
+import { amostraService, descargaService, adminService } from '../services/api';
+import { ShieldCheck, ClipboardList, CheckSquare, XSquare, Download, LogOut, FileText, ToggleLeft, ToggleRight, Settings, PlusCircle, Check, X } from 'lucide-react';
 import { webSocketService } from '../services/websocket';
+import NotificationBell from '../components/NotificationBell';
 
-export default function ResponsavelDashboard({ user, onLogout }) {
+export default function ResponsavelDashboard({ user, onLogout, notifications, onMarkAsRead, onMarkAllAsRead }) {
   const [activeTab, setActiveTab] = useState(
     user.perfil === 'GESTOR_CLIENTES' ? 'decisoes' : 'validacoes'
   );
@@ -21,14 +22,62 @@ export default function ResponsavelDashboard({ user, onLogout }) {
   const [concluidas, setConcluidas] = useState([]);
   const [selectedAmostra, setSelectedAmostra] = useState(null);
 
-  // Carregar dados conforme perfil
+  // Estados de Administração (Novo)
+  const [clientesList, setClientesList] = useState([]);
+  const [etarsList, setEtarsList] = useState([]);
+  const [autorizacoesList, setAutorizacoesList] = useState([]);
+  const [parametrosList, setParametrosList] = useState([]);
+
+  // Modais de Criação
+  const [showAddCliente, setShowAddCliente] = useState(false);
+  const [showAddAutorizacao, setShowAddAutorizacao] = useState(false);
+
+  // Estados de Formulário
+  const [newClienteData, setNewClienteData] = useState({
+    nome: '',
+    morada: '',
+    contacto: '',
+    telefone: '',
+    email: '',
+    password: '',
+    periodicidade_analise: 'POR_DESCARGA'
+  });
+
+  const [newAutorizacaoData, setNewAutorizacaoData] = useState({
+    id_cliente: '',
+    id_etar: '',
+    quota: '5',
+    auto_aprovacao: true
+  });
+
+  const [selectedConfigClient, setSelectedConfigClient] = useState('');
+  const [activeParams, setActiveParams] = useState([]);
+
+  // Carregar dados conforme perfil e tab ativa
   const loadData = async () => {
     setLoading(true);
     setError('');
     try {
       if (user.perfil === 'GESTOR_CLIENTES') {
-        const data = await descargaService.obterDescargas({ estado: 'SOLICITADA' });
-        setSolicitadas(data);
+        if (activeTab === 'decisoes') {
+          const data = await descargaService.obterDescargas({ estado: 'SOLICITADA' });
+          setSolicitadas(data);
+        } else if (activeTab === 'clientes') {
+          const data = await adminService.obterClientes();
+          setClientesList(data);
+        } else if (activeTab === 'autorizacoes') {
+          const auts = await adminService.obterAutorizacoes();
+          setAutorizacoesList(auts);
+          const cls = await adminService.obterClientes();
+          setClientesList(cls);
+          const ets = await adminService.obterEtars();
+          setEtarsList(ets);
+          const params = await adminService.obterParametros();
+          setParametrosList(params);
+        } else if (activeTab === 'etars') {
+          const ets = await adminService.obterEtars();
+          setEtarsList(ets);
+        }
       } else {
         // Responsável de Lab/ETAR
         const dataAnal = await amostraService.obterAmostras({ estado: 'ANALISADA' });
@@ -43,6 +92,119 @@ export default function ResponsavelDashboard({ user, onLogout }) {
     }
   };
 
+  // Carregar parâmetros contratuais do cliente selecionado
+  useEffect(() => {
+    if (selectedConfigClient) {
+      const loadClientParams = async () => {
+        try {
+          const activeIds = await adminService.obterParametrosCliente(selectedConfigClient);
+          setActiveParams(activeIds);
+        } catch (err) {
+          setError('Erro ao obter parâmetros do cliente selecionado.');
+        }
+      };
+      loadClientParams();
+    } else {
+      setActiveParams([]);
+    }
+  }, [selectedConfigClient]);
+
+  // Gestor de Clientes: Criar Cliente e Utilizador
+  const handleCreateCliente = async (e) => {
+    e.preventDefault();
+    setError('');
+    setSuccess('');
+    try {
+      await adminService.criarCliente(newClienteData);
+      setSuccess('Novo cliente contratualizado e credenciais de utilizador criadas com sucesso!');
+      setShowAddCliente(false);
+      setNewClienteData({
+        nome: '',
+        morada: '',
+        contacto: '',
+        telefone: '',
+        email: '',
+        password: '',
+        periodicidade_analise: 'POR_DESCARGA'
+      });
+      loadData();
+    } catch (err) {
+      setError(err.message || 'Erro ao registar novo cliente.');
+    }
+  };
+
+  // Gestor de Clientes: Criar Regra de Whitelist (Autorização)
+  const handleCreateAutorizacao = async (e) => {
+    e.preventDefault();
+    setError('');
+    setSuccess('');
+    try {
+      await adminService.criarAutorizacao(newAutorizacaoData);
+      setSuccess('Nova regra de whitelist registada com sucesso!');
+      setShowAddAutorizacao(false);
+      setNewAutorizacaoData({
+        id_cliente: '',
+        id_etar: '',
+        quota: '5',
+        auto_aprovacao: true
+      });
+      loadData();
+    } catch (err) {
+      setError(err.message || 'Erro ao criar regra de whitelist.');
+    }
+  };
+
+  // Gestor de Clientes: Alternar Estado Ativo da Whitelist
+  const handleToggleAutorizacaoStatus = async (aut) => {
+    setError('');
+    setSuccess('');
+    try {
+      await adminService.atualizarAutorizacao(aut.id_autorizacao, {
+        quota: aut.quota,
+        auto_aprovacao: aut.auto_aprovacao,
+        ativo: !aut.ativo
+      });
+      setSuccess(`Estado da whitelist atualizado para ${!aut.ativo ? 'ativo' : 'inativo'} com sucesso!`);
+      loadData();
+    } catch (err) {
+      setError('Erro ao alternar o estado da whitelist.');
+    }
+  };
+
+  // Gestor de Clientes: Alternar Disponibilidade da ETAR (Contingência)
+  const handleToggleEtarAvailability = async (id, currentAvailability) => {
+    setError('');
+    setSuccess('');
+    try {
+      await adminService.atualizarDisponibilidadeEtar(id, !currentAvailability);
+      setSuccess(`Estado da ETAR atualizado para ${!currentAvailability ? 'disponível' : 'indisponível'}!`);
+      loadData();
+    } catch (err) {
+      setError('Erro ao atualizar disponibilidade da ETAR.');
+    }
+  };
+
+  // Gestor de Clientes: Gravar Parâmetros Contratuais
+  const handleUpdateClientParams = async (e) => {
+    e.preventDefault();
+    setError('');
+    setSuccess('');
+    try {
+      await adminService.atualizarParametrosCliente(selectedConfigClient, activeParams);
+      setSuccess('Parâmetros analíticos contratuais gravados com sucesso!');
+    } catch (err) {
+      setError('Erro ao gravar parâmetros contratuais.');
+    }
+  };
+
+  const handleToggleParamCheckbox = (paramId) => {
+    if (activeParams.includes(paramId)) {
+      setActiveParams(activeParams.filter(id => id !== paramId));
+    } else {
+      setActiveParams([...activeParams, paramId]);
+    }
+  };
+
   useEffect(() => {
     loadData();
   }, [activeTab]);
@@ -54,9 +216,23 @@ export default function ResponsavelDashboard({ user, onLogout }) {
         setSuccess(`Novo pedido de descarga pendente: Descarga #${data.id_descarga} (${data.cliente_nome} - ${data.quantidade}L).`);
         loadData();
       };
+      const handleDescargaConcluida = (data) => {
+        setSuccess(data.mensagem || `Receção efetuada: Descarga #${data.id_descarga} concluída.`);
+        loadData();
+      };
+      const handleAmostraConcluida = (data) => {
+        setSuccess(data.mensagem || `Resultados validados: amostra #${data.id_amostra} concluída.`);
+        loadData();
+      };
+
       webSocketService.on('novo-pedido', handleNovoPedido);
+      webSocketService.on('descarga-concluida', handleDescargaConcluida);
+      webSocketService.on('amostra-concluida', handleAmostraConcluida);
+
       return () => {
         webSocketService.off('novo-pedido', handleNovoPedido);
+        webSocketService.off('descarga-concluida', handleDescargaConcluida);
+        webSocketService.off('amostra-concluida', handleAmostraConcluida);
       };
     } else if (user.perfil === 'RESPONSAVEL_LAB' || user.perfil === 'RESPONSAVEL_ETAR') {
       const handleNovaAmostra = (data) => {
@@ -139,6 +315,11 @@ export default function ResponsavelDashboard({ user, onLogout }) {
           <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
             Olá, <strong>{user.nome}</strong> ({user.perfil.replace('_', ' ')})
           </span>
+          <NotificationBell 
+            notifications={notifications} 
+            onMarkAsRead={onMarkAsRead} 
+            onMarkAllAsRead={onMarkAllAsRead} 
+          />
           <button className="btn btn-secondary" style={{ padding: '0.4rem 0.8rem' }} onClick={onLogout}>
             <LogOut size={16} /> Sair
           </button>
@@ -160,52 +341,271 @@ export default function ResponsavelDashboard({ user, onLogout }) {
         {user.perfil === 'GESTOR_CLIENTES' && (
           <div>
             <div className="tabs-nav">
-              <button className="tab-btn active">Pedidos Pendentes</button>
+              <button className={`tab-btn ${activeTab === 'decisoes' ? 'active' : ''}`} onClick={() => { setActiveTab('decisoes'); setError(''); setSuccess(''); }}>
+                Pedidos Pendentes
+              </button>
+              <button className={`tab-btn ${activeTab === 'clientes' ? 'active' : ''}`} onClick={() => { setActiveTab('clientes'); setError(''); setSuccess(''); }}>
+                Clientes
+              </button>
+              <button className={`tab-btn ${activeTab === 'autorizacoes' ? 'active' : ''}`} onClick={() => { setActiveTab('autorizacoes'); setError(''); setSuccess(''); }}>
+                Whitelists e Quotas
+              </button>
+              <button className={`tab-btn ${activeTab === 'etars' ? 'active' : ''}`} onClick={() => { setActiveTab('etars'); setError(''); setSuccess(''); }}>
+                Disponibilidade ETARs
+              </button>
             </div>
 
-            {loading ? (
-              <p>A ler dados...</p>
-            ) : solicitadas.length === 0 ? (
-              <div className="card" style={{ textAlign: 'center', padding: '3.5rem' }}>
-                <ShieldCheck size={48} style={{ color: 'var(--success)', marginBottom: '1rem' }} />
-                <h3>Sem pendentes</h3>
-                <p style={{ color: 'var(--text-secondary)' }}>Não existem pedidos de descarga a aguardar decisão manual.</p>
+            {/* TAB: PEDIDOS PENDENTES DE DECISÃO */}
+            {activeTab === 'decisoes' && (
+              <div>
+                {loading ? (
+                  <p>A ler dados...</p>
+                ) : solicitadas.length === 0 ? (
+                  <div className="card" style={{ textAlign: 'center', padding: '3.5rem' }}>
+                    <ShieldCheck size={48} style={{ color: 'var(--success)', marginBottom: '1rem' }} />
+                    <h3>Sem pendentes</h3>
+                    <p style={{ color: 'var(--text-secondary)' }}>Não existem pedidos de descarga a aguardar decisão manual.</p>
+                  </div>
+                ) : (
+                  <div className="table-container">
+                    <table className="data-table">
+                      <thead>
+                        <tr>
+                          <th>Ref/Data</th>
+                          <th>Cliente</th>
+                          <th>ETAR Destino</th>
+                          <th>Efluente</th>
+                          <th>Qtd (L)</th>
+                          <th>Ações</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {solicitadas.map((d) => (
+                          <tr key={d.id_descarga}>
+                            <td>
+                              <strong>#{d.id_descarga}</strong>
+                              <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                                {new Date(d.data_pedido).toLocaleDateString()}
+                              </div>
+                            </td>
+                            <td>{d.cliente_nome}</td>
+                            <td>{d.etar_nome || `ETAR ${d.id_etar}`}</td>
+                            <td>{d.tipo_efluente}</td>
+                            <td>{d.quantidade} L</td>
+                            <td>
+                              <button className="btn btn-primary" style={{ padding: '0.35rem 0.7rem', fontSize: '0.8rem' }} onClick={() => setSelectedDescarga(d)}>
+                                Decidir
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
-            ) : (
-              <div className="table-container">
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>Ref/Data</th>
-                      <th>Cliente</th>
-                      <th>ETAR Destino</th>
-                      <th>Efluente</th>
-                      <th>Qtd (L)</th>
-                      <th>Ações</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {solicitadas.map((d) => (
-                      <tr key={d.id_descarga}>
-                        <td>
-                          <strong>#{d.id_descarga}</strong>
-                          <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-                            {new Date(d.data_pedido).toLocaleDateString()}
+            )}
+
+            {/* TAB: GESTÃO DE CLIENTES CONTRATUALIZADOS */}
+            {activeTab === 'clientes' && (
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                  <h3>Clientes Contratualizados</h3>
+                  <button className="btn btn-primary" onClick={() => setShowAddCliente(true)}>
+                    <PlusCircle size={16} style={{ verticalAlign: 'middle', marginRight: '4px' }} /> Adicionar Cliente
+                  </button>
+                </div>
+                {loading ? (
+                  <p>A carregar clientes...</p>
+                ) : clientesList.length === 0 ? (
+                  <p>Não existem clientes registados no sistema.</p>
+                ) : (
+                  <div className="table-container">
+                    <table className="data-table">
+                      <thead>
+                        <tr>
+                          <th>Ref</th>
+                          <th>Nome</th>
+                          <th>Email</th>
+                          <th>Periodicidade Análise</th>
+                          <th>Contacto / Telefone</th>
+                          <th>Estado</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {clientesList.map(c => (
+                          <tr key={c.id_cliente}>
+                            <td><strong>#{c.id_cliente}</strong></td>
+                            <td>{c.nome}</td>
+                            <td>{c.email}</td>
+                            <td><span className="badge badge-solicitada">{c.periodicidade_analise}</span></td>
+                            <td>{c.contacto || 'N/A'} {c.telefone ? `(${c.telefone})` : ''}</td>
+                            <td>
+                              <span className={`badge ${c.ativo ? 'badge-autorizada' : 'badge-rejeitada'}`}>
+                                {c.ativo ? 'Ativo' : 'Inativo'}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* TAB: WHITELISTS E PARAMETRIZAÇÃO DE CLIENTES */}
+            {activeTab === 'autorizacoes' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                    <h3>Whitelists e Quotas Diárias</h3>
+                    <button className="btn btn-primary" onClick={() => setShowAddAutorizacao(true)}>
+                      <PlusCircle size={16} style={{ verticalAlign: 'middle', marginRight: '4px' }} /> Configurar Whitelist
+                    </button>
+                  </div>
+                  {loading ? (
+                    <p>A carregar regras de quota...</p>
+                  ) : autorizacoesList.length === 0 ? (
+                    <p>Sem regras de whitelist ativas.</p>
+                  ) : (
+                    <div className="table-container">
+                      <table className="data-table">
+                        <thead>
+                          <tr>
+                            <th>Ref</th>
+                            <th>Cliente</th>
+                            <th>ETAR Autorizada</th>
+                            <th>Quota Diária</th>
+                            <th>Auto-Aprovação</th>
+                            <th>Estado</th>
+                            <th>Ações</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {autorizacoesList.map(a => (
+                            <tr key={a.id_autorizacao}>
+                              <td><strong>#{a.id_autorizacao}</strong></td>
+                              <td>{a.cliente_nome}</td>
+                              <td>{a.etar_nome}</td>
+                              <td>{a.quota} descargas/dia</td>
+                              <td>{a.auto_aprovacao ? 'Sim (Automática)' : 'Não (Manual)'}</td>
+                              <td>
+                                <span className={`badge ${a.ativo ? 'badge-autorizada' : 'badge-rejeitada'}`}>
+                                  {a.ativo ? 'Ativa' : 'Inativa'}
+                                </span>
+                              </td>
+                              <td>
+                                <button className="btn btn-secondary" style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem' }} onClick={() => handleToggleAutorizacaoStatus(a)}>
+                                  {a.ativo ? 'Desativar' : 'Ativar'}
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+
+                <div className="card" style={{ maxWidth: '600px' }}>
+                  <h3>Parametrização de Amostras por Cliente</h3>
+                  <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '1.5rem' }}>
+                    Selecione um cliente para configurar quais os ensaios analíticos adicionais previstos no contrato de descarga.
+                  </p>
+                  <div className="form-group">
+                    <label className="form-label">Selecionar Cliente</label>
+                    <select className="form-input" value={selectedConfigClient} onChange={e => setSelectedConfigClient(e.target.value)}>
+                      <option value="">-- Escolha um cliente --</option>
+                      {clientesList.map(c => (
+                        <option key={c.id_cliente} value={c.id_cliente}>{c.nome}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {selectedConfigClient && (
+                    <form onSubmit={handleUpdateClientParams}>
+                      <div style={{ marginTop: '1rem', borderTop: '1px solid var(--border)', paddingTop: '1rem' }}>
+                        <h4 style={{ marginBottom: '1rem', fontSize: '0.9rem' }}>Ensaios Específicos do Contrato:</h4>
+                        {parametrosList.filter(p => !p.obrigatorio).map(p => (
+                          <div key={p.id_parametro} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                            <input 
+                              type="checkbox" 
+                              id={`param-${p.id_parametro}`} 
+                              style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                              checked={activeParams.includes(p.id_parametro)} 
+                              onChange={() => handleToggleParamCheckbox(p.id_parametro)} 
+                            />
+                            <label htmlFor={`param-${p.id_parametro}`} style={{ fontSize: '0.85rem', cursor: 'pointer' }}>
+                              <strong>{p.nome}</strong> ({p.tipo_parametro.replace('_', ' ')})
+                            </label>
                           </div>
-                        </td>
-                        <td>{d.cliente_nome}</td>
-                        <td>{d.etar_nome || `ETAR ${d.id_etar}`}</td>
-                        <td>{d.tipo_efluente}</td>
-                        <td>{d.quantidade} L</td>
-                        <td>
-                          <button className="btn btn-primary" style={{ padding: '0.35rem 0.7rem', fontSize: '0.8rem' }} onClick={() => setSelectedDescarga(d)}>
-                            Decidir
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                        ))}
+                      </div>
+                      <button type="submit" className="btn btn-primary" style={{ marginTop: '1.5rem', width: '100%' }}>
+                        Gravar Parâmetros Contratuais
+                      </button>
+                    </form>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* TAB: DISPONIBILIDADE DE ETARS (CONTINGÊNCIA) */}
+            {activeTab === 'etars' && (
+              <div>
+                <h3 style={{ marginBottom: '1.5rem' }}>Estado e Disponibilidade de ETARs</h3>
+                {loading ? (
+                  <p>A carregar ETARs...</p>
+                ) : etarsList.length === 0 ? (
+                  <p>Nenhuma ETAR cadastrada.</p>
+                ) : (
+                  <div className="table-container">
+                    <table className="data-table">
+                      <thead>
+                        <tr>
+                          <th>Ref</th>
+                          <th>ETAR</th>
+                          <th>Localização</th>
+                          <th>Estado de Aceitação</th>
+                          <th>Ação de Contingência</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {etarsList.map(e => (
+                          <tr key={e.id_etar}>
+                            <td><strong>#{e.id_etar}</strong></td>
+                            <td>{e.nome}</td>
+                            <td>{e.localizacao}</td>
+                            <td>
+                              <span className={`badge ${e.disponivel ? 'badge-autorizada' : 'badge-rejeitada'}`}>
+                                {e.disponivel ? 'Disponível' : 'Indisponível (Bloqueada)'}
+                              </span>
+                            </td>
+                            <td>
+                              <button 
+                                className="btn" 
+                                style={{ 
+                                  padding: '0.35rem 0.7rem', 
+                                  fontSize: '0.8rem', 
+                                  backgroundColor: e.disponivel ? 'var(--danger)' : 'var(--success)', 
+                                  color: '#ffffff',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '0.25rem'
+                                }} 
+                                onClick={() => handleToggleEtarAvailability(e.id_etar, e.disponivel)}
+                              >
+                                {e.disponivel ? <ToggleLeft size={16} /> : <ToggleRight size={16} />}
+                                {e.disponivel ? 'Suspender Receção' : 'Ativar Receção'}
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -373,6 +773,114 @@ export default function ResponsavelDashboard({ user, onLogout }) {
                   Fechar
                 </button>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal: Adicionar Cliente */}
+        {showAddCliente && (
+          <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: '1rem' }}>
+            <div className="card" style={{ width: '100%', maxWidth: '500px', marginBottom: 0, maxHeight: '90vh', overflowY: 'auto' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                <h3>Registar Novo Cliente Contratado</h3>
+                <button style={{ background: 'none', border: 'none', cursor: 'pointer' }} onClick={() => setShowAddCliente(false)}><X size={20} /></button>
+              </div>
+              <form onSubmit={handleCreateCliente}>
+                <div className="form-group">
+                  <label className="form-label">Nome da Empresa / Cliente *</label>
+                  <input type="text" className="form-input" placeholder="Ex: Lavandarias Reunidas SA" required value={newClienteData.nome} onChange={e => setNewClienteData({ ...newClienteData, nome: e.target.value })} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Email Principal (Acesso) *</label>
+                  <input type="email" className="form-input" placeholder="geral@empresa.com" required value={newClienteData.email} onChange={e => setNewClienteData({ ...newClienteData, email: e.target.value })} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Palavra-passe (Opcional - por omissão: Descargas123!)</label>
+                  <input type="password" className="form-input" placeholder="Introduza a password" value={newClienteData.password} onChange={e => setNewClienteData({ ...newClienteData, password: e.target.value })} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Periodicidade de Análises Contratada</label>
+                  <select className="form-input" value={newClienteData.periodicidade_analise} onChange={e => setNewClienteData({ ...newClienteData, periodicidade_analise: e.target.value })}>
+                    <option value="POR_DESCARGA">Por Descarga (Sempre)</option>
+                    <option value="SEMANAL">Semanal (Uma por semana civil)</option>
+                    <option value="QUINZENAL">Quinzenal (Mínimo a cada 15 dias)</option>
+                    <option value="MENSAL">Mensal (Uma por mês civil)</option>
+                    <option value="TRIMESTRAL">Trimestral (Uma por trimestre)</option>
+                    <option value="SEMESTRAL">Semestral (Uma por semestre)</option>
+                    <option value="ANUAL">Anual (Uma por ano civil)</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Morada da Sede / Instalações</label>
+                  <input type="text" className="form-input" placeholder="Morada..." value={newClienteData.morada} onChange={e => setNewClienteData({ ...newClienteData, morada: e.target.value })} />
+                </div>
+                <div className="form-group" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                  <div>
+                    <label className="form-label">Nome de Contacto</label>
+                    <input type="text" className="form-input" placeholder="Pessoa de contacto" value={newClienteData.contacto} onChange={e => setNewClienteData({ ...newClienteData, contacto: e.target.value })} />
+                  </div>
+                  <div>
+                    <label className="form-label">Telefone</label>
+                    <input type="text" className="form-input" placeholder="Telefone..." value={newClienteData.telefone} onChange={e => setNewClienteData({ ...newClienteData, telefone: e.target.value })} />
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem' }}>
+                  <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>Confirmar Contrato</button>
+                  <button type="button" className="btn btn-secondary" onClick={() => setShowAddCliente(false)}>Cancelar</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* Modal: Adicionar Autorização Whitelist */}
+        {showAddAutorizacao && (
+          <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: '1rem' }}>
+            <div className="card" style={{ width: '100%', maxWidth: '450px', marginBottom: 0 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                <h3>Configurar Whitelist / Limites</h3>
+                <button style={{ background: 'none', border: 'none', cursor: 'pointer' }} onClick={() => setShowAddAutorizacao(false)}><X size={20} /></button>
+              </div>
+              <form onSubmit={handleCreateAutorizacao}>
+                <div className="form-group">
+                  <label className="form-label">Selecionar Cliente contratado *</label>
+                  <select className="form-input" required value={newAutorizacaoData.id_cliente} onChange={e => setNewAutorizacaoData({ ...newAutorizacaoData, id_cliente: e.target.value })}>
+                    <option value="">-- Escolha um cliente --</option>
+                    {clientesList.map(c => (
+                      <option key={c.id_cliente} value={c.id_cliente}>{c.nome}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Selecionar ETAR autorizada *</label>
+                  <select className="form-input" required value={newAutorizacaoData.id_etar} onChange={e => setNewAutorizacaoData({ ...newAutorizacaoData, id_etar: e.target.value })}>
+                    <option value="">-- Escolha uma ETAR --</option>
+                    {etarsList.map(e => (
+                      <option key={e.id_etar} value={e.id_etar}>{e.nome}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Quota Diária de Descargas *</label>
+                  <input type="number" className="form-input" required min="1" value={newAutorizacaoData.quota} onChange={e => setNewAutorizacaoData({ ...newAutorizacaoData, quota: e.target.value })} />
+                </div>
+                <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', margin: '1rem 0' }}>
+                  <input 
+                    type="checkbox" 
+                    id="auto-aprovacao-check" 
+                    style={{ width: '20px', height: '20px', cursor: 'pointer' }}
+                    checked={newAutorizacaoData.auto_aprovacao} 
+                    onChange={e => setNewAutorizacaoData({ ...newAutorizacaoData, auto_aprovacao: e.target.checked })} 
+                  />
+                  <label htmlFor="auto-aprovacao-check" style={{ fontSize: '0.85rem', cursor: 'pointer' }}>
+                    <strong>Ativar Auto-Aprovação</strong> (Ignora triagem manual)
+                  </label>
+                </div>
+                <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem' }}>
+                  <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>Gravar Regra</button>
+                  <button type="button" className="btn btn-secondary" onClick={() => setShowAddAutorizacao(false)}>Cancelar</button>
+                </div>
+              </form>
             </div>
           </div>
         )}

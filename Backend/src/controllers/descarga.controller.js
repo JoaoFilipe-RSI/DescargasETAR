@@ -370,15 +370,16 @@ exports.registarRececao = async (req, res) => {
     }
 
     // 1. Atualizar a descarga
+    const estadoDescargaFinal = recolha_amostra ? 'RECEBIDA' : 'CONCLUIDA';
     const updateQuery = `
       UPDATE descarga
-      SET estado_descarga = 'RECEBIDA', data_rececao = NOW(),
-          quantidade_real = $1, recolha_amostra = $2, observacoes = COALESCE($3, observacoes),
-          id_utilizador_rececao = $4
-      WHERE id_descarga = $5
+      SET estado_descarga = $1, data_rececao = NOW(),
+          quantidade_real = $2, recolha_amostra = $3, observacoes = COALESCE($4, observacoes),
+          id_utilizador_rececao = $5
+      WHERE id_descarga = $6
       RETURNING *
     `;
-    const updateRes = await client.query(updateQuery, [quantidade_real, !!recolha_amostra, observacoes || null, req.user.id_utilizador, id]);
+    const updateRes = await client.query(updateQuery, [estadoDescargaFinal, quantidade_real, !!recolha_amostra, observacoes || null, req.user.id_utilizador, id]);
     const descargaAtualizada = updateRes.rows[0];
 
     // 2. Se recolheu amostra, criar registo na tabela amostra
@@ -406,8 +407,8 @@ exports.registarRececao = async (req, res) => {
 
     await client.query('COMMIT');
 
+    const { enviarNotificacao } = require('../config/socket');
     if (recolha_amostra && amostra) {
-      const { enviarNotificacao } = require('../config/socket');
       enviarNotificacao('laboratorio-tecnicos', 'nova-amostra', {
         id_amostra: amostra.id_amostra,
         qr_code_token: amostra.qr_code_token,
@@ -417,6 +418,11 @@ exports.registarRececao = async (req, res) => {
         id_amostra: amostra.id_amostra,
         qr_code_token: amostra.qr_code_token,
         id_descarga: id
+      });
+    } else {
+      enviarNotificacao('gestores-clientes', 'descarga-concluida', {
+        id_descarga: id,
+        mensagem: `Receção efetuada na ETAR: Descarga #${id} foi concluída (volume real: ${quantidade_real} L).`
       });
     }
 

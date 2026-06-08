@@ -119,13 +119,20 @@ DescargasETAR/
     *   Responsáveis na sala `laboratorio-responsaveis`
     *   Gestores de Clientes na sala `gestores-clientes`
 *   **Fluxo em Tempo Real**: Sempre que há uma alteração de estado relevante no backend (criação de pedidos, aprovações, agendamentos, check-ins ou análises concluídas), é disparada uma notificação para a sala correta.
-*   **Atualização de UI Transparente**: Ao receber uma notificação via WebSocket, os dashboards mostram um banner de alerta informativo verde e atualizam o estado local recarregando os dados em segundo plano, sem necessidade de atualizar manualmente a página.
+*   **Atualização de UI Transparente**: Ao receber uma notificação via WebSocket, os dashboards mostram um banner de alerta informativo verde e atualizem o estado local recarregando os dados em segundo plano, sem necessidade de atualizar manualmente a página.
+
+### 8. Módulo de Administração & Painel do Gestor (Novo)
+*   **Gestão de Clientes**: Criação e listagem de novos clientes contratualizados com geração automática de credenciais de utilizador.
+*   **Whitelists e Quotas**: Configuração e alteração em tempo real das quotas diárias e ativação de auto-aprovação de pedidos por cliente e ETAR.
+*   **Parametrização Analítica Contratual**: Associação dinâmica de parâmetros adicionais específicos que devem ser analisados para as amostras de cada cliente.
+*   **Contingência de ETARs**: Ativação/suspensão manual e imediata de receção física de efluentes numa ETAR, com envio automático de alertas via WebSockets para os operadores e gestores envolvidos.
+*   **Sininho de Alertas**: Painel de notificações interativo com registo persistente local das notificações recebidas (com data, hora e marcação de leitura).
 
 ---
 
 ## 🧪 Como Executar os Testes
 
-Foi desenvolvida uma suite de **23 testes integrados** de ponta a ponta (Jest + Supertest) que validam todas as rotas e regras de negócio com limpeza automática da base de dados pós-execução.
+Foi desenvolvida uma suite de **32 testes integrados** de ponta a ponta (Jest + Supertest) que validam todas as rotas e regras de negócio com limpeza automática da base de dados pós-execução.
 
 Para correr os testes:
 1. Certifique-se de que a base de dados Postgres está ativa e configurada no ficheiro `Backend/.env`.

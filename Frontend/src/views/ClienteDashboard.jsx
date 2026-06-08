@@ -3,8 +3,9 @@ import { descargaService, amostraService } from '../services/api';
 import { webSocketService } from '../services/websocket';
 import { QRCodeSVG } from 'qrcode.react';
 import { PlusCircle, Calendar, ShieldCheck, Download, LogOut, Clock, Truck } from 'lucide-react';
+import NotificationBell from '../components/NotificationBell';
 
-export default function ClienteDashboard({ user, onLogout }) {
+export default function ClienteDashboard({ user, onLogout, notifications, onMarkAsRead, onMarkAllAsRead }) {
   const [activeTab, setActiveTab] = useState('pedidos');
   const [descargas, setDescargas] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -144,6 +145,11 @@ export default function ClienteDashboard({ user, onLogout }) {
           <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
             Olá, <strong>{user.nome}</strong> (Cliente)
           </span>
+          <NotificationBell 
+            notifications={notifications} 
+            onMarkAsRead={onMarkAsRead} 
+            onMarkAllAsRead={onMarkAllAsRead} 
+          />
           <button className="btn btn-secondary" style={{ padding: '0.4rem 0.8rem' }} onClick={onLogout}>
             <LogOut size={16} /> Sair
           </button>
