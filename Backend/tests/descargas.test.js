@@ -187,6 +187,39 @@ describe('Módulo de Descargas - Testes de Integração', () => {
       expect(res.body.descarga.estado_descarga).toBe('AUTORIZADA');
     });
 
+    test('Deve permitir solicitar elementos adicionais (SOLICITAR_ELEMENTOS) mantendo o estado SOLICITADA e atualizando as observações', async () => {
+      // Criar descarga temporária
+      const createRes = await request(app)
+        .post('/api/descargas')
+        .set('Authorization', `Bearer ${tokens.clienteBBB}`)
+        .send({
+          id_etar: 2,
+          tipo_efluente: 'Industrial',
+          quantidade: 150,
+          numero_recipientes: 1
+        });
+      
+      const tempId = createRes.body.descarga.id_descarga;
+      createdDescargaIds.push(tempId);
+
+      // Solicitar elementos
+      const res = await request(app)
+        .put(`/api/descargas/${tempId}/decisao`)
+        .set('Authorization', `Bearer ${tokens.gestorClientes}`)
+        .send({
+          decisao: 'SOLICITAR_ELEMENTOS',
+          observacoes: 'Falta licença ambiental e boletim prévio do produtor.'
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.descarga.estado_descarga).toBe('SOLICITADA');
+      expect(res.body.descarga.observacoes).toBe('Falta licença ambiental e boletim prévio do produtor.');
+
+      // Verificar histórico
+      const histRes = await pool.query("SELECT * FROM historico WHERE entidade = 'DESCARGA' AND id_entidade = $1 AND acao = 'PEDIDO_ELEMENTOS'", [tempId]);
+      expect(histRes.rows.length).toBe(1);
+    });
+
     test('Deve impedir (403) a decisão se o perfil não for Gestor de Clientes (ex: perfil Cliente)', async () => {
       const res = await request(app)
         .put(`/api/descargas/${idDescargaSolicitada}/decisao`)

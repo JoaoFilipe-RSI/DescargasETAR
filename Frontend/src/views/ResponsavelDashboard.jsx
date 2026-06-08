@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { amostraService, descargaService, adminService } from '../services/api';
-import { ShieldCheck, ClipboardList, CheckSquare, XSquare, Download, LogOut, FileText, ToggleLeft, ToggleRight, Settings, PlusCircle, Check, X } from 'lucide-react';
+import { ShieldCheck, ClipboardList, CheckSquare, XSquare, Download, LogOut, FileText, ToggleLeft, ToggleRight, Settings, PlusCircle, Check, X, HelpCircle } from 'lucide-react';
 import { webSocketService } from '../services/websocket';
 import NotificationBell from '../components/NotificationBell';
 
@@ -276,13 +276,21 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
     }
   }, [user.perfil]);
 
-  // Gestor de Clientes: Registar Decisão Manual (Aprovar / Rejeitar)
+  // Gestor de Clientes: Registar Decisão Manual (Aprovar / Rejeitar / Solicitar Elementos)
   const handleDecisao = async (decisao) => {
     setError('');
     setSuccess('');
     try {
       await descargaService.registarDecisao(selectedDescarga.id_descarga, decisao, decisaoObs);
-      setSuccess(`Descarga #${selectedDescarga.id_descarga} foi ${decisao.toLowerCase()} com sucesso!`);
+      let acaoTexto = '';
+      if (decisao === 'SOLICITAR_ELEMENTOS') {
+        acaoTexto = 'colocada em falta de elementos';
+      } else if (decisao === 'AUTORIZADA') {
+        acaoTexto = 'autorizada';
+      } else {
+        acaoTexto = 'rejeitada';
+      }
+      setSuccess(`Descarga #${selectedDescarga.id_descarga} foi ${acaoTexto} com sucesso!`);
       setSelectedDescarga(null);
       setDecisaoObs('');
       loadData();
@@ -908,14 +916,17 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
                 <textarea className="form-input" style={{ minHeight: '80px', resize: 'vertical' }} placeholder="Indique o motivo da decisão..." value={decisaoObs} onChange={(e) => setDecisaoObs(e.target.value)}></textarea>
               </div>
 
-              <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.5rem' }}>
-                <button className="btn btn-primary" style={{ flex: 1, backgroundColor: 'var(--success)' }} onClick={() => handleDecisao('AUTORIZADA')}>
+              <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.5rem', flexWrap: 'wrap' }}>
+                <button className="btn btn-primary" style={{ flex: 1, minWidth: '100px', backgroundColor: 'var(--success)' }} onClick={() => handleDecisao('AUTORIZADA')}>
                   <CheckSquare size={16} /> Autorizar
                 </button>
-                <button className="btn btn-primary" style={{ flex: 1, backgroundColor: 'var(--danger)' }} onClick={() => handleDecisao('REJEITADA')}>
+                <button className="btn btn-primary" style={{ flex: 1, minWidth: '100px', backgroundColor: 'var(--danger)' }} onClick={() => handleDecisao('REJEITADA')}>
                   <XSquare size={16} /> Rejeitar
                 </button>
-                <button className="btn btn-secondary" onClick={() => setSelectedDescarga(null)}>
+                <button className="btn btn-primary" style={{ flex: 1, minWidth: '130px', backgroundColor: 'var(--warning)' }} onClick={() => handleDecisao('SOLICITAR_ELEMENTOS')}>
+                  <HelpCircle size={16} /> Pedir Elementos
+                </button>
+                <button className="btn btn-secondary" style={{ flex: 1, minWidth: '80px' }} onClick={() => setSelectedDescarga(null)}>
                   Fechar
                 </button>
               </div>

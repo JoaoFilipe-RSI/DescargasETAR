@@ -264,7 +264,24 @@ export default function ClienteDashboard({ user, onLogout, notifications, onMark
                             </div>
                           )}
                           {d.estado_descarga === 'SOLICITADA' && (
-                            <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>A aguardar aprovação</span>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                              <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>A aguardar aprovação</span>
+                              {d.observacoes && (
+                                <div style={{ 
+                                  fontSize: '0.75rem', 
+                                  color: 'var(--warning)', 
+                                  backgroundColor: 'var(--warning-light)', 
+                                  padding: '0.25rem 0.5rem', 
+                                  borderRadius: 'var(--radius-sm)', 
+                                  border: '1px solid var(--warning)', 
+                                  maxWidth: '220px', 
+                                  wordBreak: 'break-word',
+                                  marginTop: '0.25rem'
+                                }}>
+                                  <strong>Elementos em falta:</strong> {d.observacoes}
+                                </div>
+                              )}
+                            </div>
                           )}
                           {d.estado_descarga === 'REJEITADA' && (
                             <span style={{ fontSize: '0.8rem', color: 'var(--danger)', fontWeight: 600 }}>Descarga rejeitada</span>

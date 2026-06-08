@@ -178,8 +178,8 @@ exports.registarDecisao = async (req, res) => {
   const { id } = req.params;
   const { decisao, observacoes } = req.body;
 
-  if (!decisao || !['AUTORIZADA', 'REJEITADA'].includes(decisao.toUpperCase())) {
-    return res.status(400).json({ erro: 'Decisão inválida. Escolha AUTORIZADA ou REJEITADA.' });
+  if (!decisao || !['AUTORIZADA', 'REJEITADA', 'SOLICITAR_ELEMENTOS'].includes(decisao.toUpperCase())) {
+    return res.status(400).json({ erro: 'Decisão inválida. Escolha AUTORIZADA, REJEITADA ou SOLICITAR_ELEMENTOS.' });
   }
 
   try {
@@ -192,13 +192,28 @@ exports.registarDecisao = async (req, res) => {
       return res.status(400).json({ erro: 'Apenas é possível decidir sobre descargas com estado SOLICITADA.' });
     }
 
-    const query = `
-      UPDATE descarga
-      SET estado_descarga = $1, data_decisao = NOW(), id_utilizador_decisao = $2, observacoes = COALESCE($3, observacoes)
-      WHERE id_descarga = $4
-      RETURNING *
-    `;
-    const result = await pool.query(query, [decisao.toUpperCase(), req.user.id_utilizador, observacoes || null, id]);
+    let query;
+    let values;
+
+    if (decisao.toUpperCase() === 'SOLICITAR_ELEMENTOS') {
+      query = `
+        UPDATE descarga
+        SET observacoes = $1
+        WHERE id_descarga = $2
+        RETURNING *
+      `;
+      values = [observacoes || null, id];
+    } else {
+      query = `
+        UPDATE descarga
+        SET estado_descarga = $1, data_decisao = NOW(), id_utilizador_decisao = $2, observacoes = COALESCE($3, observacoes)
+        WHERE id_descarga = $4
+        RETURNING *
+      `;
+      values = [decisao.toUpperCase(), req.user.id_utilizador, observacoes || null, id];
+    }
+
+    const result = await pool.query(query, values);
     const descarga = result.rows[0];
 
     // Registar no histórico
@@ -206,19 +221,29 @@ exports.registarDecisao = async (req, res) => {
       INSERT INTO historico (entidade, id_entidade, acao, descricao, id_utilizador)
       VALUES ('DESCARGA', $1, $2, $3, $4)
     `;
-    const acaoHist = decisao.toUpperCase() === 'AUTORIZADA' ? 'AUTORIZACAO' : 'REJEICAO';
-    const descHist = `Pedido de descarga analisado e ${decisao.toLowerCase()} manualmente. Obs: ${observacoes || 'Sem observações'}`;
+    const acaoHist = decisao.toUpperCase() === 'SOLICITAR_ELEMENTOS'
+      ? 'PEDIDO_ELEMENTOS'
+      : (decisao.toUpperCase() === 'AUTORIZADA' ? 'AUTORIZACAO' : 'REJEICAO');
+    const descHist = decisao.toUpperCase() === 'SOLICITAR_ELEMENTOS'
+      ? `Foram solicitados elementos adicionais ao cliente. Obs: ${observacoes || 'Sem observações'}`
+      : `Pedido de descarga analisado e ${decisao.toLowerCase()} manualmente. Obs: ${observacoes || 'Sem observações'}`;
     await pool.query(histQuery, [id, acaoHist, descHist, req.user.id_utilizador]);
 
     const { enviarNotificacao } = require('../config/socket');
+    const msgNotif = decisao.toUpperCase() === 'SOLICITAR_ELEMENTOS'
+      ? `Foram solicitados elementos adicionais para o seu pedido de descarga #${descarga.id_descarga}.`
+      : `O seu pedido de descarga #${descarga.id_descarga} foi ${decisao.toLowerCase()}.`;
+
     enviarNotificacao(`cliente-${descarga.id_cliente}`, 'decisao-pedido', {
       id_descarga: descarga.id_descarga,
       estado_descarga: descarga.estado_descarga,
-      mensagem: `O seu pedido de descarga #${descarga.id_descarga} foi ${decisao.toLowerCase()}.`
+      mensagem: msgNotif
     });
 
     return res.json({
-      mensagem: `Descarga foi ${decisao.toLowerCase()} com sucesso.`,
+      mensagem: decisao.toUpperCase() === 'SOLICITAR_ELEMENTOS'
+        ? 'Pedido de elementos adicionais registado com sucesso.'
+        : `Descarga foi ${decisao.toLowerCase()} com sucesso.`,
       descarga
     });
 
