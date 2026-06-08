@@ -49,7 +49,10 @@ exports.criarPedido = async (req, res) => {
       const countRes = await pool.query(countQuery, [id_cliente, id_etar]);
       const totalHoje = countRes.rows[0].total;
 
-      if (totalHoje < auth.quota && auth.auto_aprovacao) {
+      const diaSemana = now.getDay(); // 0 = Domingo, 6 = Sábado
+      const eFimDeSemana = (diaSemana === 0 || diaSemana === 6);
+
+      if (totalHoje < auth.quota && auth.auto_aprovacao && !eFimDeSemana) {
         estado = 'AUTORIZADA';
         dataDecisao = now;
         autoAprovado = true;

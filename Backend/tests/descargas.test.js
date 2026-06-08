@@ -41,8 +41,27 @@ describe('Módulo de Descargas - Testes de Integração', () => {
   let idDescargaAutoAprovada = null;
   let idDescargaSolicitada = null;
 
+  let mockDateValue = new Date('2026-06-08T12:00:00.000Z'); // Segunda-feira (Weekday)
+  let originalDate;
+
+  beforeAll(() => {
+    originalDate = global.Date;
+    global.Date = class extends originalDate {
+      constructor(...args) {
+        if (args.length === 0) {
+          return new originalDate(mockDateValue.getTime());
+        }
+        return new originalDate(...args);
+      }
+      static now() {
+        return mockDateValue.getTime();
+      }
+    };
+  });
+
   // Garantir limpeza no final de todos os testes
   afterAll(async () => {
+    global.Date = originalDate;
     if (createdDescargaIds.length > 0) {
       try {
         // 1. Apagar amostras associadas
@@ -83,6 +102,29 @@ describe('Módulo de Descargas - Testes de Integração', () => {
       
       idDescargaAutoAprovada = res.body.descarga.id_descarga;
       createdDescargaIds.push(idDescargaAutoAprovada);
+    });
+
+    test('Deve manter como SOLICITADA se for criado no fim de semana (Sábado ou Domingo) mesmo com quota e whitelist ativa', async () => {
+      mockDateValue = new Date('2026-06-06T12:00:00.000Z'); // Sábado
+
+      const res = await request(app)
+        .post('/api/descargas')
+        .set('Authorization', `Bearer ${tokens.clienteAAA}`)
+        .send({
+          id_etar: 1,
+          tipo_efluente: 'Industrial',
+          quantidade: 50,
+          numero_recipientes: 1
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.descarga).toBeDefined();
+      expect(res.body.descarga.estado_descarga).toBe('SOLICITADA');
+
+      createdDescargaIds.push(res.body.descarga.id_descarga);
+
+      // Restaurar para Segunda-feira
+      mockDateValue = new Date('2026-06-08T12:00:00.000Z');
     });
 
     test('Deve manter como SOLICITADA quando a whitelist requer aprovação manual (auto_aprovacao = false)', async () => {
