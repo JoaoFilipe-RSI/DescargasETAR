@@ -83,6 +83,15 @@ exports.criarPedido = async (req, res) => {
       : 'Pedido criado. A aguardar aprovação manual.';
     await pool.query(histQuery, [descarga.id_descarga, histDesc, req.user.id_utilizador]);
 
+    if (estado === 'SOLICITADA') {
+      const { enviarNotificacao } = require('../config/socket');
+      enviarNotificacao('gestores-clientes', 'novo-pedido', {
+        id_descarga: descarga.id_descarga,
+        cliente_nome: req.user.nome,
+        quantidade: descarga.quantidade
+      });
+    }
+
     return res.status(201).json({
       mensagem: autoAprovado 
         ? 'Pedido de descarga criado e AUTORIZADO automaticamente.' 
@@ -195,6 +204,13 @@ exports.registarDecisao = async (req, res) => {
     const descHist = `Pedido de descarga analisado e ${decisao.toLowerCase()} manualmente. Obs: ${observacoes || 'Sem observações'}`;
     await pool.query(histQuery, [id, acaoHist, descHist, req.user.id_utilizador]);
 
+    const { enviarNotificacao } = require('../config/socket');
+    enviarNotificacao(`cliente-${descarga.id_cliente}`, 'decisao-pedido', {
+      id_descarga: descarga.id_descarga,
+      estado_descarga: descarga.estado_descarga,
+      mensagem: `O seu pedido de descarga #${descarga.id_descarga} foi ${decisao.toLowerCase()}.`
+    });
+
     return res.json({
       mensagem: `Descarga foi ${decisao.toLowerCase()} com sucesso.`,
       descarga
@@ -254,6 +270,13 @@ exports.agendarDescarga = async (req, res) => {
     `;
     const descHist = `Descarga agendada: ${empresa_transportadora} | Trator: ${matricula_trator} | Cisterna: ${matricula_cisterna || 'N/A'}`;
     await pool.query(histQuery, [id, descHist, req.user.id_utilizador]);
+
+    const { enviarNotificacao } = require('../config/socket');
+    enviarNotificacao(`etar-${descarga.id_etar}`, 'novo-agendamento', {
+      id_descarga: descarga.id_descarga,
+      empresa_transportadora: descarga.empresa_transportadora,
+      matricula_trator: descarga.matricula_trator
+    });
 
     return res.json({
       mensagem: 'Descarga agendada com sucesso. QR Code gerado.',
@@ -382,6 +405,20 @@ exports.registarRececao = async (req, res) => {
     await client.query(histQuery, [id, descHist, req.user.id_utilizador]);
 
     await client.query('COMMIT');
+
+    if (recolha_amostra && amostra) {
+      const { enviarNotificacao } = require('../config/socket');
+      enviarNotificacao('laboratorio-tecnicos', 'nova-amostra', {
+        id_amostra: amostra.id_amostra,
+        qr_code_token: amostra.qr_code_token,
+        id_descarga: id
+      });
+      enviarNotificacao('laboratorio-responsaveis', 'nova-amostra', {
+        id_amostra: amostra.id_amostra,
+        qr_code_token: amostra.qr_code_token,
+        id_descarga: id
+      });
+    }
 
     return res.json({
       mensagem: 'Receção da descarga registada com sucesso.',

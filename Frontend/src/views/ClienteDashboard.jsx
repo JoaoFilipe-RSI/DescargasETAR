@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { descargaService, amostraService } from '../services/api';
+import { webSocketService } from '../services/websocket';
 import { QRCodeSVG } from 'qrcode.react';
 import { PlusCircle, Calendar, ShieldCheck, Download, LogOut, Clock, Truck } from 'lucide-react';
 
@@ -45,6 +46,27 @@ export default function ClienteDashboard({ user, onLogout }) {
   useEffect(() => {
     loadDescargas();
   }, [activeTab]);
+
+  // Escutar atualizações via WebSockets em tempo real
+  useEffect(() => {
+    const handleDecisao = (data) => {
+      setSuccess(data.mensagem);
+      loadDescargas();
+    };
+
+    const handleBoletim = (data) => {
+      setSuccess(data.mensagem);
+      loadDescargas();
+    };
+
+    webSocketService.on('decisao-pedido', handleDecisao);
+    webSocketService.on('boletim-disponivel', handleBoletim);
+
+    return () => {
+      webSocketService.off('decisao-pedido', handleDecisao);
+      webSocketService.off('boletim-disponivel', handleBoletim);
+    };
+  }, []);
 
   // Criar Pedido
   const handleCreatePedido = async (e) => {

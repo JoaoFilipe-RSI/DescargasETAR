@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { amostraService, descargaService } from '../services/api';
 import { ShieldCheck, ClipboardList, CheckSquare, XSquare, Download, LogOut, FileText } from 'lucide-react';
+import { webSocketService } from '../services/websocket';
 
 export default function ResponsavelDashboard({ user, onLogout }) {
   const [activeTab, setActiveTab] = useState(
@@ -45,6 +46,37 @@ export default function ResponsavelDashboard({ user, onLogout }) {
   useEffect(() => {
     loadData();
   }, [activeTab]);
+
+  // Escutar eventos WebSocket em tempo real baseados no perfil
+  useEffect(() => {
+    if (user.perfil === 'GESTOR_CLIENTES') {
+      const handleNovoPedido = (data) => {
+        setSuccess(`Novo pedido de descarga pendente: Descarga #${data.id_descarga} (${data.cliente_nome} - ${data.quantidade}L).`);
+        loadData();
+      };
+      webSocketService.on('novo-pedido', handleNovoPedido);
+      return () => {
+        webSocketService.off('novo-pedido', handleNovoPedido);
+      };
+    } else if (user.perfil === 'RESPONSAVEL_LAB' || user.perfil === 'RESPONSAVEL_ETAR') {
+      const handleNovaAmostra = (data) => {
+        setSuccess(`Nova amostra recolhida na ETAR: ${data.qr_code_token} (Descarga #${data.id_descarga}).`);
+        loadData();
+      };
+      const handleAmostraAnalisada = (data) => {
+        setSuccess(`Resultados laboratoriais prontos para validação: Amostra ${data.qr_code_token} (Descarga #${data.id_descarga}).`);
+        loadData();
+      };
+
+      webSocketService.on('nova-amostra', handleNovaAmostra);
+      webSocketService.on('amostra-analisada', handleAmostraAnalisada);
+
+      return () => {
+        webSocketService.off('nova-amostra', handleNovaAmostra);
+        webSocketService.off('amostra-analisada', handleAmostraAnalisada);
+      };
+    }
+  }, [user.perfil]);
 
   // Gestor de Clientes: Registar Decisão Manual (Aprovar / Rejeitar)
   const handleDecisao = async (decisao) => {
@@ -183,10 +215,10 @@ export default function ResponsavelDashboard({ user, onLogout }) {
         {(user.perfil === 'RESPONSAVEL_LAB' || user.perfil === 'RESPONSAVEL_ETAR') && (
           <div>
             <div className="tabs-nav">
-              <button className={`tab-btn ${activeTab === 'validacoes' ? 'active' : ''}`} onClick={() => setActiveTab('validacoes')}>
+              <button className={`tab-btn ${activeTab === 'validacoes' ? 'active' : ''}`} onClick={() => { setActiveTab('validacoes'); setError(''); setSuccess(''); }}>
                 Amostras Analisadas ({analisadas.length})
               </button>
-              <button className={`tab-btn ${activeTab === 'concluidas' ? 'active' : ''}`} onClick={() => setActiveTab('concluidas')}>
+              <button className={`tab-btn ${activeTab === 'concluidas' ? 'active' : ''}`} onClick={() => { setActiveTab('concluidas'); setError(''); setSuccess(''); }}>
                 Boletins Concluídos
               </button>
             </div>

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { amostraService } from '../services/api';
 import { FlaskConical, ClipboardList, ScanLine, Check, AlertCircle, LogOut } from 'lucide-react';
+import { webSocketService } from '../services/websocket';
 
 export default function TecnicoDashboard({ user, onLogout }) {
   const [activeView, setActiveView] = useState('checkin'); // 'checkin', 'lista', 'bancada', 'triagem-res'
@@ -50,6 +51,20 @@ export default function TecnicoDashboard({ user, onLogout }) {
     }
   }, [activeView]);
 
+  // Escutar novas amostras em tempo real via WebSockets
+  useEffect(() => {
+    const handleNovaAmostra = (data) => {
+      setSuccess(`Nova amostra aguardando triagem/bancada: ${data.qr_code_token} (Descarga #${data.id_descarga}).`);
+      loadAmostras();
+    };
+
+    webSocketService.on('nova-amostra', handleNovaAmostra);
+
+    return () => {
+      webSocketService.off('nova-amostra', handleNovaAmostra);
+    };
+  }, []);
+
   // Efetuar Check-in (Receber Amostra física e triagem)
   const handleCheckin = async (e) => {
     e.preventDefault();
@@ -57,6 +72,7 @@ export default function TecnicoDashboard({ user, onLogout }) {
 
     setLoading(true);
     setError('');
+    setSuccess('');
     setTriagemData(null);
     try {
       const res = await amostraService.receberAmostra(sampleTokenInput.trim());
@@ -79,6 +95,7 @@ export default function TecnicoDashboard({ user, onLogout }) {
     });
     setResultadosData(resetResultados);
     setError('');
+    setSuccess('');
     setActiveView('bancada');
   };
 
@@ -152,10 +169,10 @@ export default function TecnicoDashboard({ user, onLogout }) {
         
         {/* Menu Rápido */}
         <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem' }}>
-          <button className={`btn ${activeView === 'checkin' || activeView === 'triagem-res' ? 'btn-primary' : 'btn-secondary'}`} style={{ flex: 1 }} onClick={() => { setActiveView('checkin'); setError(''); setSampleTokenInput(''); }}>
+          <button className={`btn ${activeView === 'checkin' || activeView === 'triagem-res' ? 'btn-primary' : 'btn-secondary'}`} style={{ flex: 1 }} onClick={() => { setActiveView('checkin'); setError(''); setSuccess(''); setSampleTokenInput(''); }}>
             <ScanLine size={16} /> Check-in de Frascos
           </button>
-          <button className={`btn ${activeView === 'lista' || activeView === 'bancada' ? 'btn-primary' : 'btn-secondary'}`} style={{ flex: 1 }} onClick={() => { setActiveView('lista'); setError(''); }}>
+          <button className={`btn ${activeView === 'lista' || activeView === 'bancada' ? 'btn-primary' : 'btn-secondary'}`} style={{ flex: 1 }} onClick={() => { setActiveView('lista'); setError(''); setSuccess(''); }}>
             <ClipboardList size={16} /> Lista de Bancada
           </button>
         </div>

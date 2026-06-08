@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { descargaService } from '../services/api';
 import { Camera, Search, FileText, CheckCircle2, AlertTriangle, LogOut, Printer } from 'lucide-react';
+import { webSocketService } from '../services/websocket';
 
 export default function OperadorDashboard({ user, onLogout }) {
   const [activeView, setActiveView] = useState('scanner'); // 'scanner', 'receber', 'agendados', 'sucesso'
   const [qrInput, setQrInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   
   // Dados da descarga validada
   const [validatedDescarga, setValidatedDescarga] = useState(null);
@@ -46,6 +48,20 @@ export default function OperadorDashboard({ user, onLogout }) {
     }
   }, [activeView]);
 
+  // Escutar agendamentos em tempo real via WebSockets
+  useEffect(() => {
+    const handleNovoAgendamento = (data) => {
+      setSuccess(`Novo agendamento recebido em tempo real: ${data.empresa_transportadora} (${data.matricula_trator}).`);
+      loadAgendados();
+    };
+
+    webSocketService.on('novo-agendamento', handleNovoAgendamento);
+
+    return () => {
+      webSocketService.off('novo-agendamento', handleNovoAgendamento);
+    };
+  }, []);
+
   // Validar QR Code / Token
   const handleValidateQR = async (e) => {
     if (e) e.preventDefault();
@@ -53,6 +69,7 @@ export default function OperadorDashboard({ user, onLogout }) {
 
     setLoading(true);
     setError('');
+    setSuccess('');
     try {
       const res = await descargaService.validarTokenQR(qrInput.trim());
       setValidatedDescarga(res.descarga);
@@ -74,6 +91,7 @@ export default function OperadorDashboard({ user, onLogout }) {
     e.preventDefault();
     setLoading(true);
     setError('');
+    setSuccess('');
     try {
       const payload = {
         quantidade_real: parseFloat(rececaoData.quantidade_real),
@@ -112,15 +130,16 @@ export default function OperadorDashboard({ user, onLogout }) {
         
         {/* Menu de Ações Rápido */}
         <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem' }}>
-          <button className={`btn ${activeView === 'scanner' ? 'btn-primary' : 'btn-secondary'}`} style={{ flex: 1 }} onClick={() => { setActiveView('scanner'); setError(''); setQrInput(''); }}>
+          <button className={`btn ${activeView === 'scanner' ? 'btn-primary' : 'btn-secondary'}`} style={{ flex: 1 }} onClick={() => { setActiveView('scanner'); setError(''); setSuccess(''); setQrInput(''); }}>
             <Camera size={16} /> Ler QR Code
           </button>
-          <button className={`btn ${activeView === 'agendados' ? 'btn-primary' : 'btn-secondary'}`} style={{ flex: 1 }} onClick={() => { setActiveView('agendados'); setError(''); }}>
+          <button className={`btn ${activeView === 'agendados' ? 'btn-primary' : 'btn-secondary'}`} style={{ flex: 1 }} onClick={() => { setActiveView('agendados'); setError(''); setSuccess(''); }}>
             <Search size={16} /> Agendadas
           </button>
         </div>
 
         {error && <div className="card" style={{ backgroundColor: 'var(--danger-light)', color: 'var(--danger)', padding: '1rem', borderLeft: '5px solid var(--danger)' }}>{error}</div>}
+        {success && <div className="card" style={{ backgroundColor: 'var(--success-light)', color: 'var(--success)', padding: '1rem', borderLeft: '5px solid var(--success)' }}>{success}</div>}
 
         {/* 1. Scanner de QR Code (Visual) */}
         {activeView === 'scanner' && (

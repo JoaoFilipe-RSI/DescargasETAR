@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { authService } from './services/api';
+import { webSocketService } from './services/websocket';
 import Login from './views/Login';
 import ClienteDashboard from './views/ClienteDashboard';
 import OperadorDashboard from './views/OperadorDashboard';
@@ -19,6 +20,21 @@ export default function App() {
     }
     setLoading(false);
   }, []);
+
+  // Ligar/Desligar WebSocket com base no estado da sessão do utilizador
+  useEffect(() => {
+    if (user) {
+      const token = localStorage.getItem('token');
+      if (token) {
+        webSocketService.connect(token);
+      }
+    } else {
+      webSocketService.disconnect();
+    }
+    return () => {
+      webSocketService.disconnect();
+    };
+  }, [user]);
 
   const handleLoginSuccess = (loggedInUser) => {
     setUser(loggedInUser);

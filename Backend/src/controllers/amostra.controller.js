@@ -383,7 +383,8 @@ exports.registarResultados = async (req, res) => {
       WHERE id_amostra = $2
       RETURNING *
     `;
-    await client.query(updateSampleQuery, [id_tecnico, id]);
+    const updateSampleRes = await client.query(updateSampleQuery, [id_tecnico, id]);
+    const updatedAmostra = updateSampleRes.rows[0];
 
     // Registar histórico
     const histQuery = `
@@ -393,6 +394,14 @@ exports.registarResultados = async (req, res) => {
     await client.query(histQuery, [id, id_tecnico]);
 
     await client.query('COMMIT');
+
+    const { enviarNotificacao } = require('../config/socket');
+    enviarNotificacao('laboratorio-responsaveis', 'amostra-analisada', {
+      id_amostra: updatedAmostra.id_amostra,
+      qr_code_token: updatedAmostra.qr_code_token,
+      id_descarga: updatedAmostra.id_descarga
+    });
+
     return res.json({ mensagem: 'Resultados registados com sucesso. Amostra analisada.' });
 
   } catch (err) {
@@ -470,6 +479,14 @@ exports.validarAmostra = async (req, res) => {
     await client.query(histQuery, ['DESCARGA', amostra.id_descarga, 'CONCLUSAO', 'Descarga finalizada e concluída após validação do Boletim Analítico.', id_responsavel]);
 
     await client.query('COMMIT');
+
+    const { enviarNotificacao } = require('../config/socket');
+    enviarNotificacao(`cliente-${amostra.id_cliente}`, 'boletim-disponivel', {
+      id_amostra: id,
+      id_descarga: amostra.id_descarga,
+      mensagem: 'O Boletim Analítico da sua descarga foi validado e encontra-se disponível para download.'
+    });
+
     return res.json({ mensagem: 'Amostra validada com sucesso. Ficha do cliente e descarga concluídas.' });
 
   } catch (err) {
