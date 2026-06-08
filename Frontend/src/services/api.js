@@ -201,6 +201,12 @@ export const adminService = {
       body: clienteData
     });
   },
+  atualizarEstadoCliente(id, ativo) {
+    return request(`/admin/clientes/${id}/status`, {
+      method: 'PUT',
+      body: { ativo }
+    });
+  },
   obterEtars() {
     return request('/admin/etars');
   },

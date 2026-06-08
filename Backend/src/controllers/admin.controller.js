@@ -84,6 +84,34 @@ exports.criarCliente = async (req, res) => {
   }
 };
 
+exports.atualizarEstadoCliente = async (req, res) => {
+  const { id } = req.params;
+  const { ativo } = req.body;
+
+  if (ativo === undefined) {
+    return res.status(400).json({ erro: 'Por favor, indique o estado ativo.' });
+  }
+
+  try {
+    const clientRes = await pool.query('SELECT id_utilizador FROM cliente WHERE id_cliente = $1', [id]);
+    if (clientRes.rows.length === 0) {
+      return res.status(404).json({ erro: 'Cliente não encontrado.' });
+    }
+    const id_utilizador = clientRes.rows[0].id_utilizador;
+
+    const userQuery = 'UPDATE utilizador SET ativo = $1 WHERE id_utilizador = $2 RETURNING ativo';
+    const userRes = await pool.query(userQuery, [!!ativo, id_utilizador]);
+
+    return res.json({
+      mensagem: `Estado da conta do cliente atualizado para ${userRes.rows[0].ativo ? 'ativo' : 'inativo'}.`,
+      ativo: userRes.rows[0].ativo
+    });
+  } catch (err) {
+    console.error('Erro ao atualizar estado do cliente:', err);
+    return res.status(500).json({ erro: 'Erro interno ao atualizar estado da conta do cliente.' });
+  }
+};
+
 /**
  * 2. ETARs
  */

@@ -116,12 +116,12 @@ INSERT INTO descarga (
     id_cliente, id_etar, data_pedido, tipo_efluente, quantidade,
     estado_descarga, data_decisao, id_utilizador_decisao,
     data_agendamento, data_rececao, quantidade_real, recolha_amostra,
-    id_utilizador_rececao
+    id_utilizador_rececao, empresa_transportadora, matricula_trator
 ) VALUES (
     2, 1, NOW() - INTERVAL '4 days', 'Domestico', 150,
     'RECEBIDA', NOW() - INTERVAL '3 days', 6,
     NOW() - INTERVAL '2 days', NOW() - INTERVAL '1 day', 145, true,
-    5
+    5, 'Transportes Y', 'IT-45_LL'
 );
 
 -- AMOSTRA

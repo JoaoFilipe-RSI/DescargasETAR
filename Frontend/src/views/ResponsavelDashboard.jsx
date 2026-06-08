@@ -232,6 +232,19 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
     }
   };
 
+  // Gestor de Clientes: Alternar Estado Ativo da Conta do Cliente
+  const handleToggleClienteStatus = async (cliente) => {
+    setError('');
+    setSuccess('');
+    try {
+      await adminService.atualizarEstadoCliente(cliente.id_cliente, !cliente.ativo);
+      setSuccess(`Estado do cliente ${cliente.nome} atualizado para ${!cliente.ativo ? 'ativo' : 'inativo'} com sucesso!`);
+      loadData();
+    } catch (err) {
+      setError(err.message || 'Erro ao alternar o estado do cliente.');
+    }
+  };
+
   // Gestor de Clientes: Alternar Disponibilidade da ETAR (Contingência)
   const handleToggleEtarAvailability = async (id, currentAvailability) => {
     setError('');
@@ -531,6 +544,7 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
                           <th>Periodicidade Análise</th>
                           <th>Contacto / Telefone</th>
                           <th>Estado</th>
+                          <th>Ações</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -545,6 +559,15 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
                               <span className={`badge ${c.ativo ? 'badge-autorizada' : 'badge-rejeitada'}`}>
                                 {c.ativo ? 'Ativo' : 'Inativo'}
                               </span>
+                            </td>
+                            <td>
+                              <button 
+                                className="btn btn-secondary" 
+                                style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem' }} 
+                                onClick={() => handleToggleClienteStatus(c)}
+                              >
+                                {c.ativo ? 'Suspender' : 'Ativar'}
+                              </button>
                             </td>
                           </tr>
                         ))}

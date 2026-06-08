@@ -94,6 +94,25 @@ describe('Módulo de Administração - Testes de Integração', () => {
         });
       expect(res.status).toBe(400);
     });
+
+    test('Deve atualizar (ativar/desativar) o estado de utilizador do cliente', async () => {
+      const idCliente = createdClientIds[0];
+      const resDesativar = await request(app)
+        .put(`/api/admin/clientes/${idCliente}/status`)
+        .set('Authorization', `Bearer ${tokens.gestor}`)
+        .send({ ativo: false });
+
+      expect(resDesativar.status).toBe(200);
+      expect(resDesativar.body.ativo).toBe(false);
+
+      const resAtivar = await request(app)
+        .put(`/api/admin/clientes/${idCliente}/status`)
+        .set('Authorization', `Bearer ${tokens.gestor}`)
+        .send({ ativo: true });
+
+      expect(resAtivar.status).toBe(200);
+      expect(resAtivar.body.ativo).toBe(true);
+    });
   });
 
   describe('3. Disponibilidade de ETARs', () => {
