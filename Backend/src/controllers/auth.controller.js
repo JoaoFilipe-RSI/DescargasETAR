@@ -20,7 +20,7 @@ exports.login = async (req, res) => {
       FROM utilizador u
       JOIN perfil p ON u.id_perfil = p.id_perfil
       LEFT JOIN cliente c ON u.id_utilizador = c.id_utilizador
-      WHERE u.email = $1
+      WHERE LOWER(u.email) = LOWER($1)
     `;
     const result = await pool.query(query, [email.toLowerCase().trim()]);
 
