@@ -84,3 +84,33 @@ exports.login = async (req, res) => {
 exports.getMe = (req, res) => {
   return res.json({ utilizador: req.user });
 };
+
+exports.alterarSenha = async (req, res) => {
+  const { senhaAtual, novaSenha } = req.body;
+  const id_utilizador = req.user.id_utilizador;
+
+  if (!senhaAtual || !novaSenha) {
+    return res.status(400).json({ erro: 'Por favor, indique a senha atual e a nova senha.' });
+  }
+
+  try {
+    const checkRes = await pool.query('SELECT password_hash FROM utilizador WHERE id_utilizador = $1', [id_utilizador]);
+    if (checkRes.rows.length === 0) {
+      return res.status(404).json({ erro: 'Utilizador não encontrado.' });
+    }
+    const user = checkRes.rows[0];
+
+    const isMatch = await bcrypt.compare(senhaAtual, user.password_hash);
+    if (!isMatch) {
+      return res.status(400).json({ erro: 'A senha atual introduzida está incorreta.' });
+    }
+
+    const newHash = await bcrypt.hash(novaSenha.trim(), 12);
+    await pool.query('UPDATE utilizador SET password_hash = $1 WHERE id_utilizador = $2', [newHash, id_utilizador]);
+
+    return res.json({ mensagem: 'Palavra-passe alterada com sucesso!' });
+  } catch (err) {
+    console.error('Erro ao alterar senha:', err);
+    return res.status(500).json({ erro: 'Erro interno ao alterar palavra-passe.' });
+  }
+};

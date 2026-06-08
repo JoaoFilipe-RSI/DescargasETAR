@@ -2,10 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { descargaService, amostraService } from '../services/api';
 import { webSocketService } from '../services/websocket';
 import { QRCodeSVG } from 'qrcode.react';
-import { PlusCircle, Calendar, ShieldCheck, Download, LogOut, Clock, Truck, Eye } from 'lucide-react';
+import { PlusCircle, Calendar, ShieldCheck, Download, LogOut, Clock, Truck, Eye, Settings } from 'lucide-react';
 import NotificationBell from '../components/NotificationBell';
 
-export default function ClienteDashboard({ user, onLogout, notifications, onMarkAsRead, onMarkAllAsRead }) {
+export default function ClienteDashboard({ user, onLogout, notifications, onMarkAsRead, onMarkAllAsRead, onChangePassword }) {
   const [activeTab, setActiveTab] = useState('pedidos');
   const [descargas, setDescargas] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -171,6 +171,9 @@ export default function ClienteDashboard({ user, onLogout, notifications, onMark
             onMarkAsRead={onMarkAsRead}
             onMarkAllAsRead={onMarkAllAsRead}
           />
+          <button className="btn btn-secondary" style={{ padding: '0.4rem 0.8rem', display: 'flex', alignItems: 'center', gap: '4px' }} onClick={onChangePassword}>
+            <Settings size={16} /> Senha
+          </button>
           <button className="btn btn-secondary" style={{ padding: '0.4rem 0.8rem' }} onClick={onLogout}>
             <LogOut size={16} /> Sair
           </button>

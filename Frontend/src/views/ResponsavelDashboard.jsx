@@ -4,7 +4,7 @@ import { ShieldCheck, ClipboardList, CheckSquare, XSquare, Download, LogOut, Fil
 import { webSocketService } from '../services/websocket';
 import NotificationBell from '../components/NotificationBell';
 
-export default function ResponsavelDashboard({ user, onLogout, notifications, onMarkAsRead, onMarkAllAsRead }) {
+export default function ResponsavelDashboard({ user, onLogout, notifications, onMarkAsRead, onMarkAllAsRead, onChangePassword }) {
   const [activeTab, setActiveTab] = useState(
     user.perfil === 'GESTOR_CLIENTES' ? 'decisoes' : 'validacoes'
   );
@@ -432,6 +432,9 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
             onMarkAsRead={onMarkAsRead} 
             onMarkAllAsRead={onMarkAllAsRead} 
           />
+          <button className="btn btn-secondary" style={{ padding: '0.4rem 0.8rem', display: 'flex', alignItems: 'center', gap: '4px' }} onClick={onChangePassword}>
+            <Settings size={16} /> Senha
+          </button>
           <button className="btn btn-secondary" style={{ padding: '0.4rem 0.8rem' }} onClick={onLogout}>
             <LogOut size={16} /> Sair
           </button>

@@ -9,4 +9,7 @@ router.post('/login', authController.login);
 // GET /api/auth/me - Obter dados do próprio utilizador logado (Protegido por token)
 router.get('/me', verificarToken, authController.getMe);
 
+// PUT /api/auth/alterar-senha - Alterar palavra-passe do utilizador logado (Protegido por token)
+router.put('/alterar-senha', verificarToken, authController.alterarSenha);
+
 module.exports = router;

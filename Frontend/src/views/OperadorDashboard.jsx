@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { descargaService } from '../services/api';
-import { Camera, Search, FileText, CheckCircle2, AlertTriangle, LogOut, Printer } from 'lucide-react';
+import { Camera, Search, FileText, CheckCircle2, AlertTriangle, LogOut, Printer, Settings } from 'lucide-react';
 import { webSocketService } from '../services/websocket';
 import NotificationBell from '../components/NotificationBell';
 
-export default function OperadorDashboard({ user, onLogout, notifications, onMarkAsRead, onMarkAllAsRead }) {
+export default function OperadorDashboard({ user, onLogout, notifications, onMarkAsRead, onMarkAllAsRead, onChangePassword }) {
   const [activeView, setActiveView] = useState(
     user.perfil === 'RESPONSAVEL_ETAR' ? 'rececionadas' : 'scanner'
   ); // 'scanner', 'receber', 'agendados', 'sucesso', 'rececionadas'
@@ -174,6 +174,9 @@ export default function OperadorDashboard({ user, onLogout, notifications, onMar
             onMarkAsRead={onMarkAsRead} 
             onMarkAllAsRead={onMarkAllAsRead} 
           />
+          <button className="btn btn-secondary" style={{ padding: '0.4rem 0.8rem', display: 'flex', alignItems: 'center', gap: '4px' }} onClick={onChangePassword}>
+            <Settings size={16} /> Senha
+          </button>
           <button className="btn btn-secondary" style={{ padding: '0.4rem 0.8rem' }} onClick={onLogout}>
             <LogOut size={16} /> Sair
           </button>

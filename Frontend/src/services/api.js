@@ -62,6 +62,13 @@ export const authService = {
   
   isAuthenticated() {
     return !!localStorage.getItem('token');
+  },
+  
+  alterarSenha(senhaAtual, novaSenha) {
+    return request('/auth/alterar-senha', {
+      method: 'PUT',
+      body: { senhaAtual, novaSenha }
+    });
   }
 };
 

@@ -14,6 +14,13 @@ export default function App() {
 
   const [notifications, setNotifications] = useState([]);
 
+  // Estados para Alterar Palavra-passe
+  const [showChangePassword, setShowChangePassword] = useState(false);
+  const [senhaAtual, setSenhaAtual] = useState('');
+  const [novaSenha, setNovaSenha] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
+  const [successMsg, setSuccessMsg] = useState('');
+
   // Carregar sessão existente no arranque
   useEffect(() => {
     const sessionUser = authService.getCurrentUser();
@@ -141,6 +148,24 @@ export default function App() {
     setUser(null);
   };
 
+  const handleChangePasswordSubmit = async (e) => {
+    e.preventDefault();
+    setErrorMsg('');
+    setSuccessMsg('');
+    try {
+      await authService.alterarSenha(senhaAtual, novaSenha);
+      setSuccessMsg('Palavra-passe alterada com sucesso!');
+      setSenhaAtual('');
+      setNovaSenha('');
+      setTimeout(() => {
+        setShowChangePassword(false);
+        setSuccessMsg('');
+      }, 2000);
+    } catch (err) {
+      setErrorMsg(err.message || 'Erro ao alterar palavra-passe.');
+    }
+  };
+
   if (loading) {
     return (
       <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', backgroundColor: 'var(--bg-base)' }}>
@@ -156,63 +181,136 @@ export default function App() {
     return <Login onLoginSuccess={handleLoginSuccess} />;
   }
 
-  // Direcionamento dinâmico baseado no perfil do utilizador (RBAC)
-  switch (user.perfil) {
-    case 'CLIENTE':
-      return (
-        <ClienteDashboard 
-          user={user} 
-          onLogout={handleLogout} 
-          notifications={notifications}
-          onMarkAsRead={handleMarkAsRead}
-          onMarkAllAsRead={handleMarkAllAsRead}
-        />
-      );
-    
-    case 'OPERADOR_ETAR':
-    case 'RESPONSAVEL_ETAR':
-      return (
-        <OperadorDashboard 
-          user={user} 
-          onLogout={handleLogout} 
-          notifications={notifications}
-          onMarkAsRead={handleMarkAsRead}
-          onMarkAllAsRead={handleMarkAllAsRead}
-        />
-      );
-    
-    case 'TECNICO_LAB':
-      return (
-        <TecnicoDashboard 
-          user={user} 
-          onLogout={handleLogout} 
-          notifications={notifications}
-          onMarkAsRead={handleMarkAsRead}
-          onMarkAllAsRead={handleMarkAllAsRead}
-        />
-      );
-    
-    case 'RESPONSAVEL_LAB':
-    case 'GESTOR_CLIENTES':
-      return (
-        <ResponsavelDashboard 
-          user={user} 
-          onLogout={handleLogout} 
-          notifications={notifications}
-          onMarkAsRead={handleMarkAsRead}
-          onMarkAllAsRead={handleMarkAllAsRead}
-        />
-      );
-    
-    default:
-      return (
-        <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', padding: '2rem', textAlign: 'center' }}>
-          <h2>Acesso Não Autorizado</h2>
-          <p style={{ color: 'var(--text-secondary)', margin: '1rem 0' }}>
-            O seu perfil de utilizador (<strong>{user.perfil}</strong>) não tem permissões para aceder a esta aplicação.
-          </p>
-          <button className="btn btn-primary" onClick={handleLogout}>Voltar</button>
+  const renderDashboard = () => {
+    switch (user.perfil) {
+      case 'CLIENTE':
+        return (
+          <ClienteDashboard 
+            user={user} 
+            onLogout={handleLogout} 
+            notifications={notifications}
+            onMarkAsRead={handleMarkAsRead}
+            onMarkAllAsRead={handleMarkAllAsRead}
+            onChangePassword={() => setShowChangePassword(true)}
+          />
+        );
+      
+      case 'OPERADOR_ETAR':
+      case 'RESPONSAVEL_ETAR':
+        return (
+          <OperadorDashboard 
+            user={user} 
+            onLogout={handleLogout} 
+            notifications={notifications}
+            onMarkAsRead={handleMarkAsRead}
+            onMarkAllAsRead={handleMarkAllAsRead}
+            onChangePassword={() => setShowChangePassword(true)}
+          />
+        );
+      
+      case 'TECNICO_LAB':
+        return (
+          <TecnicoDashboard 
+            user={user} 
+            onLogout={handleLogout} 
+            notifications={notifications}
+            onMarkAsRead={handleMarkAsRead}
+            onMarkAllAsRead={handleMarkAllAsRead}
+            onChangePassword={() => setShowChangePassword(true)}
+          />
+        );
+      
+      case 'RESPONSAVEL_LAB':
+      case 'GESTOR_CLIENTES':
+        return (
+          <ResponsavelDashboard 
+            user={user} 
+            onLogout={handleLogout} 
+            notifications={notifications}
+            onMarkAsRead={handleMarkAsRead}
+            onMarkAllAsRead={handleMarkAllAsRead}
+            onChangePassword={() => setShowChangePassword(true)}
+          />
+        );
+      
+      default:
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', padding: '2rem', textAlign: 'center' }}>
+            <h2>Acesso Não Autorizado</h2>
+            <p style={{ color: 'var(--text-secondary)', margin: '1rem 0' }}>
+              O seu perfil de utilizador (<strong>{user.perfil}</strong>) não tem permissões para aceder a esta aplicação.
+            </p>
+            <button className="btn btn-primary" onClick={handleLogout}>Voltar</button>
+          </div>
+        );
+    }
+  };
+
+  return (
+    <>
+      {renderDashboard()}
+
+      {showChangePassword && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 9999, padding: '1rem' }}>
+          <div className="card animate-fade-in" style={{ width: '100%', maxWidth: '400px', marginBottom: 0 }}>
+            <h3 style={{ marginBottom: '1rem' }}>Alterar Palavra-passe</h3>
+            
+            {errorMsg && (
+              <div className="card" style={{ backgroundColor: 'var(--danger-light)', color: 'var(--danger)', padding: '0.75rem', marginBottom: '1rem', borderLeft: '4px solid var(--danger)', fontSize: '0.85rem' }}>
+                {errorMsg}
+              </div>
+            )}
+            
+            {successMsg && (
+              <div className="card" style={{ backgroundColor: 'var(--success-light)', color: 'var(--success)', padding: '0.75rem', marginBottom: '1rem', borderLeft: '4px solid var(--success)', fontSize: '0.85rem' }}>
+                {successMsg}
+              </div>
+            )}
+
+            <form onSubmit={handleChangePasswordSubmit}>
+              <div className="form-group">
+                <label className="form-label">Palavra-passe Atual *</label>
+                <input 
+                  type="password" 
+                  className="form-input" 
+                  required 
+                  value={senhaAtual} 
+                  onChange={e => setSenhaAtual(e.target.value)} 
+                  placeholder="Introduza a palavra-passe atual"
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Nova Palavra-passe *</label>
+                <input 
+                  type="password" 
+                  className="form-input" 
+                  required 
+                  value={novaSenha} 
+                  onChange={e => setNovaSenha(e.target.value)} 
+                  placeholder="Mínimo 6 caracteres"
+                  minLength={6}
+                />
+              </div>
+              <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem' }}>
+                <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>Gravar</button>
+                <button 
+                  type="button" 
+                  className="btn btn-secondary" 
+                  onClick={() => { 
+                    setShowChangePassword(false); 
+                    setSenhaAtual(''); 
+                    setNovaSenha(''); 
+                    setErrorMsg(''); 
+                    setSuccessMsg(''); 
+                  }}
+                >
+                  Cancelar
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
-      );
-  }
+      )}
+    </>
+  );
 }

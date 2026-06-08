@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { amostraService } from '../services/api';
-import { FlaskConical, ClipboardList, ScanLine, Check, AlertCircle, LogOut } from 'lucide-react';
+import { FlaskConical, ClipboardList, ScanLine, Check, AlertCircle, LogOut, Settings } from 'lucide-react';
 import { webSocketService } from '../services/websocket';
 import NotificationBell from '../components/NotificationBell';
 
-export default function TecnicoDashboard({ user, onLogout, notifications, onMarkAsRead, onMarkAllAsRead }) {
+export default function TecnicoDashboard({ user, onLogout, notifications, onMarkAsRead, onMarkAllAsRead, onChangePassword }) {
   const [activeView, setActiveView] = useState('checkin'); // 'checkin', 'lista', 'bancada', 'triagem-res'
   const [sampleTokenInput, setSampleTokenInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -212,6 +212,9 @@ export default function TecnicoDashboard({ user, onLogout, notifications, onMark
             onMarkAsRead={onMarkAsRead} 
             onMarkAllAsRead={onMarkAllAsRead} 
           />
+          <button className="btn btn-secondary" style={{ padding: '0.4rem 0.8rem', display: 'flex', alignItems: 'center', gap: '4px' }} onClick={onChangePassword}>
+            <Settings size={16} /> Senha
+          </button>
           <button className="btn btn-secondary" style={{ padding: '0.4rem 0.8rem' }} onClick={onLogout}>
             <LogOut size={16} /> Sair
           </button>
