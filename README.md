@@ -67,14 +67,16 @@ DescargasETAR/
     *   `GET /api/test` (Sanidade da API).
     *   `GET /api/db/clientes` (Validação de conectividade com a BD).
 
+### 3. Módulo de Autenticação & Controlo de Acesso (JWT / RBAC)
+*   Instalação de `bcryptjs` e `jsonwebtoken`.
+*   Implementação do controlador de autenticação com login (`POST /api/auth/login`) e verificação do perfil do utilizador ativo (`GET /api/auth/me`).
+*   Implementação de middlewares para validar tokens JWT e aplicar controlo de acesso baseado em perfis (RBAC).
+*   Configuração e teste de conectividade e validação da segurança (pedidos com token válido vs bloqueios de acessos não autorizados).
+
 ---
 
 ## 📋 Planeamento Próximas Etapas (Backend)
 
-*   [ ] **Módulo de Autenticação & Autorização (JWT / RBAC)**:
-    *   Instalação de `bcryptjs` e `jsonwebtoken`.
-    *   Implementação do endpoint de login e geração de token.
-    *   Criação de middlewares de proteção de rotas com base em perfis (Cliente, Operador, Lab, Admin).
 *   [ ] **Módulo de Descargas**:
     *   Criação de pedidos de descarga (Produtor/Transportador).
     *   Implementação das regras de Whitelist (auto-aprovação) e quota.
