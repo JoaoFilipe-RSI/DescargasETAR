@@ -1,0 +1,86 @@
+# Gestão de Descargas Autoportantes nas ETAR
+
+Este projeto consiste num sistema integrado para digitalização, centralização e gestão das descargas autoportantes (camiões cisterna) de águas residuais nas Estações de Tratamento de Águas Residuais (ETAR). A plataforma substitui os impressos físicos em papel por fluxos de trabalho digitais e automáticos.
+
+---
+
+## 🎯 Objetivos do Projeto
+
+1.  **Digitalização**: Eliminação do papel através de formulários digitais padronizados.
+2.  **Centralização**: Histórico estruturado de descargas por cliente, ETAR e transportador.
+3.  **Controlo de Acessos**: Diferentes perfis de utilizadores (Clientes, Operadores ETAR, Técnicos de Laboratório, Gestão de Clientes).
+4.  **Motor de Regras**:
+    *   **Auto-Aprovação**: Validação de Whitelists e quotas diárias contratadas.
+    *   **Gestão de Contingência**: Bloqueio e reencaminhamento automático em caso de indisponibilidade súbita de uma ETAR.
+    *   **Triagem de Amostras**: Motor para decidir se uma amostra deve ser analisada ou descartada com base na periodicidade contratada.
+
+---
+
+## 🛠️ Stack Tecnológica
+
+*   **Backend**: Node.js com Express (API RESTful).
+*   **Base de Dados**: PostgreSQL (gerido com pgAdmin 4).
+*   **Segurança**: JSON Web Tokens (JWT) e hashing de passwords com Bcrypt.
+*   **Alojamento (Planeado)**: AWS RDS (PostgreSQL) e AWS EC2/Elastic Beanstalk (API).
+
+---
+
+## 📂 Estrutura do Projeto
+
+```text
+DescargasETAR/
+├── Backend/                 # Código-fonte da API Node.js/Express
+│   ├── src/
+│   │   ├── config/          # Configurações de ligações (ex: db.js)
+│   │   ├── controllers/     # Controladores das rotas
+│   │   ├── middlewares/     # Middlewares globais e de segurança (JWT/RBAC)
+│   │   ├── routes/          # Definição dos endpoints da API
+│   │   ├── services/        # Lógica de negócio e regras (Services)
+│   │   ├── app.js           # Configuração da app Express
+│   │   └── server.js        # Inicialização do servidor HTTP
+│   ├── .env                 # Variáveis de ambiente locais (não versionado)
+│   └── package.json         # Definições de dependências e scripts npm
+├── SQL/                     # Scripts de modelação do PostgreSQL
+│   ├── ER.png               # Diagrama Entidade-Relação
+│   ├── schema_gestao_descargas.sql  # Estrutura de tabelas e enums
+│   └── seed_gestao_descargas.sql    # Dados iniciais para testes
+└── README.md                # Documentação do projeto
+```
+
+---
+
+## 🚀 O que já foi Implementado
+
+### 1. Base de Dados PostgreSQL
+*   Esquema completo implementado na base de dados `db_descargas` no schema `public`.
+*   Tabelas estruturadas: `perfil`, `utilizador`, `cliente`, `etar`, `parametro`, `descarga`, `amostra`, `resultado_analitico`, `autorizacao`, `cliente_parametro`, `historico`, `notificacao`.
+*   Enumerações de estados (`estado_descarga_enum` e `estado_amostra_enum`) e restrições integradas.
+*   Dados de teste semeados com sucesso.
+
+### 2. Infraestrutura Inicial do Backend
+*   Projeto Node.js inicializado.
+*   Instalação das dependências principais: `express`, `pg`, `cors`, `dotenv` e `nodemon` (desenvolvimento).
+*   Configuração de variáveis de ambiente no ficheiro `.env`.
+*   Criação do Pool de Ligações ao PostgreSQL (`src/config/db.js`).
+*   Configuração do servidor Express (`src/app.js` e `src/server.js`).
+*   Endpoints de teste implementados e validados localmente:
+    *   `GET /api/test` (Sanidade da API).
+    *   `GET /api/db/clientes` (Validação de conectividade com a BD).
+
+---
+
+## 📋 Planeamento Próximas Etapas (Backend)
+
+*   [ ] **Módulo de Autenticação & Autorização (JWT / RBAC)**:
+    *   Instalação de `bcryptjs` e `jsonwebtoken`.
+    *   Implementação do endpoint de login e geração de token.
+    *   Criação de middlewares de proteção de rotas com base em perfis (Cliente, Operador, Lab, Admin).
+*   [ ] **Módulo de Descargas**:
+    *   Criação de pedidos de descarga (Produtor/Transportador).
+    *   Implementação das regras de Whitelist (auto-aprovação) e quota.
+    *   Agendamento logístico com geração do token para QR Code.
+    *   Confirmar receção física na ETAR e trigger de criação da amostra.
+*   [ ] **Módulo de Laboratório & Amostras**:
+    *   Receção de amostras com verificação inteligente de periodicidade (analisar vs descartar).
+    *   Introdução de resultados de parâmetros analíticos.
+    *   Validação técnica e geração automática do Boletim Analítico em PDF.
