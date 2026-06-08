@@ -84,6 +84,69 @@ exports.criarCliente = async (req, res) => {
   }
 };
 
+exports.atualizarCliente = async (req, res) => {
+  const { id } = req.params;
+  const { nome, morada, contacto, telefone, email, periodicidade_analise } = req.body;
+
+  if (!nome || !email) {
+    return res.status(400).json({ erro: 'Nome e email são obrigatórios.' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const clientRes = await client.query('SELECT id_utilizador FROM cliente WHERE id_cliente = $1', [id]);
+    if (clientRes.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ erro: 'Cliente não encontrado.' });
+    }
+    const id_utilizador = clientRes.rows[0].id_utilizador;
+
+    const emailCheck = await client.query(
+      'SELECT id_utilizador FROM utilizador WHERE LOWER(email) = LOWER($1) AND id_utilizador <> $2',
+      [email.trim(), id_utilizador]
+    );
+    if (emailCheck.rows.length > 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ erro: 'Este email já está a ser utilizado por outro utilizador.' });
+    }
+
+    await client.query(
+      'UPDATE utilizador SET nome = $1, email = $2 WHERE id_utilizador = $3',
+      [nome, email.trim(), id_utilizador]
+    );
+
+    const updateClientQuery = `
+      UPDATE cliente
+      SET nome = $1, morada = $2, contacto = $3, telefone = $4, email = $5, periodicidade_analise = $6
+      WHERE id_cliente = $7
+      RETURNING *
+    `;
+    const updatedClientRes = await client.query(updateClientQuery, [
+      nome,
+      morada || null,
+      contacto || null,
+      telefone || null,
+      email.trim(),
+      periodicidade_analise,
+      id
+    ]);
+
+    await client.query('COMMIT');
+    return res.json({
+      mensagem: 'Dados do cliente atualizados com sucesso.',
+      cliente: updatedClientRes.rows[0]
+    });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('Erro ao atualizar cliente:', err);
+    return res.status(500).json({ erro: 'Erro interno ao atualizar dados do cliente.' });
+  } finally {
+    client.release();
+  }
+};
+
 exports.atualizarEstadoCliente = async (req, res) => {
   const { id } = req.params;
   const { ativo } = req.body;

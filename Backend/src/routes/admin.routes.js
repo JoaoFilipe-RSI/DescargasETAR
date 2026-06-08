@@ -12,6 +12,7 @@ router.use(verificarPerfis(['GESTOR_CLIENTES']));
 router.get('/clientes', adminController.obterClientes);
 router.post('/clientes', adminController.criarCliente);
 router.put('/clientes/:id/status', adminController.atualizarEstadoCliente);
+router.put('/clientes/:id', adminController.atualizarCliente);
 
 // 2. ETARs
 router.get('/etars', adminController.obterEtars);

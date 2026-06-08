@@ -42,6 +42,7 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
   const [showAddCliente, setShowAddCliente] = useState(false);
   const [showAddAutorizacao, setShowAddAutorizacao] = useState(false);
   const [editingAutorizacaoId, setEditingAutorizacaoId] = useState(null);
+  const [editingClienteId, setEditingClienteId] = useState(null);
 
   // Estados de Formulário
   const [newClienteData, setNewClienteData] = useState({
@@ -157,15 +158,21 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
     }
   }, [selectedConfigClient]);
 
-  // Gestor de Clientes: Criar Cliente e Utilizador
-  const handleCreateCliente = async (e) => {
+  // Gestor de Clientes: Criar ou Editar Cliente e Utilizador
+  const handleSaveCliente = async (e) => {
     e.preventDefault();
     setError('');
     setSuccess('');
     try {
-      await adminService.criarCliente(newClienteData);
-      setSuccess('Novo cliente contratualizado e credenciais de utilizador criadas com sucesso!');
+      if (editingClienteId) {
+        await adminService.atualizarCliente(editingClienteId, newClienteData);
+        setSuccess('Dados do cliente e conta de utilizador atualizados com sucesso!');
+      } else {
+        await adminService.criarCliente(newClienteData);
+        setSuccess('Novo cliente contratualizado e credenciais de utilizador criadas com sucesso!');
+      }
       setShowAddCliente(false);
+      setEditingClienteId(null);
       setNewClienteData({
         nome: '',
         morada: '',
@@ -177,7 +184,7 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
       });
       loadData();
     } catch (err) {
-      setError(err.message || 'Erro ao registar novo cliente.');
+      setError(err.message || 'Erro ao gravar dados do cliente.');
     }
   };
 
@@ -561,13 +568,34 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
                               </span>
                             </td>
                             <td>
-                              <button 
-                                className="btn btn-secondary" 
-                                style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem' }} 
-                                onClick={() => handleToggleClienteStatus(c)}
-                              >
-                                {c.ativo ? 'Suspender' : 'Ativar'}
-                              </button>
+                              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                <button 
+                                  className="btn btn-primary" 
+                                  style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem' }}
+                                  onClick={() => {
+                                    setEditingClienteId(c.id_cliente);
+                                    setNewClienteData({
+                                      nome: c.nome,
+                                      morada: c.morada || '',
+                                      contacto: c.contacto || '',
+                                      telefone: c.telefone || '',
+                                      email: c.email,
+                                      password: '',
+                                      periodicidade_analise: c.periodicidade_analise
+                                    });
+                                    setShowAddCliente(true);
+                                  }}
+                                >
+                                  Editar
+                                </button>
+                                <button 
+                                  className="btn btn-secondary" 
+                                  style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem' }} 
+                                  onClick={() => handleToggleClienteStatus(c)}
+                                >
+                                  {c.ativo ? 'Suspender' : 'Ativar'}
+                                </button>
+                              </div>
                             </td>
                           </tr>
                         ))}
@@ -1213,15 +1241,15 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
           </div>
         )}
 
-        {/* Modal: Adicionar Cliente */}
+        {/* Modal: Adicionar/Editar Cliente */}
         {showAddCliente && (
           <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: '1rem' }}>
             <div className="card" style={{ width: '100%', maxWidth: '500px', marginBottom: 0, maxHeight: '90vh', overflowY: 'auto' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-                <h3>Registar Novo Cliente Contratado</h3>
-                <button style={{ background: 'none', border: 'none', cursor: 'pointer' }} onClick={() => setShowAddCliente(false)}><X size={20} /></button>
+                <h3>{editingClienteId ? 'Editar Cliente Contratado' : 'Registar Novo Cliente Contratado'}</h3>
+                <button style={{ background: 'none', border: 'none', cursor: 'pointer' }} onClick={() => { setShowAddCliente(false); setEditingClienteId(null); setNewClienteData({ nome: '', morada: '', contacto: '', telefone: '', email: '', password: '', periodicidade_analise: 'POR_DESCARGA' }); }}><X size={20} /></button>
               </div>
-              <form onSubmit={handleCreateCliente}>
+              <form onSubmit={handleSaveCliente}>
                 <div className="form-group">
                   <label className="form-label">Nome da Empresa / Cliente *</label>
                   <input type="text" className="form-input" placeholder="Ex: Lavandarias Reunidas SA" required value={newClienteData.nome} onChange={e => setNewClienteData({ ...newClienteData, nome: e.target.value })} />
@@ -1230,10 +1258,12 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
                   <label className="form-label">Email Principal (Acesso) *</label>
                   <input type="email" className="form-input" placeholder="geral@empresa.com" required value={newClienteData.email} onChange={e => setNewClienteData({ ...newClienteData, email: e.target.value })} />
                 </div>
-                <div className="form-group">
-                  <label className="form-label">Palavra-passe (Opcional - por omissão: Descargas123!)</label>
-                  <input type="password" className="form-input" placeholder="Introduza a password" value={newClienteData.password} onChange={e => setNewClienteData({ ...newClienteData, password: e.target.value })} />
-                </div>
+                {!editingClienteId && (
+                  <div className="form-group">
+                    <label className="form-label">Palavra-passe (Opcional - por omissão: Descargas123!)</label>
+                    <input type="password" className="form-input" placeholder="Introduza a password" value={newClienteData.password} onChange={e => setNewClienteData({ ...newClienteData, password: e.target.value })} />
+                  </div>
+                )}
                 <div className="form-group">
                   <label className="form-label">Periodicidade de Análises Contratada</label>
                   <select className="form-input" value={newClienteData.periodicidade_analise} onChange={e => setNewClienteData({ ...newClienteData, periodicidade_analise: e.target.value })}>
@@ -1261,8 +1291,8 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem' }}>
-                  <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>Confirmar Contrato</button>
-                  <button type="button" className="btn btn-secondary" onClick={() => setShowAddCliente(false)}>Cancelar</button>
+                  <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>{editingClienteId ? 'Gravar Alterações' : 'Confirmar Contrato'}</button>
+                  <button type="button" className="btn btn-secondary" onClick={() => { setShowAddCliente(false); setEditingClienteId(null); setNewClienteData({ nome: '', morada: '', contacto: '', telefone: '', email: '', password: '', periodicidade_analise: 'POR_DESCARGA' }); }}>Cancelar</button>
                 </div>
               </form>
             </div>

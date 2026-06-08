@@ -113,6 +113,27 @@ describe('Módulo de Administração - Testes de Integração', () => {
       expect(resAtivar.status).toBe(200);
       expect(resAtivar.body.ativo).toBe(true);
     });
+
+    test('Deve atualizar os dados de contacto e email do cliente com sucesso', async () => {
+      const idCliente = createdClientIds[0];
+      const res = await request(app)
+        .put(`/api/admin/clientes/${idCliente}`)
+        .set('Authorization', `Bearer ${tokens.gestor}`)
+        .send({
+          nome: 'Empresa Teste Alterada',
+          email: 'alterado@empresateste.pt',
+          morada: 'Nova Morada 999',
+          contacto: 'Novo Colaborador',
+          telefone: '912345678',
+          periodicidade_analise: 'SEMANAL'
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.cliente.nome).toBe('Empresa Teste Alterada');
+      expect(res.body.cliente.email).toBe('alterado@empresateste.pt');
+      expect(res.body.cliente.contacto).toBe('Novo Colaborador');
+      expect(res.body.cliente.periodicidade_analise).toBe('SEMANAL');
+    });
   });
 
   describe('3. Disponibilidade de ETARs', () => {

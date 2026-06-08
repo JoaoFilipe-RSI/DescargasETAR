@@ -207,6 +207,12 @@ export const adminService = {
       body: { ativo }
     });
   },
+  atualizarCliente(id, clienteData) {
+    return request(`/admin/clientes/${id}`, {
+      method: 'PUT',
+      body: clienteData
+    });
+  },
   obterEtars() {
     return request('/admin/etars');
   },
