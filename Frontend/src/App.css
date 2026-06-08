@@ -47,8 +47,9 @@
   border-bottom: 2px solid var(--border);
   margin-bottom: 1.5rem;
   overflow-x: auto;
+  overflow-y: hidden;
   white-space: nowrap;
-  padding-bottom: 0.5rem;
+  padding-bottom: 0.75rem;
 }
 
 .tab-btn {

@@ -288,7 +288,7 @@ exports.atualizarParametrosCliente = async (req, res) => {
     }
 
     await client.query('COMMIT');
-    return res.json({ mensagem: 'Parâmetros contratuais do cliente atualizados com sucesso.' });
+    return res.json({ mensagem: 'Parâmetros contratuais do cliente updated com sucesso.' });
 
   } catch (err) {
     await client.query('ROLLBACK');
@@ -296,5 +296,65 @@ exports.atualizarParametrosCliente = async (req, res) => {
     return res.status(500).json({ erro: 'Erro interno ao atualizar parâmetros contratuais.' });
   } finally {
     client.release();
+  }
+};
+
+exports.obterRelatorios = async (req, res) => {
+  const { id_cliente, id_etar, mes, ano, estado } = req.query;
+
+  let query = `
+    SELECT d.id_descarga, d.data_pedido, d.data_rececao, d.tipo_efluente, d.quantidade, d.quantidade_real, d.estado_descarga,
+           c.nome AS cliente_nome, c.id_cliente,
+           e.nome AS etar_nome, e.id_etar,
+           am.id_amostra, am.qr_code_token, am.estado_amostra, am.data_validacao,
+           COALESCE(
+             (SELECT json_agg(json_build_object('parametro', p.nome, 'valor', r.valor, 'unidade', r.unidade, 'incerteza', r.incerteza))
+              FROM resultado_analitico r
+              JOIN parametro p ON r.id_parametro = p.id_parametro
+              WHERE r.id_amostra = am.id_amostra),
+             '[]'::json
+           ) AS resultados
+    FROM descarga d
+    JOIN cliente c ON d.id_cliente = c.id_cliente
+    LEFT JOIN etar e ON d.id_etar = e.id_etar
+    LEFT JOIN amostra am ON d.id_descarga = am.id_descarga
+    WHERE 1=1
+  `;
+  const values = [];
+  let paramIndex = 1;
+
+  if (id_cliente && id_cliente !== 'all') {
+    query += ` AND d.id_cliente = $${paramIndex++}`;
+    values.push(parseInt(id_cliente, 10));
+  }
+
+  if (id_etar && id_etar !== 'all') {
+    query += ` AND d.id_etar = $${paramIndex++}`;
+    values.push(parseInt(id_etar, 10));
+  }
+
+  if (mes && mes !== 'all') {
+    query += ` AND EXTRACT(MONTH FROM d.data_pedido) = $${paramIndex++}`;
+    values.push(parseInt(mes, 10));
+  }
+
+  if (ano && ano !== 'all') {
+    query += ` AND EXTRACT(YEAR FROM d.data_pedido) = $${paramIndex++}`;
+    values.push(parseInt(ano, 10));
+  }
+
+  if (estado && estado !== 'all') {
+    query += ` AND d.estado_descarga = $${paramIndex++}`;
+    values.push(estado.toUpperCase());
+  }
+
+  query += ' ORDER BY d.data_pedido DESC';
+
+  try {
+    const result = await pool.query(query, values);
+    return res.json(result.rows);
+  } catch (err) {
+    console.error('Erro ao obter relatórios:', err);
+    return res.status(500).json({ erro: 'Erro interno ao obter relatórios.' });
   }
 };

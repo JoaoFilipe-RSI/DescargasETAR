@@ -26,4 +26,7 @@ router.get('/parametros', adminController.obterParametros);
 router.get('/clientes/:id/parametros', adminController.obterParametrosCliente);
 router.post('/clientes/:id/parametros', adminController.atualizarParametrosCliente);
 
+// 5. Relatórios Consolidados
+router.get('/relatorios', adminController.obterRelatorios);
+
 module.exports = router;

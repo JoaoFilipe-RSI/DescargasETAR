@@ -236,5 +236,17 @@ export const adminService = {
       method: 'POST',
       body: { parametros: parametrosIdsArray }
     });
+  },
+  obterRelatorios(filtros) {
+    const params = new URLSearchParams();
+    if (filtros) {
+      if (filtros.id_cliente) params.append('id_cliente', filtros.id_cliente);
+      if (filtros.id_etar) params.append('id_etar', filtros.id_etar);
+      if (filtros.mes) params.append('mes', filtros.mes);
+      if (filtros.ano) params.append('ano', filtros.ano);
+      if (filtros.estado) params.append('estado', filtros.estado);
+    }
+    const queryStr = params.toString();
+    return request(`/admin/relatorios${queryStr ? '?' + queryStr : ''}`);
   }
 };

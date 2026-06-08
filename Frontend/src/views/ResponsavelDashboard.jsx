@@ -30,6 +30,14 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
   const [descargasConcluidas, setDescargasConcluidas] = useState([]);
   const [amostrasConcluidas, setAmostrasConcluidas] = useState([]);
 
+  // Estados para o novo separador de Relatórios
+  const [relatoriosData, setRelatoriosData] = useState([]);
+  const [filtroCliente, setFiltroCliente] = useState('all');
+  const [filtroEtar, setFiltroEtar] = useState('all');
+  const [filtroMes, setFiltroMes] = useState('all');
+  const [filtroAno, setFiltroAno] = useState('all');
+  const [filtroEstado, setFiltroEstado] = useState('all');
+
   // Modais de Criação
   const [showAddCliente, setShowAddCliente] = useState(false);
   const [showAddAutorizacao, setShowAddAutorizacao] = useState(false);
@@ -86,6 +94,11 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
         } else if (activeTab === 'historicoAmostras') {
           const data = await amostraService.obterAmostras({ estado: 'CONCLUIDA' });
           setAmostrasConcluidas(data);
+        } else if (activeTab === 'relatorios') {
+          const cls = await adminService.obterClientes();
+          setClientesList(cls);
+          const ets = await adminService.obterEtars();
+          setEtarsList(ets);
         }
       } else {
         // Responsável de Lab/ETAR
@@ -100,6 +113,32 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
       setLoading(false);
     }
   };
+
+  // Carregar os relatórios consolidados do Gestor com base nos filtros
+  const loadRelatorios = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const data = await adminService.obterRelatorios({
+        id_cliente: filtroCliente,
+        id_etar: filtroEtar,
+        mes: filtroMes,
+        ano: filtroAno,
+        estado: filtroEstado
+      });
+      setRelatoriosData(data);
+    } catch (err) {
+      setError(err.message || 'Erro ao carregar relatórios.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'relatorios') {
+      loadRelatorios();
+    }
+  }, [filtroCliente, filtroEtar, filtroMes, filtroAno, filtroEstado, activeTab]);
 
   // Carregar parâmetros contratuais do cliente selecionado
   useEffect(() => {
@@ -379,7 +418,7 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
         </div>
       </header>
 
-      <main className="content-wrapper animate-fade-in">
+      <main className="content-wrapper animate-fade-in" style={{ maxWidth: '1400px' }}>
         <div className="dashboard-header">
           <div>
             <h2>Painel de Gestão e Decisão</h2>
@@ -411,6 +450,9 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
               </button>
               <button className={`tab-btn ${activeTab === 'historicoAmostras' ? 'active' : ''}`} onClick={() => { setActiveTab('historicoAmostras'); setError(''); setSuccess(''); }}>
                 Boletins Analíticos
+              </button>
+              <button className={`tab-btn ${activeTab === 'relatorios' ? 'active' : ''}`} onClick={() => { setActiveTab('relatorios'); setError(''); setSuccess(''); }}>
+                Relatórios Consolidados
               </button>
             </div>
 
@@ -805,6 +847,171 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
                             </td>
                           </tr>
                         ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* TAB: RELATÓRIOS CONSOLIDADOS */}
+            {activeTab === 'relatorios' && (
+              <div>
+                <h3 style={{ marginBottom: '1.5rem' }}>Relatórios Consolidados</h3>
+
+                {/* Filtros de Pesquisa */}
+                <div className="card" style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', padding: '1rem', marginBottom: '1.5rem', alignItems: 'center' }}>
+                  <div style={{ flex: 1, minWidth: '150px' }}>
+                    <label className="form-label" style={{ marginBottom: '0.25rem', fontSize: '0.8rem' }}>Cliente</label>
+                    <select className="form-input" value={filtroCliente} onChange={(e) => setFiltroCliente(e.target.value)} style={{ padding: '0.4rem' }}>
+                      <option value="all">-- Todos os Clientes --</option>
+                      {clientesList.map(c => (
+                        <option key={c.id_cliente} value={c.id_cliente}>{c.nome}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div style={{ flex: 1, minWidth: '150px' }}>
+                    <label className="form-label" style={{ marginBottom: '0.25rem', fontSize: '0.8rem' }}>ETAR</label>
+                    <select className="form-input" value={filtroEtar} onChange={(e) => setFiltroEtar(e.target.value)} style={{ padding: '0.4rem' }}>
+                      <option value="all">-- Todas as ETARs --</option>
+                      {etarsList.map(e => (
+                        <option key={e.id_etar} value={e.id_etar}>{e.nome}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div style={{ flex: 1, minWidth: '110px' }}>
+                    <label className="form-label" style={{ marginBottom: '0.25rem', fontSize: '0.8rem' }}>Mês</label>
+                    <select className="form-input" value={filtroMes} onChange={(e) => setFiltroMes(e.target.value)} style={{ padding: '0.4rem' }}>
+                      <option value="all">-- Todos --</option>
+                      <option value="1">Janeiro</option>
+                      <option value="2">Fevereiro</option>
+                      <option value="3">Março</option>
+                      <option value="4">Abril</option>
+                      <option value="5">Maio</option>
+                      <option value="6">Junho</option>
+                      <option value="7">Julho</option>
+                      <option value="8">Agosto</option>
+                      <option value="9">Setembro</option>
+                      <option value="10">Outubro</option>
+                      <option value="11">Novembro</option>
+                      <option value="12">Dezembro</option>
+                    </select>
+                  </div>
+
+                  <div style={{ flex: 1, minWidth: '110px' }}>
+                    <label className="form-label" style={{ marginBottom: '0.25rem', fontSize: '0.8rem' }}>Ano</label>
+                    <select className="form-input" value={filtroAno} onChange={(e) => setFiltroAno(e.target.value)} style={{ padding: '0.4rem' }}>
+                      <option value="all">-- Todos --</option>
+                      <option value="2025">2025</option>
+                      <option value="2026">2026</option>
+                      <option value="2027">2027</option>
+                    </select>
+                  </div>
+
+                  <div style={{ flex: 1, minWidth: '130px' }}>
+                    <label className="form-label" style={{ marginBottom: '0.25rem', fontSize: '0.8rem' }}>Estado da descarga</label>
+                    <select className="form-input" value={filtroEstado} onChange={(e) => setFiltroEstado(e.target.value)} style={{ padding: '0.4rem' }}>
+                      <option value="all">-- Todos os Estados --</option>
+                      <option value="SOLICITADA">Solicitada</option>
+                      <option value="AUTORIZADA">Autorizada</option>
+                      <option value="REJEITADA">Rejeitada</option>
+                      <option value="AGENDADA">Agendada</option>
+                      <option value="RECEBIDA">Recebida</option>
+                      <option value="CONCLUIDA">Concluída</option>
+                    </select>
+                  </div>
+                </div>
+
+                {loading ? (
+                  <p>A carregar relatórios...</p>
+                ) : relatoriosData.length === 0 ? (
+                  <div className="card" style={{ textAlign: 'center', padding: '2rem' }}>
+                    <p style={{ color: 'var(--text-secondary)' }}>Não existem descargas registadas para os filtros selecionados.</p>
+                  </div>
+                ) : (
+                  <div className="table-container">
+                    <table className="data-table">
+                      <thead>
+                        <tr>
+                          <th>Ref/Data Pedido</th>
+                          <th>Cliente</th>
+                          <th>ETAR</th>
+                          <th>Estado Descarga</th>
+                          <th>Qtd. Real (Solicitada)</th>
+                          <th>Amostra</th>
+                          <th>Resultados Analíticos</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {relatoriosData.map((r) => {
+                          const hasAmostra = !!r.id_amostra;
+                          const hasResultados = Array.isArray(r.resultados) && r.resultados.length > 0;
+                          return (
+                            <tr key={r.id_descarga}>
+                              <td>
+                                <strong>#{r.id_descarga}</strong>
+                                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                                  {new Date(r.data_pedido).toLocaleDateString()}
+                                </div>
+                              </td>
+                              <td><strong>{r.cliente_nome}</strong></td>
+                              <td>{r.etar_nome || `ETAR ${r.id_etar}`}</td>
+                              <td>
+                                <span className={`badge badge-${r.estado_descarga.toLowerCase()}`} style={{ fontSize: '0.7rem' }}>
+                                  {r.estado_descarga}
+                                </span>
+                              </td>
+                              <td>
+                                <strong>{r.quantidade_real ? `${r.quantidade_real} L` : 'N/A'}</strong>
+                                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                                  ({r.quantidade} L)
+                                </div>
+                              </td>
+                              <td>
+                                {hasAmostra ? (
+                                  <div>
+                                    <span className={`badge badge-${r.estado_amostra.toLowerCase()}`} style={{ fontSize: '0.7rem' }}>
+                                      {r.estado_amostra}
+                                    </span>
+                                    <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.2rem' }}>
+                                      Ref: {r.qr_code_token || 'N/A'}
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <span style={{ color: 'var(--text-secondary)', fontSize: '0.8rem' }}>Sem recolha</span>
+                                )}
+                              </td>
+                              <td style={{ maxWidth: '300px' }}>
+                                {hasResultados ? (
+                                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.3rem', fontSize: '0.75rem' }}>
+                                    {r.resultados.map((res, idx) => (
+                                      <span 
+                                        key={idx} 
+                                        style={{ 
+                                          backgroundColor: 'var(--bg-base)', 
+                                          border: '1px solid var(--border)', 
+                                          borderRadius: '4px', 
+                                          padding: '2px 6px', 
+                                          whiteSpace: 'nowrap' 
+                                        }}
+                                      >
+                                        <strong>{res.parametro}:</strong> {res.valor} {res.unidade || ''}
+                                      </span>
+                                    ))}
+                                  </div>
+                                ) : hasAmostra ? (
+                                  <span style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', fontStyle: 'italic' }}>
+                                    Aguardando análise
+                                  </span>
+                                ) : (
+                                  <span style={{ color: 'var(--text-secondary)', fontSize: '0.8rem' }}>-</span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
