@@ -205,29 +205,187 @@ exports.atualizarDisponibilidadeEtar = async (req, res) => {
     return res.status(400).json({ erro: 'Por favor, indique o estado de disponibilidade.' });
   }
 
+  const client = await pool.connect();
+
   try {
-    const query = `
+    await client.query('BEGIN');
+
+    // 1. Atualizar a disponibilidade da ETAR
+    const updateEtarQuery = `
       UPDATE etar 
       SET disponivel = $1 
       WHERE id_etar = $2 
       RETURNING *
     `;
-    const result = await pool.query(query, [!!disponivel, id]);
+    const etarResult = await client.query(updateEtarQuery, [!!disponivel, id]);
 
-    if (result.rows.length === 0) {
+    if (etarResult.rows.length === 0) {
+      await client.query('ROLLBACK');
       return res.status(404).json({ erro: 'ETAR não encontrada.' });
     }
 
-    const etar = result.rows[0];
+    const etar = etarResult.rows[0];
 
-    // Emitir notificação WebSockets
+    // Se a ETAR foi marcada como INDISPONÍVEL
+    if (!etar.disponivel) {
+      // 2. Processar descargas AUTORIZADAS (Reagendamento automático)
+      const autDescargasRes = await client.query(
+        "SELECT * FROM descarga WHERE id_etar = $1 AND estado_descarga = 'AUTORIZADA'",
+        [id]
+      );
+      const autDescargas = autDescargasRes.rows;
+
+      const { enviarNotificacao } = require('../config/socket');
+
+      for (const d of autDescargas) {
+        // Encontrar ETARs candidatas ativas (excluindo a original)
+        const candEtarsRes = await client.query(
+          "SELECT id_etar, nome FROM etar WHERE id_etar <> $1 AND disponivel = true",
+          [id]
+        );
+        const candEtars = candEtarsRes.rows;
+
+        let bestEtar = null;
+        let minDiff = Infinity;
+
+        for (const cand of candEtars) {
+          // Verificar se o cliente tem whitelist/autorização ativa para esta ETAR
+          const authRes = await client.query(
+            "SELECT quota, auto_aprovacao, ativo FROM autorizacao WHERE id_cliente = $1 AND id_etar = $2 AND ativo = true",
+            [d.id_cliente, cand.id_etar]
+          );
+
+          if (authRes.rows.length > 0) {
+            const auth = authRes.rows[0];
+            
+            // Verificar quota consumida no dia da data_pedido
+            const countRes = await client.query(
+              "SELECT COUNT(*)::int AS total FROM descarga WHERE id_cliente = $1 AND id_etar = $2 AND data_pedido::date = $3::date",
+              [d.id_cliente, cand.id_etar, d.data_pedido]
+            );
+            const totalDia = countRes.rows[0].total;
+
+            if (totalDia < auth.quota) {
+              const diff = Math.abs(cand.id_etar - id);
+              if (diff < minDiff) {
+                minDiff = diff;
+                bestEtar = cand;
+              }
+            }
+          }
+        }
+
+        if (bestEtar) {
+          // Reagendar automaticamente para a bestEtar
+          await client.query(
+            "UPDATE descarga SET id_etar = $1 WHERE id_descarga = $2",
+            [bestEtar.id_etar, d.id_descarga]
+          );
+
+          // Registar no histórico
+          await client.query(
+            "INSERT INTO historico (entidade, id_entidade, acao, descricao, id_utilizador) VALUES ($1, $2, $3, $4, $5)",
+            [
+              'DESCARGA',
+              d.id_descarga,
+              'REAGENDAMENTO_AUTOMATICO',
+              `Descarga reencaminhada automaticamente para a ${bestEtar.nome} devido à indisponibilidade de urgência da ${etar.nome}.`,
+              req.user.id_utilizador
+            ]
+          );
+
+          // Enviar notificação real-time para o cliente
+          enviarNotificacao(`cliente-${d.id_cliente}`, 'decisao-pedido', {
+            id_descarga: d.id_descarga,
+            estado_descarga: 'AUTORIZADA',
+            mensagem: `A sua descarga autorizada #${d.id_descarga} foi reencaminhada automaticamente para a ${bestEtar.nome} devido à indisponibilidade de urgência da ${etar.nome}.`
+          });
+        } else {
+          // Sem alternativa: reverter para SOLICITADA
+          const obsMsg = `[Revertido por ETAR indisponível] A ETAR original (${etar.nome}) ficou indisponível e não foi encontrada alternativa viável com quota disponível.`;
+          const novaObs = d.observacoes ? `${obsMsg}\n${d.observacoes}` : obsMsg;
+
+          await client.query(
+            "UPDATE descarga SET estado_descarga = 'SOLICITADA', observacoes = $1 WHERE id_descarga = $2",
+            [novaObs, d.id_descarga]
+          );
+
+          // Registar no histórico
+          await client.query(
+            "INSERT INTO historico (entidade, id_entidade, acao, descricao, id_utilizador) VALUES ($1, $2, $3, $4, $5)",
+            [
+              'DESCARGA',
+              d.id_descarga,
+              'REVERSAO_ESTADO',
+              `Descarga revertida para SOLICITADA devido a indisponibilidade da ${etar.nome} sem ETAR alternativa disponível.`,
+              req.user.id_utilizador
+            ]
+          );
+
+          // Enviar notificação real-time para o cliente
+          enviarNotificacao(`cliente-${d.id_cliente}`, 'decisao-pedido', {
+            id_descarga: d.id_descarga,
+            estado_descarga: 'SOLICITADA',
+            mensagem: `A sua descarga #${d.id_descarga} necessita de ser reencaminhada devido à indisponibilidade de urgência da ${etar.nome}. Entraremos em contacto brevemente.`
+          });
+
+          // Enviar notificação real-time para os gestores
+          enviarNotificacao('gestores-clientes', 'novo-pedido', {
+            id_descarga: d.id_descarga,
+            estado_descarga: 'SOLICITADA',
+            mensagem: `O pedido de descarga #${d.id_descarga} foi revertido para SOLICITADO. Não foi encontrada nenhuma ETAR alternativa com quota disponível para o cliente.`
+          });
+        }
+      }
+
+      // 3. Processar descargas AGENDADAS (Apenas marcar com comentário de alerta se não tiver já o alerta)
+      const agendadasRes = await client.query(
+        "SELECT d.*, c.nome AS cliente_nome, c.telefone AS cliente_telefone FROM descarga d JOIN cliente c ON d.id_cliente = c.id_cliente JOIN utilizador u ON c.id_utilizador = u.id_utilizador WHERE d.id_etar = $1 AND d.estado_descarga = 'AGENDADA'",
+        [id]
+      );
+      const agendadas = agendadasRes.rows;
+
+      for (const d of agendadas) {
+        if (!d.observacoes || !d.observacoes.includes('ALERTA OPERACIONAL')) {
+          const alertaMsg = `[ALERTA OPERACIONAL: ETAR indisponível. Contactar o cliente imediatamente se a descarga não puder ser realizada (ex: impossibilidade de usar o tanque de retenção).]`;
+          const novaObs = d.observacoes ? `${alertaMsg}\n${d.observacoes}` : alertaMsg;
+
+          await client.query(
+            "UPDATE descarga SET observacoes = $1 WHERE id_descarga = $2",
+            [novaObs, d.id_descarga]
+          );
+
+          // Registar no histórico
+          await client.query(
+            "INSERT INTO historico (entidade, id_entidade, acao, descricao, id_utilizador) VALUES ($1, $2, $3, $4, $5)",
+            [
+              'DESCARGA',
+              d.id_descarga,
+              'ALERTA_OPERACIONAL',
+              `Alerta de contacto imediato adicionado à descarga agendada #${d.id_descarga} devido a indisponibilidade da ${etar.nome}.`,
+              req.user.id_utilizador
+            ]
+          );
+
+          // Enviar notificação real-time para os gestores
+          enviarNotificacao('gestores-clientes', 'alerta-agendamento', {
+            id_descarga: d.id_descarga,
+            estado_descarga: 'AGENDADA',
+            mensagem: `Aviso: A descarga agendada #${d.id_descarga} para a ${etar.nome} (agora indisponível) requer contacto imediato com o cliente ${d.cliente_nome} (${d.cliente_telefone || 'Sem telefone'}).`
+          });
+        }
+      }
+    }
+
+    await client.query('COMMIT');
+
+    // Emitir notificações gerais de alteração de estado da ETAR (fora da transação para manter a lógica original)
     const { enviarNotificacao } = require('../config/socket');
     enviarNotificacao(`etar-${etar.id_etar}`, 'status-etar', {
       id_etar: etar.id_etar,
       disponivel: etar.disponivel,
       mensagem: `A ${etar.nome} encontra-se agora ${etar.disponivel ? 'disponível' : 'indisponível'} para receber descargas.`
     });
-    // Notificar gestores
     enviarNotificacao('gestores-clientes', 'status-etar', {
       id_etar: etar.id_etar,
       disponivel: etar.disponivel,
@@ -240,8 +398,11 @@ exports.atualizarDisponibilidadeEtar = async (req, res) => {
     });
 
   } catch (err) {
+    await client.query('ROLLBACK');
     console.error('Erro ao atualizar disponibilidade da ETAR:', err);
     return res.status(500).json({ erro: 'Erro interno ao atualizar disponibilidade da ETAR.' });
+  } finally {
+    client.release();
   }
 };
 
@@ -403,7 +564,7 @@ exports.obterRelatorios = async (req, res) => {
   const { id_cliente, id_etar, mes, ano, estado } = req.query;
 
   let query = `
-    SELECT d.id_descarga, d.data_pedido, d.data_rececao, d.tipo_efluente, d.quantidade, d.quantidade_real, d.estado_descarga,
+    SELECT d.id_descarga, d.data_pedido, d.data_rececao, d.tipo_efluente, d.quantidade, d.quantidade_real, d.estado_descarga, d.observacoes,
            c.nome AS cliente_nome, c.id_cliente,
            e.nome AS etar_nome, e.id_etar,
            am.id_amostra, am.qr_code_token, am.estado_amostra, am.data_validacao,

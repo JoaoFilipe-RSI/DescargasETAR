@@ -353,14 +353,21 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
         loadData();
       };
 
+      const handleAlertaAgendamento = (data) => {
+        setError(data.mensagem || `Aviso: A descarga #${data.id_descarga} agendada requer contacto de emergência!`);
+        loadData();
+      };
+
       webSocketService.on('novo-pedido', handleNovoPedido);
       webSocketService.on('descarga-concluida', handleDescargaConcluida);
       webSocketService.on('amostra-concluida', handleAmostraConcluida);
+      webSocketService.on('alerta-agendamento', handleAlertaAgendamento);
 
       return () => {
         webSocketService.off('novo-pedido', handleNovoPedido);
         webSocketService.off('descarga-concluida', handleDescargaConcluida);
         webSocketService.off('amostra-concluida', handleAmostraConcluida);
+        webSocketService.off('alerta-agendamento', handleAlertaAgendamento);
       };
     } else if (user.perfil === 'RESPONSAVEL_LAB' || user.perfil === 'RESPONSAVEL_ETAR') {
       const handleNovaAmostra = (data) => {
@@ -561,6 +568,11 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
                               <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
                                 {new Date(d.data_pedido).toLocaleDateString()}
                               </div>
+                              {d.observacoes && d.observacoes.includes('Revertido por ETAR') && (
+                                <span className="badge badge-rejeitada" style={{ fontSize: '0.65rem', marginTop: '0.25rem', display: 'inline-block', padding: '0.15rem 0.35rem', backgroundColor: 'var(--danger-light)', color: 'var(--danger)', border: '1px solid var(--danger)', borderRadius: '4px' }}>
+                                  ⚠️ Revertida por ETAR Indisponível
+                                </span>
+                              )}
                             </td>
                             <td>{d.cliente_nome}</td>
                             <td>{d.etar_nome || `ETAR ${d.id_etar}`}</td>
@@ -1066,6 +1078,21 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
                                 <span className={`badge badge-${r.estado_descarga.toLowerCase()}`} style={{ fontSize: '0.7rem' }}>
                                   {r.estado_descarga}
                                 </span>
+                                {r.observacoes && r.observacoes.includes('ALERTA OPERACIONAL') && (
+                                  <div style={{ 
+                                    fontSize: '0.65rem', 
+                                    color: 'var(--danger)', 
+                                    backgroundColor: 'var(--danger-light)', 
+                                    padding: '2px 4px', 
+                                    borderRadius: '4px', 
+                                    border: '1px solid var(--danger)', 
+                                    marginTop: '0.2rem',
+                                    whiteSpace: 'normal',
+                                    lineHeight: '1.1'
+                                  }}>
+                                    ⚠️ Contacto Urgente
+                                  </div>
+                                )}
                               </td>
                               <td>
                                 <strong>{r.quantidade_real ? `${r.quantidade_real} L` : 'N/A'}</strong>
@@ -1317,6 +1344,23 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
                 Aprove ou rejeite o pedido da <strong>{selectedDescarga.cliente_nome}</strong> para a <strong>{selectedDescarga.etar_nome}</strong> (Qtd: {selectedDescarga.quantidade} Litros).
               </p>
               
+              {selectedDescarga.observacoes && (
+                <div className="card" style={{ 
+                  backgroundColor: selectedDescarga.observacoes.includes('Revertido') ? 'var(--danger-light)' : 'var(--warning-light)', 
+                  color: selectedDescarga.observacoes.includes('Revertido') ? 'var(--danger)' : 'var(--warning)', 
+                  padding: '0.75rem', 
+                  marginBottom: '1rem', 
+                  borderLeft: selectedDescarga.observacoes.includes('Revertido') ? '4px solid var(--danger)' : '4px solid var(--warning)', 
+                  fontSize: '0.85rem',
+                  borderRadius: 'var(--radius-sm)'
+                }}>
+                  <strong>{selectedDescarga.observacoes.includes('Revertido') ? 'Alerta de Reversão de Urgência:' : 'Elementos Solicitados Anteriormente:'}</strong>
+                  <div style={{ marginTop: '0.25rem', fontStyle: 'italic', wordBreak: 'break-word' }}>
+                    "{selectedDescarga.observacoes}"
+                  </div>
+                </div>
+              )}
+
               <div className="form-group">
                 <label className="form-label">Justificação / Observações (Opcional)</label>
                 <textarea className="form-input" style={{ minHeight: '80px', resize: 'vertical' }} placeholder="Indique o motivo da decisão..." value={decisaoObs} onChange={(e) => setDecisaoObs(e.target.value)}></textarea>
@@ -1330,7 +1374,7 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
                   <XSquare size={16} /> Rejeitar
                 </button>
                 <button className="btn btn-primary" style={{ flex: 1, minWidth: '130px', backgroundColor: 'var(--warning)' }} onClick={() => handleDecisao('SOLICITAR_ELEMENTOS')}>
-                  <HelpCircle size={16} /> Pedir Elementos
+                  <HelpCircle size={16} /> Pedir mais elementos
                 </button>
                 <button className="btn btn-secondary" style={{ flex: 1, minWidth: '80px' }} onClick={() => setSelectedDescarga(null)}>
                   Fechar

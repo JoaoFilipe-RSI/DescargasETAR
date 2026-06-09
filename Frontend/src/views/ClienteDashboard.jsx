@@ -250,11 +250,28 @@ export default function ClienteDashboard({ user, onLogout, notifications, onMark
                             </button>
                           )}
                           {d.estado_descarga === 'AGENDADA' && d.qr_code_token && (
-                            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                              <span style={{ fontSize: '0.8rem', color: 'var(--accent)', fontWeight: 600 }}>{d.qr_code_token}</span>
-                              <button className="btn btn-secondary" style={{ padding: '0.35rem 0.7rem', fontSize: '0.8rem' }} onClick={() => setSelectedDescarga(d)}>
-                                Ver QR
-                              </button>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                                <span style={{ fontSize: '0.8rem', color: 'var(--accent)', fontWeight: 600 }}>{d.qr_code_token}</span>
+                                <button className="btn btn-secondary" style={{ padding: '0.35rem 0.7rem', fontSize: '0.8rem' }} onClick={() => setSelectedDescarga(d)}>
+                                  Ver QR
+                                </button>
+                              </div>
+                              {d.observacoes && d.observacoes.includes('ALERTA OPERACIONAL') && (
+                                <div style={{ 
+                                  fontSize: '0.7rem', 
+                                  color: 'var(--danger)', 
+                                  backgroundColor: 'var(--danger-light)', 
+                                  padding: '0.25rem 0.5rem', 
+                                  borderRadius: 'var(--radius-sm)', 
+                                  border: '1px solid var(--danger)', 
+                                  maxWidth: '220px',
+                                  marginTop: '0.25rem',
+                                  lineHeight: '1.2'
+                                }}>
+                                  ⚠️ <strong>Aviso Importante:</strong> A ETAR de destino tem restrições de emergência. Aguarde contacto.
+                                </div>
+                              )}
                             </div>
                           )}
                           {(d.estado_descarga === 'CONCLUIDA' || d.estado_descarga === 'RECEBIDA') && (
@@ -283,16 +300,16 @@ export default function ClienteDashboard({ user, onLogout, notifications, onMark
                               {d.observacoes && (
                                 <div style={{ 
                                   fontSize: '0.75rem', 
-                                  color: 'var(--warning)', 
-                                  backgroundColor: 'var(--warning-light)', 
+                                  color: d.observacoes.includes('Revertido') ? 'var(--danger)' : 'var(--warning)', 
+                                  backgroundColor: d.observacoes.includes('Revertido') ? 'var(--danger-light)' : 'var(--warning-light)', 
                                   padding: '0.25rem 0.5rem', 
                                   borderRadius: 'var(--radius-sm)', 
-                                  border: '1px solid var(--warning)', 
+                                  border: d.observacoes.includes('Revertido') ? '1px solid var(--danger)' : '1px solid var(--warning)', 
                                   maxWidth: '220px', 
                                   wordBreak: 'break-word',
                                   marginTop: '0.25rem'
                                 }}>
-                                  <strong>Elementos em falta:</strong> {d.observacoes}
+                                  <strong>{d.observacoes.includes('Revertido') ? 'Aviso:' : 'Elementos em falta:'}</strong> {d.observacoes}
                                 </div>
                               )}
                             </div>

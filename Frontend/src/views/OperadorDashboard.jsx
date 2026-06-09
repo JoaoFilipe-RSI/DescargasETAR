@@ -349,6 +349,20 @@ export default function OperadorDashboard({ user, onLogout, notifications, onMar
                           <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
                             {a.empresa_transportadora} ({a.matricula_trator})
                           </div>
+                          {a.observacoes && a.observacoes.includes('ALERTA OPERACIONAL') && (
+                            <div style={{ 
+                              fontSize: '0.75rem', 
+                              color: 'var(--danger)', 
+                              backgroundColor: 'var(--danger-light)', 
+                              padding: '0.25rem 0.5rem', 
+                              borderRadius: 'var(--radius-sm)', 
+                              border: '1px solid var(--danger)', 
+                              marginTop: '0.4rem',
+                              maxWidth: '400px'
+                            }}>
+                              ⚠️ <strong>Contacto Urgente:</strong> Confirmar se a descarga pode ser feita (ex: tanque de retenção).
+                            </div>
+                          )}
                         </td>
                         <td>{a.quantidade} L</td>
                         <td><code style={{ fontSize: '0.8rem', fontWeight: 'bold' }}>{a.qr_code_token || `ID: ${a.id_descarga}`}</code></td>

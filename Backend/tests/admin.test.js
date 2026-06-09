@@ -22,10 +22,14 @@ describe('Módulo de Administração - Testes de Integração', () => {
   const createdUserIds = [];
   const createdClientIds = [];
   const createdAutIds = [];
+  const createdDescargaIds = [];
 
   // Limpeza de lixo de testes
   afterAll(async () => {
     try {
+      if (createdDescargaIds.length > 0) {
+        await pool.query('DELETE FROM descarga WHERE id_descarga = ANY($1)', [createdDescargaIds]);
+      }
       if (createdClientIds.length > 0) {
         await pool.query('DELETE FROM cliente_parametro WHERE id_cliente = ANY($1)', [createdClientIds]);
       }
@@ -38,8 +42,8 @@ describe('Módulo de Administração - Testes de Integração', () => {
       if (createdUserIds.length > 0) {
         await pool.query('DELETE FROM utilizador WHERE id_utilizador = ANY($1)', [createdUserIds]);
       }
-      // Restaurar estado da ETAR 1
-      await pool.query('UPDATE etar SET disponivel = true WHERE id_etar = 1');
+      // Restaurar estado das ETARs
+      await pool.query('UPDATE etar SET disponivel = true WHERE id_etar IN (1, 2, 3)');
     } catch (err) {
       console.error('Erro ao limpar dados de teste admin:', err);
     }
@@ -280,6 +284,122 @@ describe('Módulo de Administração - Testes de Integração', () => {
         });
       expect(resLoginSuspended.status).toBe(403);
       expect(resLoginSuspended.body.erro).toBe('Esta conta está desativada. Contacte o administrador.');
+    });
+  });
+
+  describe('6. Contingência e Reagendamento de Descargas', () => {
+    let testClientId;
+    let testUserId;
+    let authId1, authId2;
+
+    beforeAll(async () => {
+      // Criar um cliente para testar
+      const resUser = await pool.query(
+        "INSERT INTO utilizador (id_perfil, nome, email, password_hash, ativo) VALUES (1, 'Cliente Contingencia', 'contingencia@cliente.pt', 'hash', true) RETURNING id_utilizador"
+      );
+      testUserId = resUser.rows[0].id_utilizador;
+      createdUserIds.push(testUserId);
+
+      const resClient = await pool.query(
+        "INSERT INTO cliente (id_utilizador, nome, email, periodicidade_analise) VALUES ($1, 'Cliente Contingencia', 'contingencia@cliente.pt', 'POR_DESCARGA') RETURNING id_cliente",
+        [testUserId]
+      );
+      testClientId = resClient.rows[0].id_cliente;
+      createdClientIds.push(testClientId);
+
+      // Autorizar em ETAR 1 e ETAR 2
+      const resAuth1 = await pool.query(
+        "INSERT INTO autorizacao (id_cliente, id_etar, quota, ativo, auto_aprovacao) VALUES ($1, 1, 5, true, true) RETURNING id_autorizacao",
+        [testClientId]
+      );
+      authId1 = resAuth1.rows[0].id_autorizacao;
+      createdAutIds.push(authId1);
+
+      const resAuth2 = await pool.query(
+        "INSERT INTO autorizacao (id_cliente, id_etar, quota, ativo, auto_aprovacao) VALUES ($1, 2, 5, true, true) RETURNING id_autorizacao",
+        [testClientId]
+      );
+      authId2 = resAuth2.rows[0].id_autorizacao;
+      createdAutIds.push(authId2);
+    });
+
+    test('Deve reagendar automaticamente descarga AUTORIZADA para ETAR com ID mais próximo quando a original fica indisponível', async () => {
+      // 1. Criar descarga AUTORIZADA para ETAR 1 (Norte)
+      const resDesc = await pool.query(
+        "INSERT INTO descarga (id_cliente, id_etar, data_pedido, tipo_efluente, quantidade, estado_descarga) VALUES ($1, 1, NOW(), 'Industrial', 1000, 'AUTORIZADA') RETURNING id_descarga",
+        [testClientId]
+      );
+      const testDescargaId = resDesc.rows[0].id_descarga;
+      createdDescargaIds.push(testDescargaId);
+
+      // 2. Definir ETAR 1 como indisponível
+      const res = await request(app)
+        .put('/api/admin/etars/1/disponibilidade')
+        .set('Authorization', `Bearer ${tokens.gestor}`)
+        .send({ disponivel: false });
+
+      expect(res.status).toBe(200);
+      expect(res.body.etar.disponivel).toBe(false);
+
+      // 3. Verificar se a descarga foi movida para a ETAR 2 (Coimbra) pois tem whitelist e quota
+      const checkDesc = await pool.query('SELECT id_etar, estado_descarga FROM descarga WHERE id_descarga = $1', [testDescargaId]);
+      expect(checkDesc.rows[0].id_etar).toBe(2);
+      expect(checkDesc.rows[0].estado_descarga).toBe('AUTORIZADA');
+    });
+
+    test('Deve reverter descarga AUTORIZADA para SOLICITADA se não houver ETAR alternativa com quota ou disponível', async () => {
+      // 1. Criar nova descarga AUTORIZADA para ETAR 2 (Coimbra)
+      const resDesc = await pool.query(
+        "INSERT INTO descarga (id_cliente, id_etar, data_pedido, tipo_efluente, quantidade, estado_descarga) VALUES ($1, 2, NOW(), 'Industrial', 1000, 'AUTORIZADA') RETURNING id_descarga",
+        [testClientId]
+      );
+      const testDescargaId = resDesc.rows[0].id_descarga;
+      createdDescargaIds.push(testDescargaId);
+
+      // 2. Definir ETAR 2 como indisponível (agora tanto a ETAR 1 como a 2 estão indisponíveis para este cliente)
+      const res = await request(app)
+        .put('/api/admin/etars/2/disponibilidade')
+        .set('Authorization', `Bearer ${tokens.gestor}`)
+        .send({ disponivel: false });
+
+      expect(res.status).toBe(200);
+      expect(res.body.etar.disponivel).toBe(false);
+
+      // 3. Verificar se a descarga foi revertida para SOLICITADA e tem observações adicionadas
+      const checkDesc = await pool.query('SELECT id_etar, estado_descarga, observacoes FROM descarga WHERE id_descarga = $1', [testDescargaId]);
+      expect(checkDesc.rows[0].estado_descarga).toBe('SOLICITADA');
+      expect(checkDesc.rows[0].observacoes).toContain('[Revertido por ETAR indisponível]');
+    });
+
+    test('Deve adicionar alerta operacional em observações de descargas AGENDADAS na ETAR desativada', async () => {
+      // Restaurar ETAR 3 (Lisboa) e criar whitelist para teste
+      await pool.query('UPDATE etar SET disponivel = true WHERE id_etar = 3');
+      const resAuth3 = await pool.query(
+        "INSERT INTO autorizacao (id_cliente, id_etar, quota, ativo, auto_aprovacao) VALUES ($1, 3, 5, true, true) RETURNING id_autorizacao",
+        [testClientId]
+      );
+      createdAutIds.push(resAuth3.rows[0].id_autorizacao);
+
+      // 1. Criar descarga AGENDADA para ETAR 3
+      const resDesc = await pool.query(
+        "INSERT INTO descarga (id_cliente, id_etar, data_pedido, tipo_efluente, quantidade, estado_descarga, data_agendamento, matricula_trator) VALUES ($1, 3, NOW(), 'Industrial', 1000, 'AGENDADA', NOW(), 'AA-00-AA') RETURNING id_descarga",
+        [testClientId]
+      );
+      const testDescargaId = resDesc.rows[0].id_descarga;
+      createdDescargaIds.push(testDescargaId);
+
+      // 2. Suspender ETAR 3
+      const res = await request(app)
+        .put('/api/admin/etars/3/disponibilidade')
+        .set('Authorization', `Bearer ${tokens.gestor}`)
+        .send({ disponivel: false });
+
+      expect(res.status).toBe(200);
+
+      // 3. Verificar observações contêm o alerta operacional
+      const checkDesc = await pool.query('SELECT estado_descarga, observacoes FROM descarga WHERE id_descarga = $1', [testDescargaId]);
+      expect(checkDesc.rows[0].estado_descarga).toBe('AGENDADA'); // Mantém-se agendada
+      expect(checkDesc.rows[0].observacoes).toContain('ALERTA OPERACIONAL');
     });
   });
 });
