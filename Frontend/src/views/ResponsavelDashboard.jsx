@@ -522,7 +522,7 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
                 Boletins Analíticos
               </button>
               <button className={`tab-btn ${activeTab === 'relatorios' ? 'active' : ''}`} onClick={() => { setActiveTab('relatorios'); setError(''); setSuccess(''); }}>
-                Relatórios Consolidados
+                Relatórios
               </button>
               <button className={`tab-btn ${activeTab === 'utilizadores' ? 'active' : ''}`} onClick={() => { setActiveTab('utilizadores'); setError(''); setSuccess(''); }}>
                 Utilizadores
@@ -961,7 +961,7 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
             {/* TAB: RELATÓRIOS CONSOLIDADOS */}
             {activeTab === 'relatorios' && (
               <div>
-                <h3 style={{ marginBottom: '1.5rem' }}>Relatórios Consolidados</h3>
+                <h3 style={{ marginBottom: '1.5rem' }}>Relatórios</h3>
 
                 {/* Filtros de Pesquisa */}
                 <div className="card" style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', padding: '1rem', marginBottom: '1.5rem', alignItems: 'center' }}>
