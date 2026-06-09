@@ -114,3 +114,79 @@ exports.alterarSenha = async (req, res) => {
     return res.status(500).json({ erro: 'Erro interno ao alterar palavra-passe.' });
   }
 };
+
+exports.atualizarPerfil = async (req, res) => {
+  const { nome, email } = req.body;
+  const id_utilizador = req.user.id_utilizador;
+
+  if (!nome || !email) {
+    return res.status(400).json({ erro: 'Por favor, indique o nome e email.' });
+  }
+
+  try {
+    // Verificar se o email já está em uso por outro utilizador
+    const emailCheck = await pool.query(
+      'SELECT id_utilizador FROM utilizador WHERE LOWER(email) = LOWER($1) AND id_utilizador <> $2',
+      [email.trim(), id_utilizador]
+    );
+    if (emailCheck.rows.length > 0) {
+      return res.status(400).json({ erro: 'Este email já está registado para outro utilizador.' });
+    }
+
+    // Atualizar utilizador
+    const updateRes = await pool.query(
+      'UPDATE utilizador SET nome = $1, email = $2 WHERE id_utilizador = $3 RETURNING *',
+      [nome.trim(), email.trim(), id_utilizador]
+    );
+
+    if (updateRes.rows.length === 0) {
+      return res.status(404).json({ erro: 'Utilizador não encontrado.' });
+    }
+
+    const user = updateRes.rows[0];
+
+    // Se for cliente, também atualizamos a tabela cliente
+    if (req.user.perfil === 'CLIENTE') {
+      await pool.query(
+        'UPDATE cliente SET nome = $1, email = $2 WHERE id_utilizador = $3',
+        [nome.trim(), email.trim(), id_utilizador]
+      );
+    }
+
+    // Obter dados atualizados completos para gerar o novo token JWT
+    const fullQuery = `
+      SELECT u.id_utilizador, u.nome, u.email, u.id_etar,
+             p.nome AS perfil, c.id_cliente,
+             e.nome AS etar_nome
+      FROM utilizador u
+      JOIN perfil p ON u.id_perfil = p.id_perfil
+      LEFT JOIN cliente c ON u.id_utilizador = c.id_utilizador
+      LEFT JOIN etar e ON u.id_etar = e.id_etar
+      WHERE u.id_utilizador = $1
+    `;
+    const fullRes = await pool.query(fullQuery, [id_utilizador]);
+    const updatedUser = fullRes.rows[0];
+
+    const payload = {
+      id_utilizador: updatedUser.id_utilizador,
+      nome: updatedUser.nome,
+      email: updatedUser.email,
+      perfil: updatedUser.perfil,
+      id_etar: updatedUser.id_etar,
+      etar_nome: updatedUser.etar_nome,
+      id_cliente: updatedUser.id_cliente
+    };
+
+    const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '24h' });
+
+    return res.json({
+      mensagem: 'Perfil atualizado com sucesso!',
+      token,
+      utilizador: payload
+    });
+  } catch (err) {
+    console.error('Erro ao atualizar perfil:', err);
+    return res.status(500).json({ erro: 'Erro interno ao atualizar perfil.' });
+  }
+};
+

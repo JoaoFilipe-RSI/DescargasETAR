@@ -14,8 +14,11 @@ export default function App() {
 
   const [notifications, setNotifications] = useState([]);
 
-  // Estados para Alterar Palavra-passe
-  const [showChangePassword, setShowChangePassword] = useState(false);
+  // Estados para Configurações (Perfil e Alterar Senha)
+  const [showSettings, setShowSettings] = useState(false);
+  const [settingsTab, setSettingsTab] = useState('perfil'); // 'perfil' ou 'senha'
+  const [perfilNome, setPerfilNome] = useState('');
+  const [perfilEmail, setPerfilEmail] = useState('');
   const [senhaAtual, setSenhaAtual] = useState('');
   const [novaSenha, setNovaSenha] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
@@ -148,6 +151,33 @@ export default function App() {
     setUser(null);
   };
 
+  const handleOpenSettings = () => {
+    setPerfilNome(user?.nome || '');
+    setPerfilEmail(user?.email || '');
+    setSettingsTab('perfil');
+    setErrorMsg('');
+    setSuccessMsg('');
+    setShowSettings(true);
+  };
+
+  const handleUpdateProfileSubmit = async (e) => {
+    e.preventDefault();
+    setErrorMsg('');
+    setSuccessMsg('');
+    try {
+      const data = await authService.atualizarPerfil(perfilNome, perfilEmail);
+      localStorage.setItem('token', data.token);
+      localStorage.setItem('user', JSON.stringify(data.utilizador));
+      setUser(data.utilizador);
+      setSuccessMsg('Perfil atualizado com sucesso!');
+      setTimeout(() => {
+        setSuccessMsg('');
+      }, 1500);
+    } catch (err) {
+      setErrorMsg(err.message || 'Erro ao atualizar perfil.');
+    }
+  };
+
   const handleChangePasswordSubmit = async (e) => {
     e.preventDefault();
     setErrorMsg('');
@@ -158,9 +188,8 @@ export default function App() {
       setSenhaAtual('');
       setNovaSenha('');
       setTimeout(() => {
-        setShowChangePassword(false);
         setSuccessMsg('');
-      }, 2000);
+      }, 1500);
     } catch (err) {
       setErrorMsg(err.message || 'Erro ao alterar palavra-passe.');
     }
@@ -191,7 +220,7 @@ export default function App() {
             notifications={notifications}
             onMarkAsRead={handleMarkAsRead}
             onMarkAllAsRead={handleMarkAllAsRead}
-            onChangePassword={() => setShowChangePassword(true)}
+            onChangePassword={handleOpenSettings}
           />
         );
       
@@ -204,7 +233,7 @@ export default function App() {
             notifications={notifications}
             onMarkAsRead={handleMarkAsRead}
             onMarkAllAsRead={handleMarkAllAsRead}
-            onChangePassword={() => setShowChangePassword(true)}
+            onChangePassword={handleOpenSettings}
           />
         );
       
@@ -216,7 +245,7 @@ export default function App() {
             notifications={notifications}
             onMarkAsRead={handleMarkAsRead}
             onMarkAllAsRead={handleMarkAllAsRead}
-            onChangePassword={() => setShowChangePassword(true)}
+            onChangePassword={handleOpenSettings}
           />
         );
       
@@ -229,7 +258,7 @@ export default function App() {
             notifications={notifications}
             onMarkAsRead={handleMarkAsRead}
             onMarkAllAsRead={handleMarkAllAsRead}
-            onChangePassword={() => setShowChangePassword(true)}
+            onChangePassword={handleOpenSettings}
           />
         );
       
@@ -250,11 +279,50 @@ export default function App() {
     <>
       {renderDashboard()}
 
-      {showChangePassword && (
+      {showSettings && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 9999, padding: '1rem' }}>
-          <div className="card animate-fade-in" style={{ width: '100%', maxWidth: '400px', marginBottom: 0 }}>
-            <h3 style={{ marginBottom: '1rem' }}>Alterar Palavra-passe</h3>
+          <div className="card animate-fade-in" style={{ width: '100%', maxWidth: '450px', marginBottom: 0 }}>
+            <h3 style={{ marginBottom: '1.25rem', fontFamily: 'var(--font-title)' }}>Configurações de Conta</h3>
             
+            <div style={{ display: 'flex', gap: '1.25rem', borderBottom: '1px solid var(--border-color)', marginBottom: '1.25rem' }}>
+              <button 
+                type="button" 
+                onClick={() => { setSettingsTab('perfil'); setErrorMsg(''); setSuccessMsg(''); }}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  paddingBottom: '0.75rem',
+                  fontFamily: 'var(--font-title)',
+                  fontWeight: 600,
+                  fontSize: '0.9rem',
+                  cursor: 'pointer',
+                  color: settingsTab === 'perfil' ? 'var(--primary)' : 'var(--text-secondary)',
+                  borderBottom: settingsTab === 'perfil' ? '2px solid var(--primary)' : '2px solid transparent',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                Os Meus Dados
+              </button>
+              <button 
+                type="button" 
+                onClick={() => { setSettingsTab('senha'); setErrorMsg(''); setSuccessMsg(''); }}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  paddingBottom: '0.75rem',
+                  fontFamily: 'var(--font-title)',
+                  fontWeight: 600,
+                  fontSize: '0.9rem',
+                  cursor: 'pointer',
+                  color: settingsTab === 'senha' ? 'var(--primary)' : 'var(--text-secondary)',
+                  borderBottom: settingsTab === 'senha' ? '2px solid var(--primary)' : '2px solid transparent',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                Alterar Palavra-passe
+              </button>
+            </div>
+
             {errorMsg && (
               <div className="card" style={{ backgroundColor: 'var(--danger-light)', color: 'var(--danger)', padding: '0.75rem', marginBottom: '1rem', borderLeft: '4px solid var(--danger)', fontSize: '0.85rem' }}>
                 {errorMsg}
@@ -267,47 +335,88 @@ export default function App() {
               </div>
             )}
 
-            <form onSubmit={handleChangePasswordSubmit}>
-              <div className="form-group">
-                <label className="form-label">Palavra-passe Atual *</label>
-                <input 
-                  type="password" 
-                  className="form-input" 
-                  required 
-                  value={senhaAtual} 
-                  onChange={e => setSenhaAtual(e.target.value)} 
-                  placeholder="Introduza a palavra-passe atual"
-                />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Nova Palavra-passe *</label>
-                <input 
-                  type="password" 
-                  className="form-input" 
-                  required 
-                  value={novaSenha} 
-                  onChange={e => setNovaSenha(e.target.value)} 
-                  placeholder="Mínimo 6 caracteres"
-                  minLength={6}
-                />
-              </div>
-              <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem' }}>
-                <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>Gravar</button>
-                <button 
-                  type="button" 
-                  className="btn btn-secondary" 
-                  onClick={() => { 
-                    setShowChangePassword(false); 
-                    setSenhaAtual(''); 
-                    setNovaSenha(''); 
-                    setErrorMsg(''); 
-                    setSuccessMsg(''); 
-                  }}
-                >
-                  Cancelar
-                </button>
-              </div>
-            </form>
+            {settingsTab === 'perfil' ? (
+              <form onSubmit={handleUpdateProfileSubmit}>
+                <div className="form-group">
+                  <label className="form-label">Nome Completo *</label>
+                  <input 
+                    type="text" 
+                    className="form-input" 
+                    required 
+                    value={perfilNome} 
+                    onChange={e => setPerfilNome(e.target.value)} 
+                    placeholder="O seu nome"
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Endereço de Email *</label>
+                  <input 
+                    type="email" 
+                    className="form-input" 
+                    required 
+                    value={perfilEmail} 
+                    onChange={e => setPerfilEmail(e.target.value)} 
+                    placeholder="o-seu-email@exemplo.com"
+                  />
+                </div>
+                <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem' }}>
+                  <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>Gravar Dados</button>
+                  <button 
+                    type="button" 
+                    className="btn btn-secondary" 
+                    onClick={() => { 
+                      setShowSettings(false); 
+                      setErrorMsg(''); 
+                      setSuccessMsg(''); 
+                    }}
+                  >
+                    Fechar
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <form onSubmit={handleChangePasswordSubmit}>
+                <div className="form-group">
+                  <label className="form-label">Palavra-passe Atual *</label>
+                  <input 
+                    type="password" 
+                    className="form-input" 
+                    required 
+                    value={senhaAtual} 
+                    onChange={e => setSenhaAtual(e.target.value)} 
+                    placeholder="Introduza a palavra-passe atual"
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Nova Palavra-passe *</label>
+                  <input 
+                    type="password" 
+                    className="form-input" 
+                    required 
+                    value={novaSenha} 
+                    onChange={e => setNovaSenha(e.target.value)} 
+                    placeholder="Mínimo 6 caracteres"
+                    minLength={6}
+                  />
+                </div>
+                <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem' }}>
+                  <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>Gravar Senha</button>
+                  <button 
+                    type="button" 
+                    className="btn btn-secondary" 
+                    onClick={() => { 
+                      setShowSettings(false); 
+                      setSenhaAtual(''); 
+                      setNovaSenha(''); 
+                      setErrorMsg(''); 
+                      setSuccessMsg(''); 
+                    }}
+                  >
+                    Fechar
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
         </div>
       )}

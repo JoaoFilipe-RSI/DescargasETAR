@@ -69,6 +69,13 @@ export const authService = {
       method: 'PUT',
       body: { senhaAtual, novaSenha }
     });
+  },
+  
+  atualizarPerfil(nome, email) {
+    return request('/auth/perfil', {
+      method: 'PUT',
+      body: { nome, email }
+    });
   }
 };
 
@@ -267,5 +274,20 @@ export const adminService = {
     }
     const queryStr = params.toString();
     return request(`/admin/relatorios${queryStr ? '?' + queryStr : ''}`);
+  },
+  obterUtilizadores() {
+    return request('/admin/utilizadores');
+  },
+  criarUtilizador(dados) {
+    return request('/admin/utilizadores', {
+      method: 'POST',
+      body: dados
+    });
+  },
+  atualizarUtilizador(id, dados) {
+    return request(`/admin/utilizadores/${id}`, {
+      method: 'PUT',
+      body: dados
+    });
   }
 };

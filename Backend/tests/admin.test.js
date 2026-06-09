@@ -197,4 +197,89 @@ describe('Módulo de Administração - Testes de Integração', () => {
       expect(checkRes.body).toContain(6);
     });
   });
+
+  describe('5. Reset de Senha de Clientes e Gestão de Utilizadores Internos', () => {
+    test('Deve permitir ao gestor redefinir a senha do cliente na edição', async () => {
+      const idCliente = createdClientIds[0];
+      const res = await request(app)
+        .put(`/api/admin/clientes/${idCliente}`)
+        .set('Authorization', `Bearer ${tokens.gestor}`)
+        .send({
+          nome: 'Empresa Teste Alterada',
+          email: 'alterado@empresateste.pt',
+          password: 'NovaSenhaCliente123!',
+          periodicidade_analise: 'SEMANAL'
+        });
+
+      expect(res.status).toBe(200);
+
+      // Tentar login com a nova password resetada pelo gestor
+      const resLogin = await request(app)
+        .post('/api/auth/login')
+        .send({
+          email: 'alterado@empresateste.pt',
+          password: 'NovaSenhaCliente123!'
+        });
+      expect(resLogin.status).toBe(200);
+      expect(resLogin.body.token).toBeDefined();
+    });
+
+    test('Deve listar utilizadores internos (excluindo clientes)', async () => {
+      const res = await request(app)
+        .get('/api/admin/utilizadores')
+        .set('Authorization', `Bearer ${tokens.gestor}`);
+
+      expect(res.status).toBe(200);
+      expect(Array.isArray(res.body)).toBe(true);
+      // Garantir que não contém o utilizador cliente (id_perfil = 1)
+      const temCliente = res.body.some(u => u.id_perfil === 1);
+      expect(temCliente).toBe(false);
+    });
+
+    test('Deve criar, atualizar e desativar um utilizador interno', async () => {
+      // 1. Criar utilizador interno
+      const resCriar = await request(app)
+        .post('/api/admin/utilizadores')
+        .set('Authorization', `Bearer ${tokens.gestor}`)
+        .send({
+          nome: 'Técnico de Teste CRUD',
+          email: 'tecnico.crud@laboratorio.pt',
+          id_perfil: 4, // TECNICO_LAB
+          password: 'PasswordTeste123!',
+          ativo: true
+        });
+
+      expect(resCriar.status).toBe(201);
+      expect(resCriar.body.utilizador).toBeDefined();
+      expect(resCriar.body.utilizador.id_utilizador).toBeDefined();
+      const idUtilizador = resCriar.body.utilizador.id_utilizador;
+      createdUserIds.push(idUtilizador);
+
+      // 2. Atualizar utilizador interno (incluindo reposição de senha)
+      const resEditar = await request(app)
+        .put(`/api/admin/utilizadores/${idUtilizador}`)
+        .set('Authorization', `Bearer ${tokens.gestor}`)
+        .send({
+          nome: 'Técnico de Teste Editado',
+          email: 'tecnico.editado@laboratorio.pt',
+          id_perfil: 4,
+          password: 'NovaPassword123!',
+          ativo: false // Suspenso
+        });
+
+      expect(resEditar.status).toBe(200);
+      expect(resEditar.body.utilizador.nome).toBe('Técnico de Teste Editado');
+      expect(resEditar.body.utilizador.ativo).toBe(false);
+
+      // 3. Verificar se login falha porque está suspenso (403)
+      const resLoginSuspended = await request(app)
+        .post('/api/auth/login')
+        .send({
+          email: 'tecnico.editado@laboratorio.pt',
+          password: 'NovaPassword123!'
+        });
+      expect(resLoginSuspended.status).toBe(403);
+      expect(resLoginSuspended.body.erro).toBe('Esta conta está desativada. Contacte o administrador.');
+    });
+  });
 });

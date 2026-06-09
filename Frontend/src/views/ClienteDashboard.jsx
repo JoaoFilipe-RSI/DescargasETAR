@@ -172,7 +172,7 @@ export default function ClienteDashboard({ user, onLogout, notifications, onMark
             onMarkAllAsRead={onMarkAllAsRead}
           />
           <button className="btn btn-secondary" style={{ padding: '0.4rem 0.8rem', display: 'flex', alignItems: 'center', gap: '4px' }} onClick={onChangePassword}>
-            <Settings size={16} /> Senha
+            <Settings size={16} /> Configurações
           </button>
           <button className="btn btn-secondary" style={{ padding: '0.4rem 0.8rem' }} onClick={onLogout}>
             <LogOut size={16} /> Sair

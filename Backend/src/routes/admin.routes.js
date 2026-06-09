@@ -31,4 +31,9 @@ router.post('/clientes/:id/parametros', adminController.atualizarParametrosClien
 // 5. Relatórios Consolidados
 router.get('/relatorios', adminController.obterRelatorios);
 
+// 6. Utilizadores Internos
+router.get('/utilizadores', adminController.obterUtilizadores);
+router.post('/utilizadores', adminController.criarUtilizador);
+router.put('/utilizadores/:id', adminController.atualizarUtilizador);
+
 module.exports = router;

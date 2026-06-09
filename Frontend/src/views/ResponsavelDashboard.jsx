@@ -30,6 +30,19 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
   const [descargasConcluidas, setDescargasConcluidas] = useState([]);
   const [amostrasConcluidas, setAmostrasConcluidas] = useState([]);
 
+  // Estados para o novo separador de Utilizadores Internos
+  const [utilizadoresList, setUtilizadoresList] = useState([]);
+  const [showAddUtilizador, setShowAddUtilizador] = useState(false);
+  const [editingUtilizadorId, setEditingUtilizadorId] = useState(null);
+  const [newUtilizadorData, setNewUtilizadorData] = useState({
+    nome: '',
+    email: '',
+    id_perfil: '2',
+    id_etar: '',
+    password: '',
+    ativo: true
+  });
+
   // Estados para o novo separador de Relatórios
   const [relatoriosData, setRelatoriosData] = useState([]);
   const [filtroCliente, setFiltroCliente] = useState('all');
@@ -98,6 +111,11 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
         } else if (activeTab === 'relatorios') {
           const cls = await adminService.obterClientes();
           setClientesList(cls);
+          const ets = await adminService.obterEtars();
+          setEtarsList(ets);
+        } else if (activeTab === 'utilizadores') {
+          const utls = await adminService.obterUtilizadores();
+          setUtilizadoresList(utls);
           const ets = await adminService.obterEtars();
           setEtarsList(ets);
         }
@@ -185,6 +203,35 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
       loadData();
     } catch (err) {
       setError(err.message || 'Erro ao gravar dados do cliente.');
+    }
+  };
+
+  // Gestor de Clientes: Criar ou Editar Utilizador Interno
+  const handleSaveUtilizador = async (e) => {
+    e.preventDefault();
+    setError('');
+    setSuccess('');
+    try {
+      if (editingUtilizadorId) {
+        await adminService.atualizarUtilizador(editingUtilizadorId, newUtilizadorData);
+        setSuccess('Utilizador interno atualizado com sucesso!');
+      } else {
+        await adminService.criarUtilizador(newUtilizadorData);
+        setSuccess('Utilizador interno criado com sucesso!');
+      }
+      setShowAddUtilizador(false);
+      setEditingUtilizadorId(null);
+      setNewUtilizadorData({
+        nome: '',
+        email: '',
+        id_perfil: '2',
+        id_etar: '',
+        password: '',
+        ativo: true
+      });
+      loadData();
+    } catch (err) {
+      setError(err.message || 'Erro ao gravar utilizador interno.');
     }
   };
 
@@ -433,7 +480,7 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
             onMarkAllAsRead={onMarkAllAsRead} 
           />
           <button className="btn btn-secondary" style={{ padding: '0.4rem 0.8rem', display: 'flex', alignItems: 'center', gap: '4px' }} onClick={onChangePassword}>
-            <Settings size={16} /> Senha
+            <Settings size={16} /> Configurações
           </button>
           <button className="btn btn-secondary" style={{ padding: '0.4rem 0.8rem' }} onClick={onLogout}>
             <LogOut size={16} /> Sair
@@ -476,6 +523,9 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
               </button>
               <button className={`tab-btn ${activeTab === 'relatorios' ? 'active' : ''}`} onClick={() => { setActiveTab('relatorios'); setError(''); setSuccess(''); }}>
                 Relatórios Consolidados
+              </button>
+              <button className={`tab-btn ${activeTab === 'utilizadores' ? 'active' : ''}`} onClick={() => { setActiveTab('utilizadores'); setError(''); setSuccess(''); }}>
+                Utilizadores
               </button>
             </div>
 
@@ -1072,6 +1122,101 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
                 )}
               </div>
             )}
+
+            {/* TAB: GESTÃO DE UTILIZADORES INTERNOS */}
+            {activeTab === 'utilizadores' && (
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                  <h3>Gestão de Utilizadores Internos</h3>
+                  <button 
+                    className="btn btn-primary" 
+                    style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+                    onClick={() => {
+                      setEditingUtilizadorId(null);
+                      setNewUtilizadorData({
+                        nome: '',
+                        email: '',
+                        id_perfil: '2',
+                        id_etar: '',
+                        password: '',
+                        ativo: true
+                      });
+                      setShowAddUtilizador(true);
+                    }}
+                  >
+                    <PlusCircle size={18} /> Adicionar Utilizador
+                  </button>
+                </div>
+
+                {loading ? (
+                  <p>A ler utilizadores...</p>
+                ) : utilizadoresList.length === 0 ? (
+                  <div className="card" style={{ textAlign: 'center', padding: '2rem' }}>
+                    <p style={{ color: 'var(--text-secondary)' }}>Nenhum utilizador interno registado no sistema.</p>
+                  </div>
+                ) : (
+                  <div className="table-container">
+                    <table className="data-table">
+                      <thead>
+                        <tr>
+                          <th>Nome</th>
+                          <th>Email</th>
+                          <th>Perfil / Função</th>
+                          <th>ETAR Associada</th>
+                          <th>Estado</th>
+                          <th>Ações</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {utilizadoresList.map((u) => (
+                          <tr key={u.id_utilizador}>
+                            <td><strong>{u.nome}</strong></td>
+                            <td>{u.email}</td>
+                            <td>
+                              <span className="badge badge-info" style={{ fontSize: '0.75rem', textTransform: 'capitalize' }}>
+                                {u.perfil_nome ? u.perfil_nome.replace('_', ' ').toLowerCase() : 'N/A'}
+                              </span>
+                            </td>
+                            <td>
+                              {u.id_etar ? (
+                                <span>{u.etar_nome || `ETAR #${u.id_etar}`}</span>
+                              ) : (
+                                <span style={{ color: 'var(--text-secondary)' }}>-</span>
+                              )}
+                            </td>
+                            <td>
+                              <span className={`badge badge-${u.ativo ? 'success' : 'danger'}`} style={{ fontSize: '0.75rem' }}>
+                                {u.ativo ? 'Ativo' : 'Suspenso'}
+                              </span>
+                            </td>
+                            <td>
+                              <button 
+                                className="btn btn-primary" 
+                                style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem' }}
+                                onClick={() => {
+                                  setEditingUtilizadorId(u.id_utilizador);
+                                  setNewUtilizadorData({
+                                    nome: u.nome,
+                                    email: u.email,
+                                    id_perfil: String(u.id_perfil),
+                                    id_etar: u.id_etar ? String(u.id_etar) : '',
+                                    password: '',
+                                    ativo: !!u.ativo
+                                  });
+                                  setShowAddUtilizador(true);
+                                }}
+                              >
+                                Editar
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 
@@ -1261,12 +1406,20 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
                   <label className="form-label">Email Principal (Acesso) *</label>
                   <input type="email" className="form-input" placeholder="geral@empresa.com" required value={newClienteData.email} onChange={e => setNewClienteData({ ...newClienteData, email: e.target.value })} />
                 </div>
-                {!editingClienteId && (
-                  <div className="form-group">
-                    <label className="form-label">Palavra-passe (Opcional - por omissão: Descargas123!)</label>
-                    <input type="password" className="form-input" placeholder="Introduza a password" value={newClienteData.password} onChange={e => setNewClienteData({ ...newClienteData, password: e.target.value })} />
-                  </div>
-                )}
+                <div className="form-group">
+                  <label className="form-label">
+                    {editingClienteId 
+                      ? 'Alterar Palavra-passe do Cliente (Opcional - deixar em branco para manter)' 
+                      : 'Palavra-passe (Opcional - por omissão: Descargas123!)'}
+                  </label>
+                  <input 
+                    type="password" 
+                    className="form-input" 
+                    placeholder={editingClienteId ? "Deixe em branco para manter" : "Introduza a password"} 
+                    value={newClienteData.password || ''} 
+                    onChange={e => setNewClienteData({ ...newClienteData, password: e.target.value })} 
+                  />
+                </div>
                 <div className="form-group">
                   <label className="form-label">Periodicidade de Análises Contratada</label>
                   <select className="form-input" value={newClienteData.periodicidade_analise} onChange={e => setNewClienteData({ ...newClienteData, periodicidade_analise: e.target.value })}>
@@ -1348,6 +1501,122 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
                 <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem' }}>
                   <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>{editingAutorizacaoId ? 'Gravar Alterações' : 'Gravar Regra'}</button>
                   <button type="button" className="btn btn-secondary" onClick={() => setShowAddAutorizacao(false)}>Cancelar</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* Modal: Adicionar/Editar Utilizador Interno */}
+        {showAddUtilizador && (
+          <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: '1rem' }}>
+            <div className="card" style={{ width: '100%', maxWidth: '480px', marginBottom: 0, maxHeight: '90vh', overflowY: 'auto' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                <h3>{editingUtilizadorId ? 'Editar Utilizador Interno' : 'Registar Novo Utilizador Interno'}</h3>
+                <button 
+                  style={{ background: 'none', border: 'none', cursor: 'pointer' }} 
+                  onClick={() => setShowAddUtilizador(false)}
+                >
+                  <X size={20} />
+                </button>
+              </div>
+              
+              <form onSubmit={handleSaveUtilizador}>
+                <div className="form-group">
+                  <label className="form-label">Nome Completo *</label>
+                  <input 
+                    type="text" 
+                    className="form-input" 
+                    placeholder="Ex: Carlos Silva" 
+                    required 
+                    value={newUtilizadorData.nome} 
+                    onChange={e => setNewUtilizadorData({ ...newUtilizadorData, nome: e.target.value })} 
+                  />
+                </div>
+                
+                <div className="form-group">
+                  <label className="form-label">Endereço de Email (Acesso) *</label>
+                  <input 
+                    type="email" 
+                    className="form-input" 
+                    placeholder="carlos.silva@etar.pt" 
+                    required 
+                    value={newUtilizadorData.email} 
+                    onChange={e => setNewUtilizadorData({ ...newUtilizadorData, email: e.target.value })} 
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Perfil / Permissões de Acesso *</label>
+                  <select 
+                    className="form-input" 
+                    required 
+                    value={newUtilizadorData.id_perfil} 
+                    onChange={e => setNewUtilizadorData({ ...newUtilizadorData, id_perfil: e.target.value, id_etar: (e.target.value !== '2' && e.target.value !== '3') ? '' : newUtilizadorData.id_etar })}
+                  >
+                    <option value="2">Operador de ETAR</option>
+                    <option value="3">Responsável de ETAR</option>
+                    <option value="4">Técnico de Laboratório</option>
+                    <option value="5">Responsável de Laboratório</option>
+                    <option value="6">Gestor de Clientes</option>
+                  </select>
+                </div>
+
+                {(newUtilizadorData.id_perfil === '2' || newUtilizadorData.id_perfil === '3') && (
+                  <div className="form-group">
+                    <label className="form-label">ETAR Associada *</label>
+                    <select 
+                      className="form-input" 
+                      required 
+                      value={newUtilizadorData.id_etar} 
+                      onChange={e => setNewUtilizadorData({ ...newUtilizadorData, id_etar: e.target.value })}
+                    >
+                      <option value="">-- Escolha uma ETAR --</option>
+                      {etarsList.map(e => (
+                        <option key={e.id_etar} value={e.id_etar}>{e.nome}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                <div className="form-group">
+                  <label className="form-label">
+                    {editingUtilizadorId 
+                      ? 'Alterar Palavra-passe (Opcional - deixar em branco para manter)' 
+                      : 'Palavra-passe (Opcional - por omissão: Descargas123!)'}
+                  </label>
+                  <input 
+                    type="password" 
+                    className="form-input" 
+                    placeholder={editingUtilizadorId ? "Deixe em branco para manter" : "Introduza a palavra-passe"} 
+                    value={newUtilizadorData.password || ''} 
+                    onChange={e => setNewUtilizadorData({ ...newUtilizadorData, password: e.target.value })} 
+                  />
+                </div>
+
+                <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '1.25rem' }}>
+                  <input 
+                    type="checkbox" 
+                    id="utilizador_ativo"
+                    checked={!!newUtilizadorData.ativo} 
+                    onChange={e => setNewUtilizadorData({ ...newUtilizadorData, ativo: e.target.checked })} 
+                  />
+                  <label htmlFor="utilizador_ativo" className="form-label" style={{ marginBottom: 0, cursor: 'pointer' }}>
+                    Conta de Utilizador Ativa (Permite login)
+                  </label>
+                </div>
+
+                <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem' }}>
+                  <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>
+                    {editingUtilizadorId ? 'Gravar Alterações' : 'Criar Utilizador'}
+                  </button>
+                  <button 
+                    type="button" 
+                    className="btn btn-secondary" 
+                    onClick={() => setShowAddUtilizador(false)}
+                  >
+                    Cancelar
+                  </button>
                 </div>
               </form>
             </div>

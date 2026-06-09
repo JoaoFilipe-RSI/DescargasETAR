@@ -112,10 +112,19 @@ exports.atualizarCliente = async (req, res) => {
       return res.status(400).json({ erro: 'Este email já está a ser utilizado por outro utilizador.' });
     }
 
-    await client.query(
-      'UPDATE utilizador SET nome = $1, email = $2 WHERE id_utilizador = $3',
-      [nome, email.trim(), id_utilizador]
-    );
+    const { password } = req.body;
+    if (password && password.trim().length >= 6) {
+      const passwordHash = await bcrypt.hash(password.trim(), 12);
+      await client.query(
+        'UPDATE utilizador SET nome = $1, email = $2, password_hash = $3 WHERE id_utilizador = $4',
+        [nome, email.trim(), passwordHash, id_utilizador]
+      );
+    } else {
+      await client.query(
+        'UPDATE utilizador SET nome = $1, email = $2 WHERE id_utilizador = $3',
+        [nome, email.trim(), id_utilizador]
+      );
+    }
 
     const updateClientQuery = `
       UPDATE cliente
@@ -447,5 +456,140 @@ exports.obterRelatorios = async (req, res) => {
   } catch (err) {
     console.error('Erro ao obter relatórios:', err);
     return res.status(500).json({ erro: 'Erro interno ao obter relatórios.' });
+  }
+};
+
+exports.obterUtilizadores = async (req, res) => {
+  try {
+    const query = `
+      SELECT u.id_utilizador, u.nome, u.email, u.id_perfil, u.ativo, u.id_etar,
+             p.nome AS perfil_nome, e.nome AS etar_nome
+      FROM utilizador u
+      JOIN perfil p ON u.id_perfil = p.id_perfil
+      LEFT JOIN etar e ON u.id_etar = e.id_etar
+      WHERE u.id_perfil <> 1
+      ORDER BY u.id_utilizador
+    `;
+    const result = await pool.query(query);
+    return res.json(result.rows);
+  } catch (err) {
+    console.error('Erro ao obter utilizadores:', err);
+    return res.status(500).json({ erro: 'Erro interno ao obter utilizadores.' });
+  }
+};
+
+exports.criarUtilizador = async (req, res) => {
+  const { nome, email, id_perfil, password, id_etar, ativo } = req.body;
+
+  if (!nome || !email || !id_perfil) {
+    return res.status(400).json({ erro: 'Por favor, indique nome, email e perfil.' });
+  }
+
+  const rawPassword = password && password.trim() ? password.trim() : 'Descargas123!';
+  try {
+    // Verificar se o email já existe
+    const emailCheck = await pool.query('SELECT id_utilizador FROM utilizador WHERE LOWER(email) = LOWER($1)', [email.trim()]);
+    if (emailCheck.rows.length > 0) {
+      return res.status(400).json({ erro: 'Este email já está registado no sistema.' });
+    }
+
+    const passwordHash = await bcrypt.hash(rawPassword, 12);
+    const query = `
+      INSERT INTO utilizador (id_perfil, nome, email, password_hash, id_etar, ativo)
+      VALUES ($1, $2, $3, $4, $5, $6)
+      RETURNING id_utilizador, nome, email, id_perfil, id_etar, ativo
+    `;
+    const result = await pool.query(query, [
+      parseInt(id_perfil, 10),
+      nome.trim(),
+      email.trim().toLowerCase(),
+      passwordHash,
+      id_etar ? parseInt(id_etar, 10) : null,
+      ativo !== undefined ? !!ativo : true
+    ]);
+
+    return res.status(201).json({
+      mensagem: 'Utilizador criado com sucesso.',
+      utilizador: result.rows[0]
+    });
+  } catch (err) {
+    console.error('Erro ao criar utilizador:', err);
+    return res.status(500).json({ erro: 'Erro interno ao criar utilizador.' });
+  }
+};
+
+exports.atualizarUtilizador = async (req, res) => {
+  const { id } = req.params;
+  const { nome, email, id_perfil, password, id_etar, ativo } = req.body;
+
+  if (!nome || !email || !id_perfil) {
+    return res.status(400).json({ erro: 'Por favor, indique nome, email e perfil.' });
+  }
+
+  try {
+    // Verificar se o email já está em uso por outro utilizador
+    const emailCheck = await pool.query(
+      'SELECT id_utilizador FROM utilizador WHERE LOWER(email) = LOWER($1) AND id_utilizador <> $2',
+      [email.trim(), id]
+    );
+    if (emailCheck.rows.length > 0) {
+      return res.status(400).json({ erro: 'Este email já está a ser utilizado por outro utilizador.' });
+    }
+
+    // Se o gestor atualizou a senha do utilizador
+    if (password && password.trim().length >= 6) {
+      const passwordHash = await bcrypt.hash(password.trim(), 12);
+      const query = `
+        UPDATE utilizador
+        SET nome = $1, email = $2, id_perfil = $3, password_hash = $4, id_etar = $5, ativo = $6
+        WHERE id_utilizador = $7
+        RETURNING id_utilizador, nome, email, id_perfil, id_etar, ativo
+      `;
+      const result = await pool.query(query, [
+        nome.trim(),
+        email.trim().toLowerCase(),
+        parseInt(id_perfil, 10),
+        passwordHash,
+        id_etar ? parseInt(id_etar, 10) : null,
+        ativo !== undefined ? !!ativo : true,
+        id
+      ]);
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({ erro: 'Utilizador não encontrado.' });
+      }
+
+      return res.json({
+        mensagem: 'Utilizador atualizado com sucesso (palavra-passe alterada).',
+        utilizador: result.rows[0]
+      });
+    } else {
+      const query = `
+        UPDATE utilizador
+        SET nome = $1, email = $2, id_perfil = $3, id_etar = $4, ativo = $5
+        WHERE id_utilizador = $6
+        RETURNING id_utilizador, nome, email, id_perfil, id_etar, ativo
+      `;
+      const result = await pool.query(query, [
+        nome.trim(),
+        email.trim().toLowerCase(),
+        parseInt(id_perfil, 10),
+        id_etar ? parseInt(id_etar, 10) : null,
+        ativo !== undefined ? !!ativo : true,
+        id
+      ]);
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({ erro: 'Utilizador não encontrado.' });
+      }
+
+      return res.json({
+        mensagem: 'Utilizador atualizado com sucesso.',
+        utilizador: result.rows[0]
+      });
+    }
+  } catch (err) {
+    console.error('Erro ao atualizar utilizador:', err);
+    return res.status(500).json({ erro: 'Erro interno ao atualizar utilizador.' });
   }
 };

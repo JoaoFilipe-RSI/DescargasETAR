@@ -25,15 +25,15 @@ describe('Módulo de Autenticação - Teste de Alteração de Palavra-passe', ()
   });
 
   afterAll(async () => {
-    // Restaurar a password original na base de dados
+    // Restaurar a password e dados originais na base de dados
     try {
       const defaultHash = await bcrypt.hash('Descargas123!', 12);
       await pool.query(
-        "UPDATE utilizador SET password_hash = $1 WHERE email = 'mariana.costa@administracao.pt'",
+        "UPDATE utilizador SET email = 'mariana.costa@administracao.pt', password_hash = $1, nome = 'Mariana Costa - Gestão de Contratos' WHERE email = 'mariana.costa@administracao.pt' OR email = 'mariana.atualizada@administracao.pt'",
         [defaultHash]
       );
     } catch (err) {
-      console.error('Erro ao restaurar password original no afterAll:', err);
+      console.error('Erro ao restaurar utilizador original no afterAll:', err);
     }
   });
 
@@ -81,5 +81,43 @@ describe('Módulo de Autenticação - Teste de Alteração de Palavra-passe', ()
 
     expect(res.status).toBe(400);
     expect(res.body.erro).toBe('A senha atual introduzida está incorreta.');
+  });
+
+  test('Deve atualizar os dados do perfil com sucesso e retornar novo token', async () => {
+    const res = await request(app)
+      .put('/api/auth/perfil')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        nome: 'Mariana Costa Atualizada',
+        email: 'mariana.atualizada@administracao.pt'
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.mensagem).toBe('Perfil atualizado com sucesso!');
+    expect(res.body.token).toBeDefined();
+    expect(res.body.utilizador.nome).toBe('Mariana Costa Atualizada');
+    expect(res.body.utilizador.email).toBe('mariana.atualizada@administracao.pt');
+
+    // Fazer login com o novo email e com a password correspondente para verificar
+    const resLogin = await request(app)
+      .post('/api/auth/login')
+      .send({
+        email: 'mariana.atualizada@administracao.pt',
+        password: 'NewPassword123!'
+      });
+    expect(resLogin.status).toBe(200);
+  });
+
+  test('Deve falhar ao tentar atualizar perfil com email já existente', async () => {
+    const res = await request(app)
+      .put('/api/auth/perfil')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        nome: 'Mariana',
+        email: 'antonio.almeida@administracao.pt'
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body.erro).toBe('Este email já está registado para outro utilizador.');
   });
 });

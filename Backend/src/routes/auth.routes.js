@@ -12,4 +12,7 @@ router.get('/me', verificarToken, authController.getMe);
 // PUT /api/auth/alterar-senha - Alterar palavra-passe do utilizador logado (Protegido por token)
 router.put('/alterar-senha', verificarToken, authController.alterarSenha);
 
+// PUT /api/auth/perfil - Atualizar dados de perfil do utilizador logado (Protegido por token)
+router.put('/perfil', verificarToken, authController.atualizarPerfil);
+
 module.exports = router;
