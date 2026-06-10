@@ -29,7 +29,7 @@ describe('Módulo de Autenticação - Teste de Alteração de Palavra-passe', ()
     try {
       const defaultHash = await bcrypt.hash('Descargas123!', 12);
       await pool.query(
-        "UPDATE utilizador SET email = 'mariana.costa@administracao.pt', password_hash = $1, nome = 'Mariana Costa - Gestão de Contratos' WHERE email = 'mariana.costa@administracao.pt' OR email = 'mariana.atualizada@administracao.pt'",
+        "UPDATE utilizador SET email = 'mariana.costa@administracao.pt', password_hash = $1, nome = 'Mariana Costa' WHERE email = 'mariana.costa@administracao.pt' OR email = 'mariana.atualizada@administracao.pt'",
         [defaultHash]
       );
     } catch (err) {

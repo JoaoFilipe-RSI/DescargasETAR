@@ -61,7 +61,7 @@ function inicializarSocket(server) {
       const room = 'laboratorio-responsaveis';
       socket.join(room);
       console.log(`   └─ Juntou-se à sala: ${room}`);
-    } else if (perfil === 'GESTOR_CLIENTES') {
+    } else if (perfil === 'GESTOR_CLIENTES' || perfil === 'GESTOR_ADMIN') {
       const room = 'gestores-clientes';
       socket.join(room);
       console.log(`   └─ Juntou-se à sala: ${room}`);

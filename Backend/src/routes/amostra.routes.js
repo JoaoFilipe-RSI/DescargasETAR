@@ -10,10 +10,10 @@ router.use(verificarToken);
 router.put('/receber/:token', verificarPerfis(['TECNICO_LAB', 'RESPONSAVEL_LAB']), amostraController.receberAmostra);
 
 // GET /api/amostras - Listagem de amostras (Todos os perfis autorizados, filtrado internamente)
-router.get('/', verificarPerfis(['CLIENTE', 'TECNICO_LAB', 'RESPONSAVEL_LAB', 'GESTOR_CLIENTES']), amostraController.obterAmostras);
+router.get('/', verificarPerfis(['CLIENTE', 'TECNICO_LAB', 'RESPONSAVEL_LAB', 'GESTOR_CLIENTES', 'GESTOR_ADMIN']), amostraController.obterAmostras);
 
 // GET /api/amostras/:id - Detalhes da amostra e os seus resultados (Filtrado para Clientes)
-router.get('/:id', verificarPerfis(['CLIENTE', 'TECNICO_LAB', 'RESPONSAVEL_LAB', 'GESTOR_CLIENTES']), amostraController.obterDetalhesAmostra);
+router.get('/:id', verificarPerfis(['CLIENTE', 'TECNICO_LAB', 'RESPONSAVEL_LAB', 'GESTOR_CLIENTES', 'GESTOR_ADMIN']), amostraController.obterDetalhesAmostra);
 
 // POST /api/amostras/:id/resultados - Introdução de resultados laboratoriais (Apenas Técnicos)
 router.post('/:id/resultados', verificarPerfis(['TECNICO_LAB']), amostraController.registarResultados);
@@ -22,9 +22,9 @@ router.post('/:id/resultados', verificarPerfis(['TECNICO_LAB']), amostraControll
 router.put('/:id/validar', verificarPerfis(['RESPONSAVEL_LAB', 'RESPONSAVEL_ETAR']), amostraController.validarAmostra);
 
 // PUT /api/amostras/:id/disponibilizar - Disponibilizar boletim ao cliente (Gestor de Clientes)
-router.put('/:id/disponibilizar', verificarPerfis(['GESTOR_CLIENTES']), amostraController.disponibilizarBoletim);
+router.put('/:id/disponibilizar', verificarPerfis(['GESTOR_CLIENTES', 'GESTOR_ADMIN']), amostraController.disponibilizarBoletim);
 
 // GET /api/amostras/:id/boletim - Download do Boletim Analítico em PDF
-router.get('/:id/boletim', verificarPerfis(['CLIENTE', 'RESPONSAVEL_LAB', 'RESPONSAVEL_ETAR', 'GESTOR_CLIENTES']), amostraController.gerarBoletimPDF);
+router.get('/:id/boletim', verificarPerfis(['CLIENTE', 'RESPONSAVEL_LAB', 'RESPONSAVEL_ETAR', 'GESTOR_CLIENTES', 'GESTOR_ADMIN']), amostraController.gerarBoletimPDF);
 
 module.exports = router;

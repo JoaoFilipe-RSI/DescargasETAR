@@ -197,6 +197,41 @@ exports.obterEtars = async (req, res) => {
   }
 };
 
+exports.criarEtar = async (req, res) => {
+  const { nome, localizacao, disponivel } = req.body;
+
+  if (!nome || !nome.trim()) {
+    return res.status(400).json({ erro: 'Por favor, indique o nome da ETAR.' });
+  }
+
+  try {
+    const query = `
+      INSERT INTO etar (nome, localizacao, disponivel)
+      VALUES ($1, $2, $3)
+      RETURNING id_etar, nome, localizacao, disponivel
+    `;
+    const result = await pool.query(query, [
+      nome.trim(),
+      localizacao ? localizacao.trim() : null,
+      disponivel !== undefined ? !!disponivel : true
+    ]);
+
+    const newEtar = result.rows[0];
+    await pool.query(
+      "INSERT INTO historico (entidade, id_entidade, acao, descricao, id_utilizador) VALUES ($1, $2, $3, $4, $5)",
+      ['ETAR', newEtar.id_etar, 'CRIACAO', `ETAR ${newEtar.nome} criada no sistema com localização ${newEtar.localizacao || 'N/A'}.`, req.user.id_utilizador]
+    );
+
+    return res.status(201).json({
+      mensagem: 'ETAR criada com sucesso.',
+      etar: newEtar
+    });
+  } catch (err) {
+    console.error('Erro ao criar ETAR:', err);
+    return res.status(500).json({ erro: 'Erro interno ao criar ETAR.' });
+  }
+};
+
 exports.atualizarDisponibilidadeEtar = async (req, res) => {
   const { id } = req.params;
   const { disponivel } = req.body;
@@ -759,3 +794,100 @@ exports.atualizarUtilizador = async (req, res) => {
     return res.status(500).json({ erro: 'Erro interno ao atualizar utilizador.' });
   }
 };
+
+exports.obterLogsAuditoria = async (req, res) => {
+  try {
+    const { entidade, acao, pesquisa } = req.query;
+    let query = `
+      SELECT h.id_historico, h.entidade, h.id_entidade, h.acao, h.descricao, h.data,
+             u.nome AS utilizador_nome, u.email AS utilizador_email, p.nome AS utilizador_perfil
+      FROM historico h
+      JOIN utilizador u ON h.id_utilizador = u.id_utilizador
+      JOIN perfil p ON u.id_perfil = p.id_perfil
+    `;
+    const whereConditions = [];
+    const values = [];
+
+    if (entidade && entidade !== 'all') {
+      values.push(entidade.trim());
+      whereConditions.push(`h.entidade = $${values.length}`);
+    }
+
+    if (acao && acao !== 'all') {
+      values.push(acao.trim());
+      whereConditions.push(`h.acao = $${values.length}`);
+    }
+
+    if (pesquisa && pesquisa.trim() !== '') {
+      values.push(`%${pesquisa.trim()}%`);
+      whereConditions.push(`(h.descricao ILIKE $${values.length} OR u.nome ILIKE $${values.length} OR u.email ILIKE $${values.length})`);
+    }
+
+    if (whereConditions.length > 0) {
+      query += ` WHERE ` + whereConditions.join(' AND ');
+    }
+
+    query += ` ORDER BY h.data DESC, h.id_historico DESC`;
+
+    const result = await pool.query(query, values);
+    return res.json(result.rows);
+  } catch (err) {
+    console.error('Erro ao obter logs de auditoria:', err);
+    return res.status(500).json({ erro: 'Erro interno ao obter logs de auditoria.' });
+  }
+};
+
+exports.criarParametro = async (req, res) => {
+  const { nome, tipo_parametro, unidade_default, obrigatorio } = req.body;
+
+  if (!nome || !nome.trim()) {
+    return res.status(400).json({ erro: 'Por favor, indique o nome do parâmetro.' });
+  }
+
+  if (!tipo_parametro) {
+    return res.status(400).json({ erro: 'Por favor, indique o tipo do parâmetro.' });
+  }
+
+  const tiposValidos = ['FISICO_QUIMICO', 'AZOTO', 'METAIS', 'OLEOS E GORDURAS'];
+  if (!tiposValidos.includes(tipo_parametro)) {
+    return res.status(400).json({ erro: 'Tipo de parâmetro inválido.' });
+  }
+
+  try {
+    // Verificar duplicado
+    const nameCheck = await pool.query('SELECT id_parametro FROM parametro WHERE LOWER(nome) = LOWER($1)', [nome.trim()]);
+    if (nameCheck.rows.length > 0) {
+      return res.status(400).json({ erro: 'Já existe um parâmetro registado com este nome.' });
+    }
+
+    const query = `
+      INSERT INTO parametro (nome, tipo_parametro, unidade_default, obrigatorio)
+      VALUES ($1, $2, $3, $4)
+      RETURNING id_parametro, nome, tipo_parametro, unidade_default, obrigatorio
+    `;
+    const result = await pool.query(query, [
+      nome.trim(),
+      tipo_parametro,
+      unidade_default ? unidade_default.trim() : 'mg/L',
+      obrigatorio !== undefined ? !!obrigatorio : false
+    ]);
+
+    const newParam = result.rows[0];
+
+    // Logar no histórico
+    await pool.query(
+      "INSERT INTO historico (entidade, id_entidade, acao, descricao, id_utilizador) VALUES ($1, $2, $3, $4, $5)",
+      ['PARAMETRO', newParam.id_parametro, 'CRIACAO', `Parâmetro analítico global ${newParam.nome} (${newParam.tipo_parametro}) criado no catálogo do sistema.`, req.user.id_utilizador]
+    );
+
+    return res.status(201).json({
+      mensagem: 'Parâmetro analítico criado com sucesso no catálogo global.',
+      parametro: newParam
+    });
+  } catch (err) {
+    console.error('Erro ao criar parâmetro global:', err);
+    return res.status(500).json({ erro: 'Erro interno ao criar parâmetro.' });
+  }
+};
+
+

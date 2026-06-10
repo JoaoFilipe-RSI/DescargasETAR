@@ -10,31 +10,43 @@ INSERT INTO perfil (nome) VALUES
 ('RESPONSAVEL_ETAR'),
 ('TECNICO_LAB'),
 ('RESPONSAVEL_LAB'),
-('GESTOR_CLIENTES');
+('GESTOR_CLIENTES'),
+('GESTOR_ADMIN');
 
 -- UTILIZADORES
 INSERT INTO utilizador (id_perfil, nome, email, password_hash, ativo) VALUES
 -- Clientes (id_perfil = 1)
-(1, 'EmpresaIndustrialAAA SA - Produtor Industrial', 'geral@empresaIndustrialaaa.pt', '$2b$12$K3vZg7mQxO7pL2R1vK9uOuE7eHB5V2p8FzJ9w6tGx4yM1qR3oSa2q', true),
-(1, 'EmpresaIndustrialBBB SA - Produtor Industrial', 'geral@empresaIndustrialbbb.pt', '$2b$12$K3vZg7mQxO7pL2R1vK9uOuE7eHB5V2p8FzJ9w6tGx4yM1qR3oSa2q', true),
-(1, 'TransEfluentes Lda - Transportador', 'logistica@transefluentes.pt', '$2b$12$K3vZg7mQxO7pL2R1vK9uOuE7eHB5V2p8FzJ9w6tGx4yM1qR3oSa2q', true),
+(1, 'EmpresaIndustrialAAA SA', 'geral@empresaIndustrialaaa.pt', '$2b$12$K3vZg7mQxO7pL2R1vK9uOuE7eHB5V2p8FzJ9w6tGx4yM1qR3oSa2q', true),
+(1, 'EmpresaIndustrialBBB SA', 'geral@empresaIndustrialbbb.pt', '$2b$12$K3vZg7mQxO7pL2R1vK9uOuE7eHB5V2p8FzJ9w6tGx4yM1qR3oSa2q', true),
+(1, 'TransEfluentes Lda', 'logistica@transefluentes.pt', '$2b$12$K3vZg7mQxO7pL2R1vK9uOuE7eHB5V2p8FzJ9w6tGx4yM1qR3oSa2q', true),
 
--- Operador de Linha (id_perfil = 2)
-(2, 'Carlos Silva - Operador ETAR', 'carlos.silva@etar.pt', '$2b$12$K3vZg7mQxO7pL2R1vK9uOuE7eHB5V2p8FzJ9w6tGx4yM1qR3oSa2q', true),
-(2, 'José Teixeira - Operador ETAR', 'jose.teixeira@etar.pt', '$2b$12$K3vZg7mQxO7pL2R1vK9uOuE7eHB5V2p8FzJ9w6tGx4yM1qR3oSa2q', true),
+-- Operadores (id_perfil = 2)
+(2, 'Carlos Silva', 'carlos.silva@etar.pt', '$2b$12$K3vZg7mQxO7pL2R1vK9uOuE7eHB5V2p8FzJ9w6tGx4yM1qR3oSa2q', true),
+(2, 'José Teixeira', 'jose.teixeira@etar.pt', '$2b$12$K3vZg7mQxO7pL2R1vK9uOuE7eHB5V2p8FzJ9w6tGx4yM1qR3oSa2q', true),
+(2, 'Bruno Nogueira', 'bruno.nogueira@etar.pt', '$2b$12$K3vZg7mQxO7pL2R1vK9uOuE7eHB5V2p8FzJ9w6tGx4yM1qR3oSa2q', true),
+(2, 'Diana Santos', 'diana.santos@etar.pt', '$2b$12$K3vZg7mQxO7pL2R1vK9uOuE7eHB5V2p8FzJ9w6tGx4yM1qR3oSa2q', true),
+(2, 'Filipe Abreu', 'filipe.abreu@etar.pt', '$2b$12$K3vZg7mQxO7pL2R1vK9uOuE7eHB5V2p8FzJ9w6tGx4yM1qR3oSa2q', true),
+(2, 'Gabriela Sousa', 'gabriela.sousa@etar.pt', '$2b$12$K3vZg7mQxO7pL2R1vK9uOuE7eHB5V2p8FzJ9w6tGx4yM1qR3oSa2q', true),
+(2, 'Igor Gomes', 'igor.gomes@etar.pt', '$2b$12$K3vZg7mQxO7pL2R1vK9uOuE7eHB5V2p8FzJ9w6tGx4yM1qR3oSa2q', true),
+(2, 'Joana Cruz', 'joana.cruz@etar.pt', '$2b$12$K3vZg7mQxO7pL2R1vK9uOuE7eHB5V2p8FzJ9w6tGx4yM1qR3oSa2q', true),
 
--- Responsável de ETAR (id_perfil = 3)
-(3, 'Fernando Rocha - Responsável de ETAR', 'fernando.rocha@etar.pt', '$2b$12$K3vZg7mQxO7pL2R1vK9uOuE7eHB5V2p8FzJ9w6tGx4yM1qR3oSa2q', true),
+-- Responsáveis de ETAR (id_perfil = 3)
+(3, 'Fernando Rocha', 'fernando.rocha@etar.pt', '$2b$12$K3vZg7mQxO7pL2R1vK9uOuE7eHB5V2p8FzJ9w6tGx4yM1qR3oSa2q', true),
+(3, 'Eduardo Lima', 'eduardo.lima@etar.pt', '$2b$12$K3vZg7mQxO7pL2R1vK9uOuE7eHB5V2p8FzJ9w6tGx4yM1qR3oSa2q', true),
+(3, 'Helder Costa', 'helder.costa@etar.pt', '$2b$12$K3vZg7mQxO7pL2R1vK9uOuE7eHB5V2p8FzJ9w6tGx4yM1qR3oSa2q', true),
+(3, 'Katia Martins', 'katia.martins@etar.pt', '$2b$12$K3vZg7mQxO7pL2R1vK9uOuE7eHB5V2p8FzJ9w6tGx4yM1qR3oSa2q', true),
 
--- Técnico de Laboratório (id_perfil = 4)
-(4, 'Ana Pereira - Técnica de Laboratório', 'ana.pereira@laboratorio.pt', '$2b$12$K3vZg7mQxO7pL2R1vK9uOuE7eHB5V2p8FzJ9w6tGx4yM1qR3oSa2q', true),
+-- Técnicos de Laboratório (id_perfil = 4)
+(4, 'Ana Pereira', 'ana.pereira@laboratorio.pt', '$2b$12$K3vZg7mQxO7pL2R1vK9uOuE7eHB5V2p8FzJ9w6tGx4yM1qR3oSa2q', true),
+(4, 'Pedro Sousa', 'pedro.sousa@laboratorio.pt', '$2b$12$K3vZg7mQxO7pL2R1vK9uOuE7eHB5V2p8FzJ9w6tGx4yM1qR3oSa2q', true),
 
 -- Responsável de Laboratório (id_perfil = 5)
-(5, 'Rui Fonseca - Diretor Laboratório', 'rui.fonseca@laboratorio.pt', '$2b$12$K3vZg7mQxO7pL2R1vK9uOuE7eHB5V2p8FzJ9w6tGx4yM1qR3oSa2q', true),
+(5, 'Rui Fonseca', 'rui.fonseca@laboratorio.pt', '$2b$12$K3vZg7mQxO7pL2R1vK9uOuE7eHB5V2p8FzJ9w6tGx4yM1qR3oSa2q', true),
 
--- Gestor de Clientes / Admin (id_perfil = 6)
-(6, 'Mariana Costa - Gestão de Contratos', 'mariana.costa@administracao.pt', '$2b$12$K3vZg7mQxO7pL2R1vK9uOuE7eHB5V2p8FzJ9w6tGx4yM1qR3oSa2q', true),
-(6, 'António Almeida - Gestão de Clientes', 'antonio.almeida@administracao.pt', '$2b$12$K3vZg7mQxO7pL2R1vK9uOuE7eHB5V2p8FzJ9w6tGx4yM1qR3oSa2q', true);
+-- Gestor de Clientes / Admin (id_perfil = 6 / 7)
+(6, 'Mariana Costa', 'mariana.costa@administracao.pt', '$2b$12$K3vZg7mQxO7pL2R1vK9uOuE7eHB5V2p8FzJ9w6tGx4yM1qR3oSa2q', true),
+(6, 'António Almeida', 'antonio.almeida@administracao.pt', '$2b$12$K3vZg7mQxO7pL2R1vK9uOuE7eHB5V2p8FzJ9w6tGx4yM1qR3oSa2q', true),
+(7, 'Filipe Ferreira', 'filipe.ferreira@admin.entidadegestora.pt', '$2b$12$K3vZg7mQxO7pL2R1vK9uOuE7eHB5V2p8FzJ9w6tGx4yM1qR3oSa2q', true);
 
 
 -- CLIENTES
@@ -95,7 +107,7 @@ INSERT INTO descarga (
     estado_descarga, data_decisao, id_utilizador_decisao
 ) VALUES (
     1, 1, NOW() - INTERVAL '2 days', 'Industrial', 200,
-    'AUTORIZADA', NOW() - INTERVAL '1 day', 6
+    'AUTORIZADA', NOW() - INTERVAL '1 day', 19
 );
 
 -- AGENDADA
@@ -106,7 +118,7 @@ INSERT INTO descarga (
     matricula_trator, matricula_cisterna
 ) VALUES (
     1, 1, NOW() - INTERVAL '3 days', 'Industrial', 300,
-    'AGENDADA', NOW() - INTERVAL '2 days', 6,
+    'AGENDADA', NOW() - INTERVAL '2 days', 19,
     NOW() - INTERVAL '1 day', 'Transportes X',
     'AA-00-AA', 'BB-00-BB'
 );
@@ -119,9 +131,9 @@ INSERT INTO descarga (
     id_utilizador_rececao, empresa_transportadora, matricula_trator
 ) VALUES (
     2, 1, NOW() - INTERVAL '4 days', 'Domestico', 150,
-    'RECEBIDA', NOW() - INTERVAL '3 days', 6,
+    'RECEBIDA', NOW() - INTERVAL '3 days', 19,
     NOW() - INTERVAL '2 days', NOW() - INTERVAL '1 day', 145, true,
-    5, 'Transportes Y', 'IT-45_LL'
+    4, 'Transportes Y', 'IT-45_LL'
 );
 
 -- AMOSTRA
@@ -135,7 +147,7 @@ INSERT INTO amostra (
     NOW() - INTERVAL '1 day',
     NOW() - INTERVAL '1 day',
     NOW(),
-    7, 8
+    16, 18
 );
 
 -- RESULTADOS ANALITICOS
@@ -154,7 +166,7 @@ INSERT INTO notificacao (id_utilizador, mensagem, tipo, enviada) VALUES
 
 -- HISTORICO
 INSERT INTO historico (entidade, id_entidade, acao, descricao, id_utilizador) VALUES
-('DESCARGA', 2, 'AUTORIZACAO', 'Descarga autorizada pelo gestor', 9),
+('DESCARGA', 2, 'AUTORIZACAO', 'Descarga autorizada pelo gestor', 19),
 ('DESCARGA', 3, 'AGENDAMENTO', 'Descarga agendada pelo cliente', 1),
 ('DESCARGA', 4, 'RECECAO', 'Receção realizada pelo operador', 4);
 
@@ -162,3 +174,14 @@ INSERT INTO historico (entidade, id_entidade, acao, descricao, id_utilizador) VA
 UPDATE utilizador SET id_etar = 1 WHERE email = 'carlos.silva@etar.pt';
 UPDATE utilizador SET id_etar = 2 WHERE email = 'jose.teixeira@etar.pt';
 UPDATE utilizador SET id_etar = 1 WHERE email = 'fernando.rocha@etar.pt';
+
+-- Novas associações de ETARs para operadores e responsáveis de teste
+UPDATE utilizador SET id_etar = 1 WHERE email = 'bruno.nogueira@etar.pt';
+UPDATE utilizador SET id_etar = 2 WHERE email = 'diana.santos@etar.pt';
+UPDATE utilizador SET id_etar = 2 WHERE email = 'eduardo.lima@etar.pt';
+UPDATE utilizador SET id_etar = 3 WHERE email = 'filipe.abreu@etar.pt';
+UPDATE utilizador SET id_etar = 3 WHERE email = 'gabriela.sousa@etar.pt';
+UPDATE utilizador SET id_etar = 3 WHERE email = 'helder.costa@etar.pt';
+UPDATE utilizador SET id_etar = 4 WHERE email = 'igor.gomes@etar.pt';
+UPDATE utilizador SET id_etar = 4 WHERE email = 'joana.cruz@etar.pt';
+UPDATE utilizador SET id_etar = 4 WHERE email = 'katia.martins@etar.pt';

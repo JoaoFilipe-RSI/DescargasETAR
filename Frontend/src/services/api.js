@@ -249,6 +249,12 @@ export const adminService = {
       body: { disponivel }
     });
   },
+  criarEtar(dados) {
+    return request('/admin/etars', {
+      method: 'POST',
+      body: dados
+    });
+  },
   obterAutorizacoes() {
     return request('/admin/autorizacoes');
   },
@@ -274,6 +280,12 @@ export const adminService = {
     return request(`/admin/clientes/${id}/parametros`, {
       method: 'POST',
       body: { parametros: parametrosIdsArray }
+    });
+  },
+  criarParametro(dados) {
+    return request('/admin/parametros', {
+      method: 'POST',
+      body: dados
     });
   },
   obterRelatorios(filtros) {
@@ -302,5 +314,15 @@ export const adminService = {
       method: 'PUT',
       body: dados
     });
+  },
+  obterLogsAuditoria(filtros) {
+    const params = new URLSearchParams();
+    if (filtros) {
+      if (filtros.entidade) params.append('entidade', filtros.entidade);
+      if (filtros.acao) params.append('acao', filtros.acao);
+      if (filtros.pesquisa) params.append('pesquisa', filtros.pesquisa);
+    }
+    const queryStr = params.toString();
+    return request(`/admin/auditoria${queryStr ? '?' + queryStr : ''}`);
   }
 };

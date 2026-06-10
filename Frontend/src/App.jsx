@@ -111,7 +111,7 @@ export default function App() {
           webSocketService.on('amostra-analisada', handleAmostraAnalisada);
           handlers.push({ event: 'nova-amostra', cb: handleNovaAmostra });
           handlers.push({ event: 'amostra-analisada', cb: handleAmostraAnalisada });
-        } else if (user.perfil === 'GESTOR_CLIENTES') {
+        } else if (user.perfil === 'GESTOR_CLIENTES' || user.perfil === 'GESTOR_ADMIN') {
           const handleNovoPedido = (data) => 
             addNotification(`Novo pedido pendente: Descarga #${data.id_descarga} (${data.cliente_nome} - ${data.quantidade}L).`);
           const handleDescargaConcluida = (data) => 
@@ -263,6 +263,7 @@ export default function App() {
       
       case 'RESPONSAVEL_LAB':
       case 'GESTOR_CLIENTES':
+      case 'GESTOR_ADMIN':
         return (
           <ResponsavelDashboard 
             user={user} 

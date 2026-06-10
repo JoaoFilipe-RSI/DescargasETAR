@@ -16,6 +16,11 @@ const tokens = {
     JWT_SECRET,
     { expiresIn: '1h' }
   ),
+  gestorAdmin: jwt.sign(
+    { id_utilizador: 120, perfil: 'GESTOR_ADMIN', nome: 'Filipe Ferreira' },
+    JWT_SECRET,
+    { expiresIn: '1h' }
+  ),
 };
 
 describe('Módulo de Administração - Testes de Integração', () => {
@@ -23,6 +28,8 @@ describe('Módulo de Administração - Testes de Integração', () => {
   const createdClientIds = [];
   const createdAutIds = [];
   const createdDescargaIds = [];
+  const createdEtarIds = [];
+  const createdParamIds = [];
 
   let originalEtarStates = [];
   let originalDescargaStates = [];
@@ -48,6 +55,11 @@ describe('Módulo de Administração - Testes de Integração', () => {
   // Limpeza de lixo de testes
   afterAll(async () => {
     try {
+      if (createdParamIds.length > 0) {
+        await pool.query("DELETE FROM historico WHERE entidade = 'PARAMETRO' AND id_entidade = ANY($1)", [createdParamIds]);
+        await pool.query('DELETE FROM cliente_parametro WHERE id_parametro = ANY($1)', [createdParamIds]);
+        await pool.query('DELETE FROM parametro WHERE id_parametro = ANY($1)', [createdParamIds]);
+      }
       if (createdDescargaIds.length > 0) {
         await pool.query('DELETE FROM descarga WHERE id_descarga = ANY($1)', [createdDescargaIds]);
       }
@@ -62,6 +74,10 @@ describe('Módulo de Administração - Testes de Integração', () => {
       }
       if (createdUserIds.length > 0) {
         await pool.query('DELETE FROM utilizador WHERE id_utilizador = ANY($1)', [createdUserIds]);
+      }
+      if (createdEtarIds.length > 0) {
+        await pool.query("DELETE FROM historico WHERE entidade = 'ETAR' AND id_entidade = ANY($1)", [createdEtarIds]);
+        await pool.query('DELETE FROM etar WHERE id_etar = ANY($1)', [createdEtarIds]);
       }
 
       // Restaurar estado original das ETARs
@@ -299,10 +315,17 @@ describe('Módulo de Administração - Testes de Integração', () => {
       expect(resLogin.body.token).toBeDefined();
     });
 
-    test('Deve listar utilizadores internos (excluindo clientes)', async () => {
+    test('Deve impedir (403) a listagem de utilizadores internos a gestores comuns', async () => {
       const res = await request(app)
         .get('/api/admin/utilizadores')
         .set('Authorization', `Bearer ${tokens.gestor}`);
+      expect(res.status).toBe(403);
+    });
+
+    test('Deve permitir (200) a listagem de utilizadores internos a gestores admin', async () => {
+      const res = await request(app)
+        .get('/api/admin/utilizadores')
+        .set('Authorization', `Bearer ${tokens.gestorAdmin}`);
 
       expect(res.status).toBe(200);
       expect(Array.isArray(res.body)).toBe(true);
@@ -311,11 +334,25 @@ describe('Módulo de Administração - Testes de Integração', () => {
       expect(temCliente).toBe(false);
     });
 
-    test('Deve criar, atualizar e desativar um utilizador interno', async () => {
+    test('Deve impedir (403) a criação de utilizador por gestores comuns', async () => {
+      const res = await request(app)
+        .post('/api/admin/utilizadores')
+        .set('Authorization', `Bearer ${tokens.gestor}`)
+        .send({
+          nome: 'Técnico de Teste CRUD',
+          email: 'tecnico.crud@laboratorio.pt',
+          id_perfil: 4,
+          password: 'PasswordTeste123!',
+          ativo: true
+        });
+      expect(res.status).toBe(403);
+    });
+
+    test('Deve criar, atualizar e desativar um utilizador interno com perfil gestor admin', async () => {
       // 1. Criar utilizador interno
       const resCriar = await request(app)
         .post('/api/admin/utilizadores')
-        .set('Authorization', `Bearer ${tokens.gestor}`)
+        .set('Authorization', `Bearer ${tokens.gestorAdmin}`)
         .send({
           nome: 'Técnico de Teste CRUD',
           email: 'tecnico.crud@laboratorio.pt',
@@ -333,7 +370,7 @@ describe('Módulo de Administração - Testes de Integração', () => {
       // 2. Atualizar utilizador interno (incluindo reposição de senha)
       const resEditar = await request(app)
         .put(`/api/admin/utilizadores/${idUtilizador}`)
-        .set('Authorization', `Bearer ${tokens.gestor}`)
+        .set('Authorization', `Bearer ${tokens.gestorAdmin}`)
         .send({
           nome: 'Técnico de Teste Editado',
           email: 'tecnico.editado@laboratorio.pt',
@@ -473,4 +510,176 @@ describe('Módulo de Administração - Testes de Integração', () => {
       expect(checkDesc.rows[0].observacoes).toContain('ALERTA OPERACIONAL');
     });
   });
+
+  describe('7. Auditoria do Sistema', () => {
+    test('Deve impedir (403) a consulta de logs de auditoria a gestores comuns', async () => {
+      const res = await request(app)
+        .get('/api/admin/auditoria')
+        .set('Authorization', `Bearer ${tokens.gestor}`);
+      expect(res.status).toBe(403);
+    });
+
+    test('Deve permitir (200) a consulta de logs de auditoria a gestores admin', async () => {
+      const res = await request(app)
+        .get('/api/admin/auditoria')
+        .set('Authorization', `Bearer ${tokens.gestorAdmin}`);
+      expect(res.status).toBe(200);
+      expect(Array.isArray(res.body)).toBe(true);
+      if (res.body.length > 0) {
+        const log = res.body[0];
+        expect(log.id_historico).toBeDefined();
+        expect(log.entidade).toBeDefined();
+        expect(log.acao).toBeDefined();
+        expect(log.utilizador_nome).toBeDefined();
+        expect(log.utilizador_email).toBeDefined();
+        expect(log.utilizador_perfil).toBeDefined();
+      }
+    });
+
+    test('Deve filtrar logs de auditoria por entidade', async () => {
+      const res = await request(app)
+        .get('/api/admin/auditoria?entidade=DESCARGA')
+        .set('Authorization', `Bearer ${tokens.gestorAdmin}`);
+      expect(res.status).toBe(200);
+      expect(Array.isArray(res.body)).toBe(true);
+      const allDescarga = res.body.every(log => log.entidade === 'DESCARGA');
+      expect(allDescarga).toBe(true);
+    });
+  });
+
+  describe('8. Gestão de ETARs', () => {
+    test('Deve impedir (401) a criação de ETAR por utilizador não autenticado', async () => {
+      const res = await request(app)
+        .post('/api/admin/etars')
+        .send({ nome: 'ETAR Inválida', localizacao: 'Nenhures' });
+      expect(res.status).toBe(401);
+    });
+
+    test('Deve permitir (201) a criação de ETAR por um gestor comum', async () => {
+      const res = await request(app)
+        .post('/api/admin/etars')
+        .set('Authorization', `Bearer ${tokens.gestor}`)
+        .send({
+          nome: 'ETAR Leste Teste',
+          localizacao: 'Bragança',
+          disponivel: true
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.etar).toBeDefined();
+      expect(res.body.etar.id_etar).toBeDefined();
+      expect(res.body.etar.nome).toBe('ETAR Leste Teste');
+      createdEtarIds.push(res.body.etar.id_etar);
+    });
+
+    test('Deve permitir (201) a criação de ETAR por um gestor admin', async () => {
+      const res = await request(app)
+        .post('/api/admin/etars')
+        .set('Authorization', `Bearer ${tokens.gestorAdmin}`)
+        .send({
+          nome: 'ETAR Oeste Teste',
+          localizacao: 'Viana do Castelo',
+          disponivel: false
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.etar.nome).toBe('ETAR Oeste Teste');
+      expect(res.body.etar.disponivel).toBe(false);
+      createdEtarIds.push(res.body.etar.id_etar);
+    });
+
+    test('Deve impedir (400) a criação de ETAR sem nome', async () => {
+      const res = await request(app)
+        .post('/api/admin/etars')
+        .set('Authorization', `Bearer ${tokens.gestorAdmin}`)
+        .send({
+          localizacao: 'Guarda'
+        });
+      expect(res.status).toBe(400);
+      expect(res.body.erro).toBe('Por favor, indique o nome da ETAR.');
+    });
+  });
+
+  describe('9. Catálogo de Parâmetros', () => {
+    test('Deve impedir (401) a criação de parâmetro por utilizador não autenticado', async () => {
+      const res = await request(app)
+        .post('/api/admin/parametros')
+        .send({ nome: 'Parametro Invalido', tipo_parametro: 'FISICO_QUIMICO', unidade_default: 'mg/L', obrigatorio: false });
+      expect(res.status).toBe(401);
+    });
+
+    test('Deve impedir (403) a criação de parâmetro por cliente', async () => {
+      const res = await request(app)
+        .post('/api/admin/parametros')
+        .set('Authorization', `Bearer ${tokens.cliente}`)
+        .send({ nome: 'Parametro Cliente', tipo_parametro: 'FISICO_QUIMICO', unidade_default: 'mg/L', obrigatorio: false });
+      expect(res.status).toBe(403);
+    });
+
+    test('Deve criar (201) um novo parâmetro analítico no catálogo por um gestor comum', async () => {
+      const res = await request(app)
+        .post('/api/admin/parametros')
+        .set('Authorization', `Bearer ${tokens.gestor}`)
+        .send({
+          nome: 'CBO5 Teste',
+          tipo_parametro: 'FISICO_QUIMICO',
+          unidade_default: 'mg O2/L',
+          obrigatorio: false
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.parametro).toBeDefined();
+      expect(res.body.parametro.id_parametro).toBeDefined();
+      expect(res.body.parametro.nome).toBe('CBO5 Teste');
+      expect(res.body.parametro.tipo_parametro).toBe('FISICO_QUIMICO');
+      createdParamIds.push(res.body.parametro.id_parametro);
+    });
+
+    test('Deve criar (201) um novo parâmetro analítico no catálogo por um gestor admin', async () => {
+      const res = await request(app)
+        .post('/api/admin/parametros')
+        .set('Authorization', `Bearer ${tokens.gestorAdmin}`)
+        .send({
+          nome: 'Chumbo Teste',
+          tipo_parametro: 'METAIS',
+          unidade_default: 'ug/L',
+          obrigatorio: true
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.parametro.nome).toBe('Chumbo Teste');
+      expect(res.body.parametro.tipo_parametro).toBe('METAIS');
+      expect(res.body.parametro.obrigatorio).toBe(true);
+      createdParamIds.push(res.body.parametro.id_parametro);
+    });
+
+    test('Deve impedir (400) a criação de parâmetro em duplicado', async () => {
+      const res = await request(app)
+        .post('/api/admin/parametros')
+        .set('Authorization', `Bearer ${tokens.gestor}`)
+        .send({
+          nome: 'CBO5 Teste',
+          tipo_parametro: 'FISICO_QUIMICO',
+          unidade_default: 'mg/L',
+          obrigatorio: false
+        });
+      expect(res.status).toBe(400);
+      expect(res.body.erro).toBe('Já existe um parâmetro registado com este nome.');
+    });
+
+    test('Deve impedir (400) a criação de parâmetro com tipo inválido', async () => {
+      const res = await request(app)
+        .post('/api/admin/parametros')
+        .set('Authorization', `Bearer ${tokens.gestor}`)
+        .send({
+          nome: 'Parametro Invalido Tipo',
+          tipo_parametro: 'TIPO_QUE_NAO_EXISTE',
+          unidade_default: 'mg/L',
+          obrigatorio: false
+        });
+      expect(res.status).toBe(400);
+      expect(res.body.erro).toBe('Tipo de parâmetro inválido.');
+    });
+  });
 });
+

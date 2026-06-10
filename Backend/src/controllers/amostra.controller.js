@@ -523,6 +523,132 @@ exports.validarAmostra = async (req, res) => {
     client.release();
   }
 };
+const lcg = (seed) => {
+  let state = Math.abs(seed) || 123456789;
+  return () => {
+    state = (state * 1664525 + 1013904223) % 4294967296;
+    return state / 4294967296;
+  };
+};
+
+const desenharCarimboEAssinatura = (doc, x, y, nome, cargo, localizacao) => {
+  doc.save();
+  
+  // Limpar nome de sufixos de cargo (ex: " - Técnica de Laboratório")
+  const nomeLimpo = nome ? nome.split(' - ')[0].trim() : '';
+
+  // Inclinar ligeiramente o carimbo (-3 graus)
+  doc.rotate(-3, { origin: [x + 65, y + 25] });
+
+  // 1. Moldura do carimbo (cor azul de tinta)
+  doc.strokeColor('#2A6F97').lineWidth(1.5).opacity(0.85);
+  doc.roundedRect(x, y, 130, 50, 6).stroke();
+  doc.lineWidth(0.5).roundedRect(x + 3, y + 3, 124, 44, 4).stroke();
+
+  // 2. Textos do Carimbo
+  doc.fillColor('#2A6F97').opacity(0.85);
+  doc.fontSize(6).text('ENTIDADE GESTORA ETAR', x, y + 8, { align: 'center', width: 130, bold: true });
+  doc.fontSize(7).text(localizacao ? localizacao.toUpperCase() : 'SERVIÇOS DE GESTÃO', x, y + 17, { align: 'center', width: 130, bold: true });
+  
+  const dataCarimbo = new Date().toLocaleDateString('pt-PT');
+  doc.fontSize(5.5).text(`${cargo} | ${dataCarimbo}`, x, y + 27, { align: 'center', width: 130 });
+  doc.fontSize(5).text('DOCUMENTO VALIDADO', x, y + 36, { align: 'center', width: 130 });
+
+  // 3. Assinatura Manuscrita Generativa por cima (tinta de caneta escura)
+  doc.strokeColor('#0D1B2A').lineWidth(1.2).opacity(0.95);
+  
+  // DJB2 Hash do nome limpo para melhor distribuição
+  let hash = 5381;
+  for (let i = 0; i < nomeLimpo.length; i++) {
+    hash = ((hash << 5) + hash) + nomeLimpo.charCodeAt(i);
+  }
+  hash = Math.abs(hash);
+  
+  const nextRand = lcg(hash);
+
+  // Determinar ponto de início com pequenas variações
+  const startX = x + 12 + nextRand() * 12;
+  const startY = y + 26 + nextRand() * 8;
+  
+  doc.moveTo(startX, startY);
+
+  // 1º passo: Traço inicial / Laço de letra maiúscula dinâmica
+  const loopWidth = 14 + nextRand() * 12;
+  const loopHeight = 16 + nextRand() * 12;
+  const loopDir = nextRand() > 0.5 ? 1 : -1;
+  
+  doc.bezierCurveTo(
+    startX - loopWidth * 0.4 * loopDir, startY - loopHeight,
+    startX + loopWidth * 1.4 * loopDir, startY - loopHeight * 0.4,
+    startX + loopWidth * loopDir, startY + 4
+  );
+
+  // 2º passo: Gerar ondas conectadas dinâmicas (rabisco do corpo do nome)
+  let currX = startX + loopWidth * loopDir;
+  let currY = startY + 4;
+  
+  const numSteps = 5 + Math.floor(nextRand() * 5); // Entre 5 e 9 ondas/picos
+  const stepWidth = (70 / numSteps) * (0.8 + nextRand() * 0.4); // Largura proporcional
+
+  for (let i = 0; i < numSteps; i++) {
+    const nextX = currX + stepWidth;
+    const scaleFactor = 1 - (i / numSteps) * 0.3; // Atenuação para a direita
+    const upY = startY - (4 + nextRand() * 14) * scaleFactor;
+    const downY = startY + (nextRand() * 6 - 3);
+
+    // Ondas Bézier orgânicas
+    doc.bezierCurveTo(
+      currX + stepWidth * 0.3, upY,
+      currX + stepWidth * 0.7, downY,
+      nextX, downY
+    );
+    currX = nextX;
+    currY = downY;
+  }
+
+  // 3º passo: Floreio final / Traço inferior ou cruzado dinâmico
+  const floreioStyle = Math.floor(nextRand() * 3); // 3 estilos
+  if (floreioStyle === 0) {
+    // Sublinhado clássico curvo de volta e depois traço rápido à frente
+    const slashStartY = currY + 2 + nextRand() * 3;
+    doc.moveTo(currX, slashStartY);
+    doc.quadraticCurveTo(
+      (startX + currX) / 2, y + 42 + nextRand() * 5,
+      startX - 4 - nextRand() * 4, startY + 8 + nextRand() * 4
+    );
+    doc.stroke();
+    
+    // Risco rápido à frente
+    doc.moveTo(startX - 6, startY + 10);
+    doc.lineTo(currX + 8, startY + 8);
+  } else if (floreioStyle === 1) {
+    // Linha de corte diagonal rápida cruzando o meio da assinatura
+    doc.lineTo(currX + 6, currY - 4);
+    doc.stroke();
+    
+    doc.moveTo(currX + 6, currY - 4);
+    doc.bezierCurveTo(
+      currX - 18, currY + 12,
+      startX + 8, startY - 12,
+      startX - 4, startY + 4
+    );
+  } else {
+    // Laço circular elítico envolvente final com um ponto
+    doc.bezierCurveTo(
+      currX + 12, currY - 12,
+      currX + 22, currY + 12,
+      currX + 4, currY + 8
+    );
+    doc.stroke();
+    
+    // Ponto final isolado elegante
+    doc.moveTo(currX + 7, currY + 6);
+    doc.lineTo(currX + 8, currY + 7);
+  }
+
+  doc.stroke();
+  doc.restore();
+};
 
 /**
  * 6. Geração do Boletim Analítico em PDF (GET /api/amostras/:id/boletim)
@@ -738,7 +864,7 @@ exports.gerarBoletimPDF = async (req, res) => {
 
     // --- 6. ASSINATURAS (Y dinâmico, garantindo espaço suficiente para evitar sobreposição) ---
     rowY = doc.y + 25;
-    if (rowY > 650) {
+    if (rowY > 580) { // alterado para 580 para garantir espaço para carimbos de 50pt de altura
       doc.addPage();
       rowY = 50;
     }
@@ -750,10 +876,20 @@ exports.gerarBoletimPDF = async (req, res) => {
     // Área do Técnico e Responsável com alinhamento perfeito de colunas sem sobreposição
     doc.fontSize(7.5).fillColor('#333333');
     doc.text('Técnico Executor:', 220, rowY, { width: 160 });
-    doc.fontSize(8).text(info.tecnico_nome || 'N/A', 220, rowY + 12, { bold: true, width: 160 });
+    
+    const obterNomeCurto = (n) => n ? n.split(' - ')[0].trim() : '';
+    const tecnicoNomeCurto = obterNomeCurto(info.tecnico_nome);
+    doc.fontSize(8).text(tecnicoNomeCurto || 'N/A', 220, rowY + 12, { bold: true, width: 160 });
+    if (info.tecnico_nome) {
+      desenharCarimboEAssinatura(doc, 215, rowY + 22, tecnicoNomeCurto, 'TÉCNICO', info.etar_nome || 'ETAR');
+    }
     
     doc.fontSize(7.5).text('A Responsável Técnica e Qualidade do Laboratório:', 400, rowY, { width: 155 });
-    doc.fontSize(8).text(info.responsavel_nome || 'N/A', 400, rowY + 18, { bold: true, width: 155 });
+    const responsavelNomeCurto = obterNomeCurto(info.responsavel_nome);
+    doc.fontSize(8).text(responsavelNomeCurto || 'N/A', 400, rowY + 20, { bold: true, width: 155 });
+    if (info.responsavel_nome) {
+      desenharCarimboEAssinatura(doc, 395, rowY + 30, responsavelNomeCurto, 'RESPONSÁVEL', 'LABORATÓRIO');
+    }
 
     // --- 7. RODAPÉ FIXO (Notas legais e contactos no fundo da folha) ---
     // Usamos Y fixo no fundo da página (A4 tem 842 de altura)

@@ -6,7 +6,7 @@ import NotificationBell from '../components/NotificationBell';
 
 export default function ResponsavelDashboard({ user, onLogout, notifications, onMarkAsRead, onMarkAllAsRead, onChangePassword, onAddNotification }) {
   const [activeTab, setActiveTab] = useState(
-    user.perfil === 'GESTOR_CLIENTES' ? 'decisoes' : 'validacoes'
+    (user.perfil === 'GESTOR_CLIENTES' || user.perfil === 'GESTOR_ADMIN') ? 'decisoes' : 'validacoes'
   );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -51,6 +51,27 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
   const [filtroAno, setFiltroAno] = useState('all');
   const [filtroEstado, setFiltroEstado] = useState('all');
 
+  // Estados para o novo separador de Auditoria
+  const [auditoriaList, setAuditoriaList] = useState([]);
+  const [filtroAuditEntidade, setFiltroAuditEntidade] = useState('all');
+  const [filtroAuditAcao, setFiltroAuditAcao] = useState('all');
+  const [pesquisaAudit, setPesquisaAudit] = useState('');
+
+  const [showAddEtar, setShowAddEtar] = useState(false);
+  const [newEtarData, setNewEtarData] = useState({
+    nome: '',
+    localizacao: '',
+    disponivel: true
+  });
+
+  const [showAddParam, setShowAddParam] = useState(false);
+  const [newParamData, setNewParamData] = useState({
+    nome: '',
+    tipo_parametro: 'FISICO_QUIMICO',
+    unidade_default: 'mg/L',
+    obrigatorio: false
+  });
+
   // Modais de Criação
   const [showAddCliente, setShowAddCliente] = useState(false);
   const [showAddAutorizacao, setShowAddAutorizacao] = useState(false);
@@ -83,7 +104,7 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
     setLoading(true);
     setError('');
     try {
-      if (user.perfil === 'GESTOR_CLIENTES') {
+      if (user.perfil === 'GESTOR_CLIENTES' || user.perfil === 'GESTOR_ADMIN') {
         if (activeTab === 'decisoes') {
           const data = await descargaService.obterDescargas({ estado: 'SOLICITADA' });
           setSolicitadas(data);
@@ -126,11 +147,26 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
           setClientesList(cls);
           const ets = await adminService.obterEtars();
           setEtarsList(ets);
-        } else if (activeTab === 'utilizadores') {
+        } else if (activeTab === 'utilizadores' && user.perfil === 'GESTOR_ADMIN') {
           const utls = await adminService.obterUtilizadores();
-          setUtilizadoresList(utls);
+          const sortedUtls = Array.isArray(utls)
+            ? [...utls].sort((a, b) => {
+                if (Number(a.id_perfil) !== Number(b.id_perfil)) {
+                  return Number(a.id_perfil) - Number(b.id_perfil);
+                }
+                return a.nome.localeCompare(b.nome);
+              })
+            : [];
+          setUtilizadoresList(sortedUtls);
           const ets = await adminService.obterEtars();
           setEtarsList(ets);
+        } else if (activeTab === 'auditoria' && user.perfil === 'GESTOR_ADMIN') {
+          const logs = await adminService.obterLogsAuditoria({
+            entidade: filtroAuditEntidade,
+            acao: filtroAuditAcao,
+            pesquisa: pesquisaAudit
+          });
+          setAuditoriaList(logs);
         }
       } else {
         // Responsável de Lab/ETAR
@@ -191,6 +227,12 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
       loadRelatorios();
     }
   }, [filtroCliente, filtroEtar, filtroMes, filtroAno, filtroEstado, activeTab]);
+
+  useEffect(() => {
+    if (activeTab === 'auditoria') {
+      loadData();
+    }
+  }, [filtroAuditEntidade, filtroAuditAcao, pesquisaAudit, activeTab]);
 
   // Carregar parâmetros contratuais do cliente selecionado
   useEffect(() => {
@@ -265,6 +307,47 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
       loadData();
     } catch (err) {
       setError(err.message || 'Erro ao gravar utilizador interno.');
+    }
+  };
+
+  // Gestor de Clientes / Admin: Criar Nova ETAR
+  const handleSaveEtar = async (e) => {
+    e.preventDefault();
+    setError('');
+    setSuccess('');
+    try {
+      await adminService.criarEtar(newEtarData);
+      setSuccess('Nova ETAR registada com sucesso!');
+      setShowAddEtar(false);
+      setNewEtarData({
+        nome: '',
+        localizacao: '',
+        disponivel: true
+      });
+      loadData();
+    } catch (err) {
+      setError(err.message || 'Erro ao criar nova ETAR.');
+    }
+  };
+
+  // Gestor: Criar Novo Parâmetro Analítico no Catálogo
+  const handleSaveParam = async (e) => {
+    e.preventDefault();
+    setError('');
+    setSuccess('');
+    try {
+      await adminService.criarParametro(newParamData);
+      setSuccess('Novo parâmetro analítico registado com sucesso no catálogo!');
+      setShowAddParam(false);
+      setNewParamData({
+        nome: '',
+        tipo_parametro: 'FISICO_QUIMICO',
+        unidade_default: 'mg/L',
+        obrigatorio: false
+      });
+      loadData();
+    } catch (err) {
+      setError(err.message || 'Erro ao criar parâmetro global.');
     }
   };
 
@@ -372,7 +455,7 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
 
   // Escutar eventos WebSocket em tempo real baseados no perfil
   useEffect(() => {
-    if (user.perfil === 'GESTOR_CLIENTES') {
+    if (user.perfil === 'GESTOR_CLIENTES' || user.perfil === 'GESTOR_ADMIN') {
       const handleNovoPedido = (data) => {
         setSuccess(`Novo pedido de descarga pendente: Descarga #${data.id_descarga} (${data.cliente_nome} - ${data.quantidade}L).`);
         loadData();
@@ -539,8 +622,8 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
         {error && <div className="card" style={{ backgroundColor: 'var(--danger-light)', color: 'var(--danger)', padding: '1rem', borderLeft: '5px solid var(--danger)' }}>{error}</div>}
         {success && <div className="card" style={{ backgroundColor: 'var(--success-light)', color: 'var(--success)', padding: '1rem', borderLeft: '5px solid var(--success)' }}>{success}</div>}
 
-        {/* 1. SE FOR GESTOR DE CLIENTES */}
-        {user.perfil === 'GESTOR_CLIENTES' && (
+        {/* 1. SE FOR GESTOR DE CLIENTES / ADMIN */}
+        {(user.perfil === 'GESTOR_CLIENTES' || user.perfil === 'GESTOR_ADMIN') && (
           <div>
             <div className="tabs-nav">
               <button className={`tab-btn ${activeTab === 'decisoes' ? 'active' : ''}`} onClick={() => { setActiveTab('decisoes'); setError(''); setSuccess(''); }}>
@@ -564,9 +647,16 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
               <button className={`tab-btn ${activeTab === 'relatorios' ? 'active' : ''}`} onClick={() => { setActiveTab('relatorios'); setError(''); setSuccess(''); }}>
                 Relatórios
               </button>
-              <button className={`tab-btn ${activeTab === 'utilizadores' ? 'active' : ''}`} onClick={() => { setActiveTab('utilizadores'); setError(''); setSuccess(''); }}>
-                Utilizadores
-              </button>
+              {user.perfil === 'GESTOR_ADMIN' && (
+                <>
+                  <button className={`tab-btn ${activeTab === 'utilizadores' ? 'active' : ''}`} onClick={() => { setActiveTab('utilizadores'); setError(''); setSuccess(''); }}>
+                    Utilizadores
+                  </button>
+                  <button className={`tab-btn ${activeTab === 'auditoria' ? 'active' : ''}`} onClick={() => { setActiveTab('auditoria'); setError(''); setSuccess(''); }}>
+                    Auditoria
+                  </button>
+                </>
+              )}
             </div>
 
             {/* TAB: PEDIDOS PENDENTES DE DECISÃO */}
@@ -707,6 +797,91 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
             {/* TAB: WHITELISTS E PARAMETRIZAÇÃO DE CLIENTES */}
             {activeTab === 'autorizacoes' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+                {/* Parâmetros e Catálogo no topo */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.5rem' }}>
+                  {/* Lado Esquerdo: Parametrização por Cliente */}
+                  <div className="card" style={{ marginBottom: 0 }}>
+                    <h3>Parametrização de Amostras por Cliente</h3>
+                    <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '1.5rem' }}>
+                      Selecione um cliente para configurar quais os ensaios analíticos adicionais previstos no contrato de descarga.
+                    </p>
+                    <div className="form-group">
+                      <label className="form-label">Selecionar Cliente</label>
+                      <select className="form-input" value={selectedConfigClient} onChange={e => setSelectedConfigClient(e.target.value)}>
+                        <option value="">-- Escolha um cliente --</option>
+                        {clientesList.map(c => (
+                          <option key={c.id_cliente} value={c.id_cliente}>{c.nome}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {selectedConfigClient && (
+                      <form onSubmit={handleUpdateClientParams}>
+                        <div style={{ marginTop: '1rem', borderTop: '1px solid var(--border)', paddingTop: '1rem' }}>
+                          <h4 style={{ marginBottom: '1rem', fontSize: '0.9rem' }}>Ensaios Específicos do Contrato:</h4>
+                          {parametrosList.filter(p => !p.obrigatorio).map(p => (
+                            <div key={p.id_parametro} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                              <input 
+                                type="checkbox" 
+                                id={`param-${p.id_parametro}`} 
+                                style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                                checked={activeParams.includes(p.id_parametro)} 
+                                onChange={() => handleToggleParamCheckbox(p.id_parametro)} 
+                              />
+                              <label htmlFor={`param-${p.id_parametro}`} style={{ fontSize: '0.85rem', cursor: 'pointer' }}>
+                                <strong>{p.nome}</strong> ({p.tipo_parametro.replace('_', ' ')})
+                              </label>
+                            </div>
+                          ))}
+                        </div>
+                        <button type="submit" className="btn btn-primary" style={{ marginTop: '1.5rem', width: '100%' }}>
+                          Gravar Parâmetros Contratuais
+                        </button>
+                      </form>
+                    )}
+                  </div>
+
+                  {/* Lado Direito: Catálogo Global de Parâmetros */}
+                  <div className="card" style={{ marginBottom: 0 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                      <h3>Catálogo Global de Parâmetros</h3>
+                      <button className="btn btn-primary" style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '4px' }} onClick={() => setShowAddParam(true)}>
+                        <PlusCircle size={14} /> Novo Parâmetro
+                      </button>
+                    </div>
+                    <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '1.25rem' }}>
+                      Lista global de análises e contaminantes cadastrados no catálogo do sistema.
+                    </p>
+                    <div className="table-container" style={{ maxHeight: '250px', overflowY: 'auto', marginBottom: 0 }}>
+                      <table className="data-table" style={{ fontSize: '0.8rem' }}>
+                        <thead>
+                          <tr>
+                            <th>Nome</th>
+                            <th>Tipo</th>
+                            <th>Unidade</th>
+                            <th>Obrig.</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {parametrosList.map(p => (
+                            <tr key={p.id_parametro}>
+                              <td><strong>{p.nome}</strong></td>
+                              <td>
+                                <span className="badge" style={{ fontSize: '0.65rem', padding: '0.15rem 0.4rem', border: '1px solid var(--border)', backgroundColor: 'var(--bg-base)' }}>
+                                  {p.tipo_parametro.replace('_', ' ').toLowerCase()}
+                                </span>
+                              </td>
+                              <td>{p.unidade_default}</td>
+                              <td>{p.obrigatorio ? 'Sim' : 'Não'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Whitelists e Quotas Diárias abaixo */}
                 <div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
                     <h3>Whitelists e Quotas Diárias</h3>
@@ -784,54 +959,18 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
                     </div>
                   )}
                 </div>
-
-                <div className="card" style={{ maxWidth: '600px' }}>
-                  <h3>Parametrização de Amostras por Cliente</h3>
-                  <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '1.5rem' }}>
-                    Selecione um cliente para configurar quais os ensaios analíticos adicionais previstos no contrato de descarga.
-                  </p>
-                  <div className="form-group">
-                    <label className="form-label">Selecionar Cliente</label>
-                    <select className="form-input" value={selectedConfigClient} onChange={e => setSelectedConfigClient(e.target.value)}>
-                      <option value="">-- Escolha um cliente --</option>
-                      {clientesList.map(c => (
-                        <option key={c.id_cliente} value={c.id_cliente}>{c.nome}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {selectedConfigClient && (
-                    <form onSubmit={handleUpdateClientParams}>
-                      <div style={{ marginTop: '1rem', borderTop: '1px solid var(--border)', paddingTop: '1rem' }}>
-                        <h4 style={{ marginBottom: '1rem', fontSize: '0.9rem' }}>Ensaios Específicos do Contrato:</h4>
-                        {parametrosList.filter(p => !p.obrigatorio).map(p => (
-                          <div key={p.id_parametro} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                            <input 
-                              type="checkbox" 
-                              id={`param-${p.id_parametro}`} 
-                              style={{ width: '18px', height: '18px', cursor: 'pointer' }}
-                              checked={activeParams.includes(p.id_parametro)} 
-                              onChange={() => handleToggleParamCheckbox(p.id_parametro)} 
-                            />
-                            <label htmlFor={`param-${p.id_parametro}`} style={{ fontSize: '0.85rem', cursor: 'pointer' }}>
-                              <strong>{p.nome}</strong> ({p.tipo_parametro.replace('_', ' ')})
-                            </label>
-                          </div>
-                        ))}
-                      </div>
-                      <button type="submit" className="btn btn-primary" style={{ marginTop: '1.5rem', width: '100%' }}>
-                        Gravar Parâmetros Contratuais
-                      </button>
-                    </form>
-                  )}
-                </div>
               </div>
             )}
 
             {/* TAB: DISPONIBILIDADE DE ETARS (CONTINGÊNCIA) */}
             {activeTab === 'etars' && (
               <div>
-                <h3 style={{ marginBottom: '1.5rem' }}>Estado e Disponibilidade de ETARs</h3>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                  <h3>Estado e Disponibilidade de ETARs</h3>
+                  <button className="btn btn-primary" onClick={() => setShowAddEtar(true)}>
+                    <PlusCircle size={16} style={{ verticalAlign: 'middle', marginRight: '4px' }} /> Adicionar ETAR
+                  </button>
+                </div>
                 {loading ? (
                   <p>A carregar ETARs...</p>
                 ) : etarsList.length === 0 ? (
@@ -1199,7 +1338,7 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
             )}
 
             {/* TAB: GESTÃO DE UTILIZADORES INTERNOS */}
-            {activeTab === 'utilizadores' && (
+            {activeTab === 'utilizadores' && user.perfil === 'GESTOR_ADMIN' && (
               <div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
                   <h3>Gestão de Utilizadores Internos</h3>
@@ -1235,8 +1374,8 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
                       <thead>
                         <tr>
                           <th>Nome</th>
+                          <th>Perfil / Cargo</th>
                           <th>Email</th>
-                          <th>Perfil / Função</th>
                           <th>ETAR Associada</th>
                           <th>Estado</th>
                           <th>Ações</th>
@@ -1246,12 +1385,12 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
                         {utilizadoresList.map((u) => (
                           <tr key={u.id_utilizador}>
                             <td><strong>{u.nome}</strong></td>
-                            <td>{u.email}</td>
                             <td>
                               <span className="badge badge-info" style={{ fontSize: '0.75rem', textTransform: 'capitalize' }}>
                                 {u.perfil_nome ? u.perfil_nome.replace('_', ' ').toLowerCase() : 'N/A'}
                               </span>
                             </td>
+                            <td>{u.email}</td>
                             <td>
                               {u.id_etar ? (
                                 <span>{u.etar_nome || `ETAR #${u.id_etar}`}</span>
@@ -1286,6 +1425,150 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
                             </td>
                           </tr>
                         ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* TAB: AUDITORIA DO SISTEMA */}
+            {activeTab === 'auditoria' && user.perfil === 'GESTOR_ADMIN' && (
+              <div>
+                <h3 style={{ marginBottom: '1.5rem' }}>Auditoria do Sistema (Logs de Rastreabilidade)</h3>
+
+                {/* Filtros de Pesquisa */}
+                <div className="card" style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', padding: '1rem', marginBottom: '1.5rem', alignItems: 'center' }}>
+                  <div style={{ flex: 1, minWidth: '150px' }}>
+                    <label className="form-label" style={{ marginBottom: '0.25rem', fontSize: '0.8rem' }}>Filtrar por Entidade</label>
+                    <select className="form-input" value={filtroAuditEntidade} onChange={(e) => setFiltroAuditEntidade(e.target.value)} style={{ padding: '0.4rem' }}>
+                      <option value="all">-- Todas as Entidades --</option>
+                      <option value="DESCARGA">Descargas</option>
+                      <option value="AMOSTRA">Amostras</option>
+                      <option value="CLIENTE">Clientes</option>
+                      <option value="UTILIZADOR">Utilizadores</option>
+                      <option value="AUTORIZACAO">Whitelists / Autorizações</option>
+                    </select>
+                  </div>
+
+                  <div style={{ flex: 1, minWidth: '150px' }}>
+                    <label className="form-label" style={{ marginBottom: '0.25rem', fontSize: '0.8rem' }}>Filtrar por Ação</label>
+                    <select className="form-input" value={filtroAuditAcao} onChange={(e) => setFiltroAuditAcao(e.target.value)} style={{ padding: '0.4rem' }}>
+                      <option value="all">-- Todas as Ações --</option>
+                      <option value="PEDIDO">Pedidos de Descarga</option>
+                      <option value="AUTORIZACAO">Autorizações</option>
+                      <option value="REJEICAO">Rejeições</option>
+                      <option value="PEDIDO_ELEMENTOS">Pedido de Elementos</option>
+                      <option value="AGENDAMENTO">Agendamentos</option>
+                      <option value="RECECAO">Receções</option>
+                      <option value="VALIDACAO">Validações de Boletins</option>
+                      <option value="DISPONIBILIZACAO">Disponibilizações</option>
+                      <option value="CANCELAMENTO">Cancelamentos</option>
+                      <option value="EDICAO">Edições</option>
+                      <option value="CRIACAO">Criações</option>
+                      <option value="ALTERACAO_STATUS">Alterações de Estado</option>
+                    </select>
+                  </div>
+
+                  <div style={{ flex: 2, minWidth: '250px' }}>
+                    <label className="form-label" style={{ marginBottom: '0.25rem', fontSize: '0.8rem' }}>Pesquisa por utilizador ou descrição</label>
+                    <input 
+                      type="text" 
+                      className="form-input" 
+                      placeholder="Pesquise por nome, email ou detalhes do log..." 
+                      value={pesquisaAudit} 
+                      onChange={(e) => setPesquisaAudit(e.target.value)} 
+                      style={{ padding: '0.4rem' }} 
+                    />
+                  </div>
+                </div>
+
+                {loading ? (
+                  <p>A ler logs de auditoria...</p>
+                ) : auditoriaList.length === 0 ? (
+                  <div className="card" style={{ textAlign: 'center', padding: '2.5rem' }}>
+                    <p style={{ color: 'var(--text-secondary)' }}>Nenhum log de auditoria encontrado para os filtros selecionados.</p>
+                  </div>
+                ) : (
+                  <div className="table-container">
+                    <table className="data-table">
+                      <thead>
+                        <tr>
+                          <th>Ref</th>
+                          <th>Data / Hora</th>
+                          <th>Utilizador</th>
+                          <th>Entidade</th>
+                          <th>Ação</th>
+                          <th>Descrição / Detalhes</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {auditoriaList.map((log) => {
+                          // Definir cores das entidades
+                          let entityColor = 'var(--text-secondary)';
+                          let entityBg = 'var(--bg-base)';
+                          if (log.entidade === 'DESCARGA') {
+                            entityColor = '#2563eb';
+                            entityBg = '#dbeafe';
+                          } else if (log.entidade === 'AMOSTRA') {
+                            entityColor = '#7c3aed';
+                            entityBg = '#f3e8ff';
+                          } else if (log.entidade === 'CLIENTE') {
+                            entityColor = '#059669';
+                            entityBg = '#d1fae5';
+                          } else if (log.entidade === 'UTILIZADOR') {
+                            entityColor = '#db2777';
+                            entityBg = '#fce7f3';
+                          } else if (log.entidade === 'AUTORIZACAO') {
+                            entityColor = '#d97706';
+                            entityBg = '#fef3c7';
+                          }
+
+                          // Definir cores das ações
+                          let actionClass = 'badge-info';
+                          if (log.acao.includes('AUTORIZACAO') || log.acao.includes('VALIDACAO') || log.acao.includes('CRIACAO')) {
+                            actionClass = 'badge-autorizada';
+                          } else if (log.acao.includes('REJEICAO') || log.acao.includes('CANCELAMENTO') || log.acao.includes('SUSPENSAO')) {
+                            actionClass = 'badge-rejeitada';
+                          } else if (log.acao.includes('EDICAO') || log.acao.includes('ALTERACAO')) {
+                            actionClass = 'badge-solicitada';
+                          }
+
+                          return (
+                            <tr key={log.id_historico}>
+                              <td><strong>#{log.id_historico}</strong></td>
+                              <td style={{ fontSize: '0.85rem', whiteSpace: 'nowrap' }}>
+                                {new Date(log.data).toLocaleString()}
+                              </td>
+                              <td>
+                                <div><strong>{log.utilizador_nome}</strong></div>
+                                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{log.utilizador_email}</div>
+                                <span className="badge" style={{ fontSize: '0.65rem', marginTop: '0.15rem', padding: '1px 4px', backgroundColor: 'var(--bg-base)', border: '1px solid var(--border)' }}>
+                                  {log.utilizador_perfil.replace('_', ' ').toLowerCase()}
+                                </span>
+                              </td>
+                              <td>
+                                <span className="badge" style={{ 
+                                  color: entityColor, 
+                                  backgroundColor: entityBg, 
+                                  border: `1px solid ${entityColor}`,
+                                  fontSize: '0.75rem',
+                                  textTransform: 'capitalize'
+                                }}>
+                                  {log.entidade.toLowerCase()} #{log.id_entidade}
+                                </span>
+                              </td>
+                              <td>
+                                <span className={`badge ${actionClass}`} style={{ fontSize: '0.75rem' }}>
+                                  {log.acao.replace('_', ' ')}
+                                </span>
+                              </td>
+                              <td style={{ fontSize: '0.85rem', maxWidth: '350px', wordBreak: 'break-word' }}>
+                                {log.descricao}
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
@@ -1621,6 +1904,7 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
                     className="form-input" 
                     placeholder="Ex: Carlos Silva" 
                     required 
+                    disabled={!!editingUtilizadorId}
                     value={newUtilizadorData.nome} 
                     onChange={e => setNewUtilizadorData({ ...newUtilizadorData, nome: e.target.value })} 
                   />
@@ -1709,6 +1993,123 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
                   >
                     Cancelar
                   </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* Modal: Adicionar Nova ETAR */}
+        {showAddEtar && (
+          <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: '1rem' }}>
+            <div className="card" style={{ width: '100%', maxWidth: '450px', marginBottom: 0 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                <h3>Registar Nova ETAR</h3>
+                <button style={{ background: 'none', border: 'none', cursor: 'pointer' }} onClick={() => setShowAddEtar(false)}><X size={20} /></button>
+              </div>
+              <form onSubmit={handleSaveEtar}>
+                <div className="form-group">
+                  <label className="form-label">Nome da ETAR *</label>
+                  <input 
+                    type="text" 
+                    className="form-input" 
+                    placeholder="Ex: ETAR Leste" 
+                    required 
+                    value={newEtarData.nome} 
+                    onChange={e => setNewEtarData({ ...newEtarData, nome: e.target.value })} 
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Localização (Concelho/Cidade)</label>
+                  <input 
+                    type="text" 
+                    className="form-input" 
+                    placeholder="Ex: Vila Real" 
+                    value={newEtarData.localizacao} 
+                    onChange={e => setNewEtarData({ ...newEtarData, localizacao: e.target.value })} 
+                  />
+                </div>
+                <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', margin: '1rem 0' }}>
+                  <input 
+                    type="checkbox" 
+                    id="etar-disponivel-check" 
+                    style={{ width: '20px', height: '20px', cursor: 'pointer' }}
+                    checked={newEtarData.disponivel} 
+                    onChange={e => setNewEtarData({ ...newEtarData, disponivel: e.target.checked })} 
+                  />
+                  <label htmlFor="etar-disponivel-check" style={{ fontSize: '0.85rem', cursor: 'pointer' }}>
+                    <strong>Ativa / Disponível para receber descargas</strong>
+                  </label>
+                </div>
+                <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem' }}>
+                  <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>Gravar ETAR</button>
+                  <button type="button" className="btn btn-secondary" onClick={() => setShowAddEtar(false)}>Cancelar</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* Modal: Adicionar Novo Parâmetro Analítico */}
+        {showAddParam && (
+          <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: '1rem' }}>
+            <div className="card" style={{ width: '100%', maxWidth: '450px', marginBottom: 0 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                <h3>Registar Novo Parâmetro</h3>
+                <button style={{ background: 'none', border: 'none', cursor: 'pointer' }} onClick={() => setShowAddParam(false)}><X size={20} /></button>
+              </div>
+              <form onSubmit={handleSaveParam}>
+                <div className="form-group">
+                  <label className="form-label">Nome do Parâmetro *</label>
+                  <input 
+                    type="text" 
+                    className="form-input" 
+                    placeholder="Ex: CBO5" 
+                    required 
+                    value={newParamData.nome} 
+                    onChange={e => setNewParamData({ ...newParamData, nome: e.target.value })} 
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Tipo de Parâmetro *</label>
+                  <select 
+                    className="form-input" 
+                    required 
+                    value={newParamData.tipo_parametro} 
+                    onChange={e => setNewParamData({ ...newParamData, tipo_parametro: e.target.value })}
+                  >
+                    <option value="FISICO_QUIMICO">Físico-Químico</option>
+                    <option value="AZOTO">Azoto / Nutrientes</option>
+                    <option value="METAIS">Metais Pesados</option>
+                    <option value="OLEOS E GORDURAS">Óleos e Gorduras</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Unidade Padrão *</label>
+                  <input 
+                    type="text" 
+                    className="form-input" 
+                    placeholder="Ex: mg/L" 
+                    required 
+                    value={newParamData.unidade_default} 
+                    onChange={e => setNewParamData({ ...newParamData, unidade_default: e.target.value })} 
+                  />
+                </div>
+                <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', margin: '1rem 0' }}>
+                  <input 
+                    type="checkbox" 
+                    id="param-obrigatorio-check" 
+                    style={{ width: '20px', height: '20px', cursor: 'pointer' }}
+                    checked={newParamData.obrigatorio} 
+                    onChange={e => setNewParamData({ ...newParamData, obrigatorio: e.target.checked })} 
+                  />
+                  <label htmlFor="param-obrigatorio-check" style={{ fontSize: '0.85rem', cursor: 'pointer' }}>
+                    <strong>Obrigatório em todas as análises</strong>
+                  </label>
+                </div>
+                <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem' }}>
+                  <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>Gravar Parâmetro</button>
+                  <button type="button" className="btn btn-secondary" onClick={() => setShowAddParam(false)}>Cancelar</button>
                 </div>
               </form>
             </div>

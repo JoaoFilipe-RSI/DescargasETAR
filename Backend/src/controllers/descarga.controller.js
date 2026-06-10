@@ -661,6 +661,133 @@ exports.registarRececao = async (req, res) => {
   }
 };
 
+const lcg = (seed) => {
+  let state = Math.abs(seed) || 123456789;
+  return () => {
+    state = (state * 1664525 + 1013904223) % 4294967296;
+    return state / 4294967296;
+  };
+};
+
+const desenharCarimboEAssinatura = (doc, x, y, nome, cargo, localizacao) => {
+  doc.save();
+  
+  // Limpar nome de sufixos de cargo (ex: " - Técnica de Laboratório")
+  const nomeLimpo = nome ? nome.split(' - ')[0].trim() : '';
+
+  // Inclinar ligeiramente o carimbo (-3 graus)
+  doc.rotate(-3, { origin: [x + 65, y + 25] });
+
+  // 1. Moldura do carimbo (cor azul de tinta)
+  doc.strokeColor('#2A6F97').lineWidth(1.5).opacity(0.85);
+  doc.roundedRect(x, y, 130, 50, 6).stroke();
+  doc.lineWidth(0.5).roundedRect(x + 3, y + 3, 124, 44, 4).stroke();
+
+  // 2. Textos do Carimbo
+  doc.fillColor('#2A6F97').opacity(0.85);
+  doc.fontSize(6).text('ENTIDADE GESTORA ETAR', x, y + 8, { align: 'center', width: 130, bold: true });
+  doc.fontSize(7).text(localizacao ? localizacao.toUpperCase() : 'SERVIÇOS DE GESTÃO', x, y + 17, { align: 'center', width: 130, bold: true });
+  
+  const dataCarimbo = new Date().toLocaleDateString('pt-PT');
+  doc.fontSize(5.5).text(`${cargo} | ${dataCarimbo}`, x, y + 27, { align: 'center', width: 130 });
+  doc.fontSize(5).text('DOCUMENTO AUTORIZADO', x, y + 36, { align: 'center', width: 130 });
+
+  // 3. Assinatura Manuscrita Generativa por cima (tinta de caneta escura)
+  doc.strokeColor('#0D1B2A').lineWidth(1.2).opacity(0.95);
+  
+  // DJB2 Hash do nome limpo para melhor distribuição
+  let hash = 5381;
+  for (let i = 0; i < nomeLimpo.length; i++) {
+    hash = ((hash << 5) + hash) + nomeLimpo.charCodeAt(i);
+  }
+  hash = Math.abs(hash);
+  
+  const nextRand = lcg(hash);
+
+  // Determinar ponto de início com pequenas variações
+  const startX = x + 12 + nextRand() * 12;
+  const startY = y + 26 + nextRand() * 8;
+  
+  doc.moveTo(startX, startY);
+
+  // 1º passo: Traço inicial / Laço de letra maiúscula dinâmica
+  const loopWidth = 14 + nextRand() * 12;
+  const loopHeight = 16 + nextRand() * 12;
+  const loopDir = nextRand() > 0.5 ? 1 : -1;
+  
+  doc.bezierCurveTo(
+    startX - loopWidth * 0.4 * loopDir, startY - loopHeight,
+    startX + loopWidth * 1.4 * loopDir, startY - loopHeight * 0.4,
+    startX + loopWidth * loopDir, startY + 4
+  );
+
+  // 2º passo: Gerar ondas conectadas dinâmicas (rabisco do corpo do nome)
+  let currX = startX + loopWidth * loopDir;
+  let currY = startY + 4;
+  
+  const numSteps = 5 + Math.floor(nextRand() * 5); // Entre 5 e 9 ondas/picos
+  const stepWidth = (70 / numSteps) * (0.8 + nextRand() * 0.4); // Largura proporcional
+
+  for (let i = 0; i < numSteps; i++) {
+    const nextX = currX + stepWidth;
+    const scaleFactor = 1 - (i / numSteps) * 0.3; // Atenuação para a direita
+    const upY = startY - (4 + nextRand() * 14) * scaleFactor;
+    const downY = startY + (nextRand() * 6 - 3);
+
+    // Ondas Bézier orgânicas
+    doc.bezierCurveTo(
+      currX + stepWidth * 0.3, upY,
+      currX + stepWidth * 0.7, downY,
+      nextX, downY
+    );
+    currX = nextX;
+    currY = downY;
+  }
+
+  // 3º passo: Floreio final / Traço inferior ou cruzado dinâmico
+  const floreioStyle = Math.floor(nextRand() * 3); // 3 estilos
+  if (floreioStyle === 0) {
+    // Sublinhado clássico curvo de volta e depois traço rápido à frente
+    const slashStartY = currY + 2 + nextRand() * 3;
+    doc.moveTo(currX, slashStartY);
+    doc.quadraticCurveTo(
+      (startX + currX) / 2, y + 42 + nextRand() * 5,
+      startX - 4 - nextRand() * 4, startY + 8 + nextRand() * 4
+    );
+    doc.stroke();
+    
+    // Risco rápido à frente
+    doc.moveTo(startX - 6, startY + 10);
+    doc.lineTo(currX + 8, startY + 8);
+  } else if (floreioStyle === 1) {
+    // Linha de corte diagonal rápida cruzando o meio da assinatura
+    doc.lineTo(currX + 6, currY - 4);
+    doc.stroke();
+    
+    doc.moveTo(currX + 6, currY - 4);
+    doc.bezierCurveTo(
+      currX - 18, currY + 12,
+      startX + 8, startY - 12,
+      startX - 4, startY + 4
+    );
+  } else {
+    // Laço circular elítico envolvente final com um ponto
+    doc.bezierCurveTo(
+      currX + 12, currY - 12,
+      currX + 22, currY + 12,
+      currX + 4, currY + 8
+    );
+    doc.stroke();
+    
+    // Ponto final isolado elegante
+    doc.moveTo(currX + 7, currY + 6);
+    doc.lineTo(currX + 8, currY + 7);
+  }
+
+  doc.stroke();
+  doc.restore();
+};
+
 /**
  * Gera a Ficha de Descarga em PDF (GET /api/descargas/:id/ficha).
  */
@@ -879,12 +1006,22 @@ exports.gerarFichaDescargaPDF = async (req, res) => {
     const signY = obsY + 55;
     doc.fontSize(8.5).fillColor('#333333');
     doc.text('Validação da Entidade Gestora:', 40, signY);
-    doc.fontSize(9).text(d.decisor_nome || 'Gestor de Contratos', 40, signY + 15, { bold: true });
-    doc.fontSize(7.5).fillColor('#666666').text('Documento autorizado digitalmente pelo Gestor.', 40, signY + 27, { italic: true });
+    
+    const obterNomeCurto = (n) => n ? n.split(' - ')[0].trim() : '';
+    const decisorNomeCurto = obterNomeCurto(d.decisor_nome);
+    doc.fontSize(9).text(decisorNomeCurto || 'Gestor de Contratos', 40, signY + 15, { bold: true });
+    desenharCarimboEAssinatura(doc, 40, signY + 28, decisorNomeCurto || 'Mariana Costa', 'GESTOR', 'SERVIÇOS DE GESTÃO');
+    doc.fontSize(7.5).fillColor('#666666').text('Documento autorizado digitalmente pelo Gestor.', 40, signY + 82, { italic: true });
 
     doc.fontSize(8.5).fillColor('#333333').text('Operador de Receção ETAR:', 330, signY);
-    doc.fontSize(9).text(d.operador_nome || 'Operador ETAR', 330, signY + 15, { bold: true });
-    doc.fontSize(7.5).fillColor('#666666').text(d.data_rececao ? 'Receção física assinada digitalmente na ETAR.' : 'A aguardar receção física.', 330, signY + 27, { italic: true });
+    const operadorNomeCurto = obterNomeCurto(d.operador_nome);
+    doc.fontSize(9).text(operadorNomeCurto || 'Operador ETAR', 330, signY + 15, { bold: true });
+    if (d.data_rececao && d.operador_nome) {
+      desenharCarimboEAssinatura(doc, 330, signY + 28, operadorNomeCurto, 'OPERADOR', d.etar_nome || 'ETAR');
+      doc.fontSize(7.5).fillColor('#666666').text('Receção física assinada digitalmente na ETAR.', 330, signY + 82, { italic: true });
+    } else {
+      doc.fontSize(7.5).fillColor('#666666').text('A aguardar receção física.', 330, signY + 28, { italic: true });
+    }
 
     // Rodapé de cópias
     doc.fontSize(7).fillColor('#999999').text('Este impresso foi assinado eletronicamente e emitido pelo sistema centralizado de gestão de descargas.', 40, 775, { align: 'center' });
