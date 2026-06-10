@@ -1533,6 +1533,45 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
                                 <span className={`badge badge-${r.estado_descarga.toLowerCase()}`} style={{ fontSize: '0.7rem' }}>
                                   {r.estado_descarga}
                                 </span>
+                                {/* Quem autorizou/rejeitou */}
+                                {r.decisao_por_nome && ['AUTORIZADA', 'REJEITADA'].includes(r.estado_descarga) && (
+                                  <div style={{
+                                    fontSize: '0.68rem',
+                                    color: 'var(--text-secondary)',
+                                    marginTop: '0.2rem',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '3px'
+                                  }}>
+                                    <span style={{ opacity: 0.6 }}>👤</span>
+                                    <span style={{ fontStyle: 'italic' }}>por {r.decisao_por_nome}</span>
+                                  </div>
+                                )}
+                                {/* Quem recebeu */}
+                                {r.rececao_por_nome && ['RECEBIDA', 'CONCLUIDA'].includes(r.estado_descarga) && (
+                                  <div style={{
+                                    fontSize: '0.68rem',
+                                    color: 'var(--text-secondary)',
+                                    marginTop: '0.2rem',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '3px'
+                                  }}>
+                                    <span style={{ opacity: 0.6 }}>👤</span>
+                                    <span style={{ fontStyle: 'italic' }}>recebido por {r.rececao_por_nome}</span>
+                                  </div>
+                                )}
+                                {/* Quem autorizou (em estados mais avançados que AUTORIZADA) */}
+                                {r.decisao_por_nome && ['AGENDADA', 'RECEBIDA', 'CONCLUIDA'].includes(r.estado_descarga) && (
+                                  <div style={{
+                                    fontSize: '0.65rem',
+                                    color: 'var(--text-secondary)',
+                                    marginTop: '0.1rem',
+                                    opacity: 0.75
+                                  }}>
+                                    ✓ aut. por {r.decisao_por_nome}
+                                  </div>
+                                )}
                                 {r.observacoes && r.observacoes.includes('ALERTA OPERACIONAL') && (
                                   <div style={{
                                     fontSize: '0.65rem',
@@ -1744,6 +1783,10 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
                       <option value="CLIENTE">Clientes</option>
                       <option value="UTILIZADOR">Utilizadores</option>
                       <option value="AUTORIZACAO">Whitelists / Autorizações</option>
+                      <option value="ETAR">ETARs</option>
+                      <option value="PARAMETRO">Parâmetros</option>
+                      <option value="PERFIL">Perfis</option>
+                      <option value="SISTEMA">Sistema</option>
                     </select>
                   </div>
 
@@ -1818,6 +1861,18 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
                           } else if (log.entidade === 'AUTORIZACAO') {
                             entityColor = '#d97706';
                             entityBg = '#fef3c7';
+                          } else if (log.entidade === 'ETAR') {
+                            entityColor = '#0d9488';
+                            entityBg = '#ccfbf1';
+                          } else if (log.entidade === 'PARAMETRO') {
+                            entityColor = '#0891b2';
+                            entityBg = '#ecfeff';
+                          } else if (log.entidade === 'PERFIL') {
+                            entityColor = '#4b5563';
+                            entityBg = '#f3f4f6';
+                          } else if (log.entidade === 'SISTEMA') {
+                            entityColor = '#ea580c';
+                            entityBg = '#ffedd5';
                           }
 
                           // Definir cores das ações

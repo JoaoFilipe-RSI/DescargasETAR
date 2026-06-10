@@ -68,6 +68,11 @@ exports.criarCliente = async (req, res) => {
       periodicidade_analise || 'POR_DESCARGA'
     ]);
 
+    await client.query(
+      "INSERT INTO historico (entidade, id_entidade, acao, descricao, id_utilizador) VALUES ($1, $2, $3, $4, $5)",
+      ['CLIENTE', clientRes.rows[0].id_cliente, 'CRIACAO', `Cliente contratado ${nome} registado no sistema.`, req.user.id_utilizador]
+    );
+
     await client.query('COMMIT');
 
     return res.status(201).json({
@@ -142,6 +147,11 @@ exports.atualizarCliente = async (req, res) => {
       id
     ]);
 
+    await client.query(
+      "INSERT INTO historico (entidade, id_entidade, acao, descricao, id_utilizador) VALUES ($1, $2, $3, $4, $5)",
+      ['CLIENTE', id, 'EDICAO', `Dados do cliente ${nome} atualizados no sistema.`, req.user.id_utilizador]
+    );
+
     await client.query('COMMIT');
     return res.json({
       mensagem: 'Dados do cliente atualizados com sucesso.',
@@ -173,6 +183,11 @@ exports.atualizarEstadoCliente = async (req, res) => {
 
     const userQuery = 'UPDATE utilizador SET ativo = $1 WHERE id_utilizador = $2 RETURNING ativo';
     const userRes = await pool.query(userQuery, [!!ativo, id_utilizador]);
+
+    await pool.query(
+      "INSERT INTO historico (entidade, id_entidade, acao, descricao, id_utilizador) VALUES ($1, $2, $3, $4, $5)",
+      ['CLIENTE', id, 'ALTERACAO_STATUS', `Estado da conta do cliente id #${id} atualizado para ${!!ativo ? 'ativo' : 'inativo'}.`, req.user.id_utilizador]
+    );
 
     return res.json({
       mensagem: `Estado da conta do cliente atualizado para ${userRes.rows[0].ativo ? 'ativo' : 'inativo'}.`,
@@ -487,9 +502,15 @@ exports.criarAutorizacao = async (req, res) => {
     `;
     const result = await pool.query(query, [id_cliente, id_etar, quotaVal, !!auto_aprovacao]);
 
+    const newAut = result.rows[0];
+    await pool.query(
+      "INSERT INTO historico (entidade, id_entidade, acao, descricao, id_utilizador) VALUES ($1, $2, $3, $4, $5)",
+      ['AUTORIZACAO', newAut.id_autorizacao, 'CRIACAO', `Regra de whitelist criada para cliente #${id_cliente} na ETAR #${id_etar} com quota de ${quotaVal !== null ? `${quotaVal} descargas/dia` : 'Sem limite'}.`, req.user.id_utilizador]
+    );
+
     return res.status(201).json({
       mensagem: 'Regra de whitelist criada com sucesso.',
-      autorizacao: result.rows[0]
+      autorizacao: newAut
     });
 
   } catch (err) {
@@ -521,9 +542,15 @@ exports.atualizarAutorizacao = async (req, res) => {
       return res.status(404).json({ erro: 'Regra de whitelist não encontrada.' });
     }
 
+    const updatedAut = result.rows[0];
+    await pool.query(
+      "INSERT INTO historico (entidade, id_entidade, acao, descricao, id_utilizador) VALUES ($1, $2, $3, $4, $5)",
+      ['AUTORIZACAO', id, 'EDICAO', `Regra de whitelist id #${id} atualizada. Quota: ${quotaVal !== null ? `${quotaVal} descargas/dia` : 'Sem limite'}, Auto-Aprovação: ${!!auto_aprovacao ? 'Sim' : 'Não'}, Ativa: ${!!ativo ? 'Sim' : 'Não'}.`, req.user.id_utilizador]
+    );
+
     return res.json({
       mensagem: 'Regra de whitelist atualizada com sucesso.',
-      autorizacao: result.rows[0]
+      autorizacao: updatedAut
     });
 
   } catch (err) {
@@ -605,8 +632,11 @@ exports.obterRelatorios = async (req, res) => {
 
   let query = `
     SELECT d.id_descarga, d.data_pedido, d.data_rececao, d.tipo_efluente, d.quantidade, d.quantidade_real, d.estado_descarga, d.observacoes,
+           d.data_decisao,
            c.nome AS cliente_nome, c.id_cliente,
            e.nome AS etar_nome, e.id_etar,
+           ud.nome AS decisao_por_nome,
+           ur.nome AS rececao_por_nome,
            am.id_amostra, am.qr_code_token, am.estado_amostra, am.data_validacao,
            COALESCE(
              (SELECT json_agg(json_build_object('parametro', p.nome, 'valor', r.valor, 'unidade', r.unidade, 'incerteza', r.incerteza))
@@ -618,6 +648,8 @@ exports.obterRelatorios = async (req, res) => {
     FROM descarga d
     JOIN cliente c ON d.id_cliente = c.id_cliente
     LEFT JOIN etar e ON d.id_etar = e.id_etar
+    LEFT JOIN utilizador ud ON d.id_utilizador_decisao = ud.id_utilizador
+    LEFT JOIN utilizador ur ON d.id_utilizador_rececao = ur.id_utilizador
     LEFT JOIN amostra am ON d.id_descarga = am.id_descarga
     WHERE 1=1
   `;
@@ -709,9 +741,15 @@ exports.criarUtilizador = async (req, res) => {
       ativo !== undefined ? !!ativo : true
     ]);
 
+    const newUtilizador = result.rows[0];
+    await pool.query(
+      "INSERT INTO historico (entidade, id_entidade, acao, descricao, id_utilizador) VALUES ($1, $2, $3, $4, $5)",
+      ['UTILIZADOR', newUtilizador.id_utilizador, 'CRIACAO', `Utilizador interno ${newUtilizador.nome} (${newUtilizador.email}) criado com perfil id #${id_perfil}.`, req.user.id_utilizador]
+    );
+
     return res.status(201).json({
       mensagem: 'Utilizador criado com sucesso.',
-      utilizador: result.rows[0]
+      utilizador: newUtilizador
     });
   } catch (err) {
     console.error('Erro ao criar utilizador:', err);
@@ -760,9 +798,15 @@ exports.atualizarUtilizador = async (req, res) => {
         return res.status(404).json({ erro: 'Utilizador não encontrado.' });
       }
 
+      const updatedUser = result.rows[0];
+      await pool.query(
+        "INSERT INTO historico (entidade, id_entidade, acao, descricao, id_utilizador) VALUES ($1, $2, $3, $4, $5)",
+        ['UTILIZADOR', id, 'EDICAO', `Utilizador interno ${updatedUser.nome} atualizado (palavra-passe alterada). Ativo: ${updatedUser.ativo ? 'Sim' : 'Não'}.`, req.user.id_utilizador]
+      );
+
       return res.json({
         mensagem: 'Utilizador atualizado com sucesso (palavra-passe alterada).',
-        utilizador: result.rows[0]
+        utilizador: updatedUser
       });
     } else {
       const query = `
@@ -784,9 +828,15 @@ exports.atualizarUtilizador = async (req, res) => {
         return res.status(404).json({ erro: 'Utilizador não encontrado.' });
       }
 
+      const updatedUser = result.rows[0];
+      await pool.query(
+        "INSERT INTO historico (entidade, id_entidade, acao, descricao, id_utilizador) VALUES ($1, $2, $3, $4, $5)",
+        ['UTILIZADOR', id, 'EDICAO', `Utilizador interno ${updatedUser.nome} atualizado. Ativo: ${updatedUser.ativo ? 'Sim' : 'Não'}.`, req.user.id_utilizador]
+      );
+
       return res.json({
         mensagem: 'Utilizador atualizado com sucesso.',
-        utilizador: result.rows[0]
+        utilizador: updatedUser
       });
     }
   } catch (err) {
