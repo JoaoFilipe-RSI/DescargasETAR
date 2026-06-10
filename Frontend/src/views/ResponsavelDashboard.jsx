@@ -4,7 +4,7 @@ import { ShieldCheck, ClipboardList, CheckSquare, XSquare, Download, LogOut, Fil
 import { webSocketService } from '../services/websocket';
 import NotificationBell from '../components/NotificationBell';
 
-export default function ResponsavelDashboard({ user, onLogout, notifications, onMarkAsRead, onMarkAllAsRead, onChangePassword }) {
+export default function ResponsavelDashboard({ user, onLogout, notifications, onMarkAsRead, onMarkAllAsRead, onChangePassword, onAddNotification }) {
   const [activeTab, setActiveTab] = useState(
     user.perfil === 'GESTOR_CLIENTES' ? 'decisoes' : 'validacoes'
   );
@@ -87,6 +87,19 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
         if (activeTab === 'decisoes') {
           const data = await descargaService.obterDescargas({ estado: 'SOLICITADA' });
           setSolicitadas(data);
+          
+          // Sincronizar notificações offline para o gestor (descargas revertidas)
+          if (Array.isArray(data)) {
+            data.forEach(d => {
+              if (d.observacoes && d.observacoes.includes('Revertido por indisponibilidade urgente')) {
+                const etarNome = d.etar_nome || `ETAR ${d.id_etar}`;
+                const notifMsg = `O pedido de descarga #${d.id_descarga} foi revertido para SOLICITADO devido à indisponibilidade da ${etarNome} (sem alternativa).`;
+                if (typeof onAddNotification === 'function') {
+                  onAddNotification(notifMsg);
+                }
+              }
+            });
+          }
         } else if (activeTab === 'clientes') {
           const data = await adminService.obterClientes();
           setClientesList(data);
@@ -146,6 +159,26 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
         estado: filtroEstado
       });
       setRelatoriosData(data);
+
+      // Sincronizar notificações de alertas operacionais offline para o gestor
+      if (Array.isArray(data)) {
+        data.forEach(d => {
+          if (d.estado_descarga === 'AGENDADA' && d.observacoes && d.observacoes.includes('ALERTA OPERACIONAL')) {
+            const etarNome = d.etar_nome || `ETAR ${d.id_etar}`;
+            const notifMsg = `Aviso: A descarga agendada #${d.id_descarga} para a ${etarNome} (agora indisponível) requer contacto imediato com o cliente.`;
+            if (typeof onAddNotification === 'function') {
+              onAddNotification(notifMsg);
+            }
+          }
+          if (d.estado_descarga === 'SOLICITADA' && d.observacoes && d.observacoes.includes('Revertido por indisponibilidade urgente')) {
+            const etarNome = d.etar_nome || `ETAR ${d.id_etar}`;
+            const notifMsg = `O pedido de descarga #${d.id_descarga} foi revertido para SOLICITADO devido à indisponibilidade da ${etarNome} (sem alternativa).`;
+            if (typeof onAddNotification === 'function') {
+              onAddNotification(notifMsg);
+            }
+          }
+        });
+      }
     } catch (err) {
       setError(err.message || 'Erro ao carregar relatórios.');
     } finally {
@@ -568,9 +601,9 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
                               <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
                                 {new Date(d.data_pedido).toLocaleDateString()}
                               </div>
-                              {d.observacoes && d.observacoes.includes('Revertido por ETAR') && (
+                              {d.observacoes && d.observacoes.includes('Revertido') && (
                                 <span className="badge badge-rejeitada" style={{ fontSize: '0.65rem', marginTop: '0.25rem', display: 'inline-block', padding: '0.15rem 0.35rem', backgroundColor: 'var(--danger-light)', color: 'var(--danger)', border: '1px solid var(--danger)', borderRadius: '4px' }}>
-                                  ⚠️ Revertida por ETAR Indisponível
+                                  ⚠️ Autorização Revertida
                                 </span>
                               )}
                             </td>
@@ -714,7 +747,7 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
                               <td><strong>#{a.id_autorizacao}</strong></td>
                               <td>{a.cliente_nome}</td>
                               <td>{a.etar_nome}</td>
-                              <td>{a.quota} descargas/dia</td>
+                              <td>{a.quota === null || a.quota === undefined || a.quota === '' ? 'Sem limite' : `${a.quota} descargas/dia`}</td>
                               <td>{a.auto_aprovacao ? 'Sim (Automática)' : 'Não (Manual)'}</td>
                               <td>
                                 <span className={`badge ${a.ativo ? 'badge-autorizada' : 'badge-rejeitada'}`}>
@@ -731,7 +764,7 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
                                       setNewAutorizacaoData({
                                         id_cliente: a.id_cliente,
                                         id_etar: a.id_etar,
-                                        quota: a.quota.toString(),
+                                        quota: a.quota !== null && a.quota !== undefined ? a.quota.toString() : '',
                                         auto_aprovacao: a.auto_aprovacao
                                       });
                                       setShowAddAutorizacao(true);
@@ -1091,6 +1124,21 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
                                     lineHeight: '1.1'
                                   }}>
                                     ⚠️ Contacto Urgente
+                                  </div>
+                                )}
+                                {r.observacoes && r.observacoes.includes('Revertido') && (
+                                  <div style={{ 
+                                    fontSize: '0.65rem', 
+                                    color: 'var(--danger)', 
+                                    backgroundColor: 'var(--danger-light)', 
+                                    padding: '2px 4px', 
+                                    borderRadius: '4px', 
+                                    border: '1px solid var(--danger)', 
+                                    marginTop: '0.2rem',
+                                    whiteSpace: 'normal',
+                                    lineHeight: '1.1'
+                                  }}>
+                                    ⚠️ Autorização Revertida
                                   </div>
                                 )}
                               </td>
@@ -1527,8 +1575,8 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
                   </select>
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Quota Diária de Descargas *</label>
-                  <input type="number" className="form-input" required min="1" value={newAutorizacaoData.quota} onChange={e => setNewAutorizacaoData({ ...newAutorizacaoData, quota: e.target.value })} />
+                  <label className="form-label">Quota Diária de Descargas (Deixe em branco para 'Sem limite')</label>
+                  <input type="number" className="form-input" min="1" value={newAutorizacaoData.quota} onChange={e => setNewAutorizacaoData({ ...newAutorizacaoData, quota: e.target.value })} />
                 </div>
                 <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', margin: '1rem 0' }}>
                   <input 

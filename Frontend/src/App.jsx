@@ -14,6 +14,23 @@ export default function App() {
 
   const [notifications, setNotifications] = useState([]);
 
+  const handleAddNotification = (mensagem) => {
+    setNotifications((prev) => {
+      if (prev.some((n) => n.mensagem === mensagem)) {
+        return prev;
+      }
+      return [
+        {
+          id: Date.now() + Math.random().toString(36).substring(2, 9),
+          mensagem,
+          data: new Date(),
+          lida: false
+        },
+        ...prev
+      ];
+    });
+  };
+
   // Estados para Configurações (Perfil e Alterar Senha)
   const [showSettings, setShowSettings] = useState(false);
   const [settingsTab, setSettingsTab] = useState('perfil'); // 'perfil' ou 'senha'
@@ -59,17 +76,7 @@ export default function App() {
       if (token) {
         webSocketService.connect(token);
 
-        const addNotification = (mensagem) => {
-          setNotifications((prev) => [
-            {
-              id: Date.now() + Math.random().toString(36).substring(2, 9),
-              mensagem,
-              data: new Date(),
-              lida: false
-            },
-            ...prev
-          ]);
-        };
+        const addNotification = handleAddNotification;
 
         const handlers = [];
 
@@ -111,13 +118,17 @@ export default function App() {
             addNotification(data.mensagem);
           const handleAmostraConcluida = (data) => 
             addNotification(data.mensagem);
+          const handleAlertaAgendamento = (data) =>
+            addNotification(data.mensagem);
 
           webSocketService.on('novo-pedido', handleNovoPedido);
           webSocketService.on('descarga-concluida', handleDescargaConcluida);
           webSocketService.on('amostra-concluida', handleAmostraConcluida);
+          webSocketService.on('alerta-agendamento', handleAlertaAgendamento);
           handlers.push({ event: 'novo-pedido', cb: handleNovoPedido });
           handlers.push({ event: 'descarga-concluida', cb: handleDescargaConcluida });
           handlers.push({ event: 'amostra-concluida', cb: handleAmostraConcluida });
+          handlers.push({ event: 'alerta-agendamento', cb: handleAlertaAgendamento });
         }
 
         return () => {
@@ -221,6 +232,7 @@ export default function App() {
             onMarkAsRead={handleMarkAsRead}
             onMarkAllAsRead={handleMarkAllAsRead}
             onChangePassword={handleOpenSettings}
+            onAddNotification={handleAddNotification}
           />
         );
       
@@ -259,6 +271,7 @@ export default function App() {
             onMarkAsRead={handleMarkAsRead}
             onMarkAllAsRead={handleMarkAllAsRead}
             onChangePassword={handleOpenSettings}
+            onAddNotification={handleAddNotification}
           />
         );
       

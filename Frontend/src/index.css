@@ -195,6 +195,17 @@ h1, h2, h3, h4, h5, h6 {
   color: var(--text-inverse);
 }
 
+.btn-danger-outline {
+  background-color: transparent;
+  color: var(--danger);
+  border: 1px solid var(--danger);
+}
+
+.btn-danger-outline:hover {
+  background-color: var(--danger);
+  color: var(--text-inverse);
+}
+
 /* Formulários */
 .form-group {
   margin-bottom: 1.25rem;
@@ -239,6 +250,7 @@ h1, h2, h3, h4, h5, h6 {
 .badge-solicitada { background-color: var(--warning-light); color: var(--warning); }
 .badge-autorizada { background-color: var(--accent-light); color: var(--accent); }
 .badge-rejeitada { background-color: var(--danger-light); color: var(--danger); }
+.badge-cancelada { background-color: var(--border); color: var(--text-secondary); }
 .badge-agendada { background-color: var(--primary-light); color: var(--text-inverse); }
 .badge-recebida { background-color: var(--success-light); color: var(--success); }
 .badge-concluida { background-color: var(--success); color: var(--text-inverse); }

@@ -5,7 +5,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { PlusCircle, Calendar, ShieldCheck, Download, LogOut, Clock, Truck, Eye, Settings } from 'lucide-react';
 import NotificationBell from '../components/NotificationBell';
 
-export default function ClienteDashboard({ user, onLogout, notifications, onMarkAsRead, onMarkAllAsRead, onChangePassword }) {
+export default function ClienteDashboard({ user, onLogout, notifications, onMarkAsRead, onMarkAllAsRead, onChangePassword, onAddNotification }) {
   const [activeTab, setActiveTab] = useState('pedidos');
   const [descargas, setDescargas] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -30,6 +30,17 @@ export default function ClienteDashboard({ user, onLogout, notifications, onMark
     matricula_cisterna: ''
   });
 
+  // Edição de Pedidos Rejeitados
+  const [editingDescarga, setEditingDescarga] = useState(null);
+  const [editForm, setEditForm] = useState({
+    id_etar: '1',
+    tipo_efluente: 'Industrial',
+    quantidade: '',
+    numero_recipientes: '',
+    nome_produtor_externo: '',
+    morada_produtor_externo: ''
+  });
+
   // Carregar dados de descargas do cliente
   const loadDescargas = async () => {
     setLoading(true);
@@ -37,6 +48,19 @@ export default function ClienteDashboard({ user, onLogout, notifications, onMark
       const data = await descargaService.obterDescargas();
       setDescargas(data);
       setError('');
+
+      // Sincronizar notificações de reversão offline
+      if (Array.isArray(data)) {
+        data.forEach(d => {
+          if (d.estado_descarga === 'SOLICITADA' && d.observacoes && d.observacoes.includes('Revertido por indisponibilidade urgente')) {
+            const etarNome = d.etar_nome || `ETAR ${d.id_etar}`;
+            const notifMsg = `A sua descarga #${d.id_descarga} necessita de ser reencaminhada devido à indisponibilidade de urgência da ${etarNome}. Entraremos em contacto brevemente.`;
+            if (typeof onAddNotification === 'function') {
+              onAddNotification(notifMsg);
+            }
+          }
+        });
+      }
     } catch (err) {
       setError(err.message || 'Erro ao carregar descargas.');
     } finally {
@@ -155,6 +179,68 @@ export default function ClienteDashboard({ user, onLogout, notifications, onMark
     }
   };
 
+  // Cancelar descarga
+  const handleCancelarDescarga = async (idDescarga) => {
+    if (!window.confirm('Tem a certeza de que pretende cancelar esta descarga?')) {
+      return;
+    }
+    setError('');
+    setSuccess('');
+    try {
+      await descargaService.cancelarDescarga(idDescarga);
+      setSuccess('Descarga cancelada com sucesso.');
+      loadDescargas();
+    } catch (err) {
+      setError(err.message || 'Erro ao cancelar descarga.');
+    }
+  };
+
+  // Iniciar Edição de Pedido Rejeitado
+  const handleStartEdit = (d) => {
+    setEditingDescarga(d);
+    setEditForm({
+      id_etar: String(d.id_etar),
+      tipo_efluente: d.tipo_efluente,
+      quantidade: String(d.quantidade),
+      numero_recipientes: d.numero_recipientes ? String(d.numero_recipientes) : '',
+      nome_produtor_externo: d.nome_produtor_externo || '',
+      morada_produtor_externo: d.morada_produtor_externo || ''
+    });
+  };
+
+  // Submeter Edição/Alterações
+  const handleSaveEdit = async (e) => {
+    e.preventDefault();
+    setError('');
+    setSuccess('');
+
+    const isTransportador = user?.nome?.toLowerCase().includes('transportador');
+    if (isTransportador) {
+      if (!editForm.nome_produtor_externo?.trim() || !editForm.morada_produtor_externo?.trim()) {
+        setError('A informação do produtor externo (Nome e Morada) é obrigatória para clientes transportadores.');
+        return;
+      }
+    }
+
+    try {
+      const payload = {
+        id_etar: parseInt(editForm.id_etar, 10),
+        tipo_efluente: editForm.tipo_efluente,
+        quantidade: parseFloat(editForm.quantidade),
+        numero_recipientes: editForm.numero_recipientes ? parseInt(editForm.numero_recipientes, 10) : null,
+        nome_produtor_externo: isTransportador ? editForm.nome_produtor_externo.trim() : null,
+        morada_produtor_externo: isTransportador ? editForm.morada_produtor_externo.trim() : null
+      };
+
+      const res = await descargaService.editarPedido(editingDescarga.id_descarga, payload);
+      setSuccess(res.mensagem);
+      setEditingDescarga(null);
+      loadDescargas();
+    } catch (err) {
+      setError(err.message || 'Erro ao atualizar pedido de descarga.');
+    }
+  };
+
   return (
     <div className="app-container">
       <header className="navbar">
@@ -218,12 +304,12 @@ export default function ClienteDashboard({ user, onLogout, notifications, onMark
                 <table className="data-table">
                   <thead>
                     <tr>
-                      <th>Ref/Data</th>
-                      <th>ETAR</th>
-                      <th>Efluente</th>
-                      <th>Qtd (L)</th>
-                      <th>Estado</th>
-                      <th>Ações</th>
+                      <th style={{ width: '12%' }}>Ref/Data</th>
+                      <th style={{ width: '15%' }}>ETAR</th>
+                      <th style={{ width: '13%' }}>Efluente</th>
+                      <th style={{ width: '10%' }}>Qtd (L)</th>
+                      <th style={{ width: '15%' }}>Estado</th>
+                      <th style={{ width: '35%' }}>Ações</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -239,15 +325,30 @@ export default function ClienteDashboard({ user, onLogout, notifications, onMark
                         <td>{d.tipo_efluente}</td>
                         <td>{d.quantidade} L</td>
                         <td>
-                          <span className={`badge badge-${d.estado_descarga === 'RECEBIDA' ? 'concluida' : d.estado_descarga.toLowerCase()}`}>
-                            {d.estado_descarga === 'RECEBIDA' ? 'CONCLUIDA' : d.estado_descarga}
+                          <span className={`badge badge-${
+                            d.estado_descarga === 'RECEBIDA'
+                              ? 'concluida'
+                              : (d.estado_descarga === 'REJEITADA' && d.observacoes === 'Cancelada pelo cliente'
+                                  ? 'cancelada'
+                                  : d.estado_descarga.toLowerCase())
+                          }`}>
+                            {d.estado_descarga === 'RECEBIDA'
+                              ? 'CONCLUIDA'
+                              : (d.estado_descarga === 'REJEITADA' && d.observacoes === 'Cancelada pelo cliente'
+                                  ? 'CANCELADA'
+                                  : d.estado_descarga)}
                           </span>
                         </td>
                         <td>
                           {d.estado_descarga === 'AUTORIZADA' && (
-                            <button className="btn btn-primary" style={{ padding: '0.35rem 0.7rem', fontSize: '0.8rem' }} onClick={() => setSelectedDescarga(d)}>
-                              <Truck size={14} /> Agendar
-                            </button>
+                            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                              <button className="btn btn-primary" style={{ padding: '0.35rem 0.7rem', fontSize: '0.8rem' }} onClick={() => setSelectedDescarga(d)}>
+                                <Truck size={14} /> Agendar
+                              </button>
+                              <button className="btn btn-danger-outline" style={{ padding: '0.35rem 0.7rem', fontSize: '0.8rem' }} onClick={() => handleCancelarDescarga(d.id_descarga)}>
+                                Cancelar
+                              </button>
+                            </div>
                           )}
                           {d.estado_descarga === 'AGENDADA' && d.qr_code_token && (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
@@ -256,16 +357,19 @@ export default function ClienteDashboard({ user, onLogout, notifications, onMark
                                 <button className="btn btn-secondary" style={{ padding: '0.35rem 0.7rem', fontSize: '0.8rem' }} onClick={() => setSelectedDescarga(d)}>
                                   Ver QR
                                 </button>
+                                <button className="btn btn-danger-outline" style={{ padding: '0.35rem 0.7rem', fontSize: '0.8rem' }} onClick={() => handleCancelarDescarga(d.id_descarga)}>
+                                  Cancelar
+                                </button>
                               </div>
                               {d.observacoes && d.observacoes.includes('ALERTA OPERACIONAL') && (
                                 <div style={{ 
-                                  fontSize: '0.7rem', 
+                                  fontSize: '0.75rem', 
                                   color: 'var(--danger)', 
                                   backgroundColor: 'var(--danger-light)', 
                                   padding: '0.25rem 0.5rem', 
                                   borderRadius: 'var(--radius-sm)', 
                                   border: '1px solid var(--danger)', 
-                                  maxWidth: '220px',
+                                  maxWidth: '550px',
                                   marginTop: '0.25rem',
                                   lineHeight: '1.2'
                                 }}>
@@ -296,7 +400,12 @@ export default function ClienteDashboard({ user, onLogout, notifications, onMark
                           )}
                           {d.estado_descarga === 'SOLICITADA' && (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                              <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>A aguardar aprovação</span>
+                              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                                <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>A aguardar aprovação</span>
+                                <button className="btn btn-danger-outline" style={{ padding: '0.35rem 0.7rem', fontSize: '0.8rem' }} onClick={() => handleCancelarDescarga(d.id_descarga)}>
+                                  Cancelar
+                                </button>
+                              </div>
                               {d.observacoes && (
                                 <div style={{ 
                                   fontSize: '0.75rem', 
@@ -305,8 +414,9 @@ export default function ClienteDashboard({ user, onLogout, notifications, onMark
                                   padding: '0.25rem 0.5rem', 
                                   borderRadius: 'var(--radius-sm)', 
                                   border: d.observacoes.includes('Revertido') ? '1px solid var(--danger)' : '1px solid var(--warning)', 
-                                  maxWidth: '220px', 
+                                  maxWidth: '550px', 
                                   wordBreak: 'break-word',
+                                  whiteSpace: 'pre-line',
                                   marginTop: '0.25rem'
                                 }}>
                                   <strong>{d.observacoes.includes('Revertido') ? 'Aviso:' : 'Elementos em falta:'}</strong> {d.observacoes}
@@ -315,7 +425,32 @@ export default function ClienteDashboard({ user, onLogout, notifications, onMark
                             </div>
                           )}
                           {d.estado_descarga === 'REJEITADA' && (
-                            <span style={{ fontSize: '0.8rem', color: 'var(--danger)', fontWeight: 600 }}>Descarga rejeitada</span>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                                <span style={{ fontSize: '0.8rem', color: 'var(--danger)', fontWeight: 600 }}>
+                                  {d.observacoes === 'Cancelada pelo cliente' ? 'Cancelada' : 'Descarga rejeitada'}
+                                </span>
+                                <button className="btn btn-secondary" style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem' }} onClick={() => handleStartEdit(d)}>
+                                  Editar
+                                </button>
+                              </div>
+                              {d.observacoes && (
+                                <div style={{ 
+                                  fontSize: '0.75rem', 
+                                  color: 'var(--danger)', 
+                                  backgroundColor: 'var(--danger-light)', 
+                                  padding: '0.25rem 0.5rem', 
+                                  borderRadius: 'var(--radius-sm)', 
+                                  border: '1px solid var(--danger)', 
+                                  maxWidth: '550px', 
+                                  wordBreak: 'break-word',
+                                  whiteSpace: 'pre-line',
+                                  marginTop: '0.25rem'
+                                }}>
+                                  {d.observacoes}
+                                </div>
+                              )}
+                            </div>
                           )}
                         </td>
                       </tr>
@@ -453,6 +588,77 @@ export default function ClienteDashboard({ user, onLogout, notifications, onMark
                   <button className="btn btn-secondary" style={{ width: '100%' }} onClick={() => setSelectedDescarga(null)}>Fechar</button>
                 </div>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* Modal de Edição de Pedido Rejeitado */}
+        {editingDescarga && (
+          <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: '1rem' }}>
+            <div className="card" style={{ width: '100%', maxWidth: '550px', marginBottom: 0, overflowY: 'auto', maxHeight: '90vh' }}>
+              <h3 style={{ marginBottom: '1.5rem' }}>Editar Pedido de Descarga #{editingDescarga.id_descarga}</h3>
+              <form onSubmit={handleSaveEdit}>
+                <div className="form-group">
+                  <label className="form-label">Selecione a ETAR</label>
+                  <select className="form-input" value={editForm.id_etar} onChange={(e) => setEditForm({ ...editForm, id_etar: e.target.value })}>
+                    <option value="1">ETAR Norte (Porto)</option>
+                    <option value="2">ETAR Centro (Coimbra)</option>
+                    <option value="3">ETAR Sul (Lisboa)</option>
+                    <option value="4">ETAR Algarve (Faro) - Em Manutenção</option>
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Tipo de Efluente</label>
+                  <select className="form-input" value={editForm.tipo_efluente} onChange={(e) => setEditForm({ ...editForm, tipo_efluente: e.target.value })}>
+                    <option value="Industrial">Industrial</option>
+                    <option value="Domestico">Doméstico / Fossa Séptica</option>
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Volume Estimado (Litros)</label>
+                  <input type="number" className="form-input" placeholder="Ex: 8000" required value={editForm.quantidade} onChange={(e) => setEditForm({ ...editForm, quantidade: e.target.value })} />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Número de Recipientes (Opcional)</label>
+                  <input type="number" className="form-input" placeholder="Ex: 1" value={editForm.numero_recipientes} onChange={(e) => setEditForm({ ...editForm, numero_recipientes: e.target.value })} />
+                </div>
+
+                {user?.nome?.toLowerCase().includes('transportador') && (
+                  <div style={{ borderTop: '1px solid var(--border)', margin: '1.5rem 0', paddingTop: '1.5rem' }}>
+                    <h4 style={{ fontSize: '0.95rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>Informação do Produtor Externo *</h4>
+                    <div className="form-group">
+                      <label className="form-label">Nome do Produtor *</label>
+                      <input 
+                        type="text" 
+                        className="form-input" 
+                        placeholder="Ex: Lavandaria Sol Lda" 
+                        required 
+                        value={editForm.nome_produtor_externo} 
+                        onChange={(e) => setEditForm({ ...editForm, nome_produtor_externo: e.target.value })} 
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Morada do Produtor *</label>
+                      <input 
+                        type="text" 
+                        className="form-input" 
+                        placeholder="Ex: Zona Industrial Maia" 
+                        required 
+                        value={editForm.morada_produtor_externo} 
+                        onChange={(e) => setEditForm({ ...editForm, morada_produtor_externo: e.target.value })} 
+                      />
+                    </div>
+                  </div>
+                )}
+
+                <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem' }}>
+                  <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>Submeter Alterações</button>
+                  <button type="button" className="btn btn-secondary" onClick={() => setEditingDescarga(null)}>Cancelar</button>
+                </div>
+              </form>
             </div>
           </div>
         )}

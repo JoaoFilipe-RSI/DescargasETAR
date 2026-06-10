@@ -43,8 +43,9 @@ describe('Módulo de Descargas - Testes de Integração', () => {
 
   let mockDateValue = new Date('2026-06-08T12:00:00.000Z'); // Segunda-feira (Weekday)
   let originalDate;
+  let originalEtarStates = [];
 
-  beforeAll(() => {
+  beforeAll(async () => {
     originalDate = global.Date;
     global.Date = class extends originalDate {
       constructor(...args) {
@@ -57,6 +58,18 @@ describe('Módulo de Descargas - Testes de Integração', () => {
         return mockDateValue.getTime();
       }
     };
+
+    try {
+      // Guardar estados originais das ETARs
+      const etarsRes = await pool.query('SELECT id_etar, disponivel FROM etar');
+      originalEtarStates = etarsRes.rows;
+
+      // Garantir estado esperado para os testes
+      await pool.query('UPDATE etar SET disponivel = true WHERE id_etar IN (1, 2, 3)');
+      await pool.query('UPDATE etar SET disponivel = false WHERE id_etar = 4');
+    } catch (err) {
+      console.error('Erro ao inicializar base de dados para descargas.test.js:', err);
+    }
   });
 
   // Garantir limpeza no final de todos os testes
@@ -78,6 +91,16 @@ describe('Módulo de Descargas - Testes de Integração', () => {
         console.error('Erro durante o cleanup da base de dados:', err);
       }
     }
+
+    try {
+      // Restaurar estado original das ETARs
+      for (const etar of originalEtarStates) {
+        await pool.query('UPDATE etar SET disponivel = $1 WHERE id_etar = $2', [etar.disponivel, etar.id_etar]);
+      }
+    } catch (err) {
+      console.error('Erro ao restaurar ETARs em descargas.test.js:', err);
+    }
+
     // Fechar ligação ao pool para o Jest não ficar aberto
     await pool.end();
   });
@@ -144,6 +167,44 @@ describe('Módulo de Descargas - Testes de Integração', () => {
 
       idDescargaSolicitada = res.body.descarga.id_descarga;
       createdDescargaIds.push(idDescargaSolicitada);
+    });
+
+    test('Deve aprovar automaticamente múltiplos pedidos no mesmo dia se a quota for nula (Sem limite)', async () => {
+      // 1. Definir a quota do clienteAAA para null
+      await pool.query('UPDATE autorizacao SET quota = NULL WHERE id_cliente = 1 AND id_etar = 1');
+
+      // 2. Criar a primeira descarga (deve ser auto-aprovada)
+      const res1 = await request(app)
+        .post('/api/descargas')
+        .set('Authorization', `Bearer ${tokens.clienteAAA}`)
+        .send({
+          id_etar: 1,
+          tipo_efluente: 'Industrial',
+          quantidade: 100,
+          numero_recipientes: 1
+        });
+
+      expect(res1.status).toBe(201);
+      expect(res1.body.descarga.estado_descarga).toBe('AUTORIZADA');
+      createdDescargaIds.push(res1.body.descarga.id_descarga);
+
+      // 3. Criar a segunda descarga no mesmo dia (deve também ser auto-aprovada)
+      const res2 = await request(app)
+        .post('/api/descargas')
+        .set('Authorization', `Bearer ${tokens.clienteAAA}`)
+        .send({
+          id_etar: 1,
+          tipo_efluente: 'Industrial',
+          quantidade: 150,
+          numero_recipientes: 1
+        });
+
+      expect(res2.status).toBe(201);
+      expect(res2.body.descarga.estado_descarga).toBe('AUTORIZADA');
+      createdDescargaIds.push(res2.body.descarga.id_descarga);
+
+      // 4. Restaurar a quota original de 5
+      await pool.query('UPDATE autorizacao SET quota = 5 WHERE id_cliente = 1 AND id_etar = 1');
     });
 
     test('Deve falhar (400) se a ETAR de destino estiver indisponível (ex: ETAR Algarve)', async () => {
@@ -368,6 +429,150 @@ describe('Módulo de Descargas - Testes de Integração', () => {
         .set('Authorization', `Bearer ${tokens.clienteAAA}`); // idDescargaSolicitada é do clienteBBB (cliente 2)
 
       expect(res.status).toBe(403);
+    });
+  });
+
+  describe('8. Cancelar Descarga (PUT /api/descargas/:id/cancelar)', () => {
+    test('Deve permitir ao cliente cancelar a sua própria descarga SOLICITADA', async () => {
+      const createRes = await request(app)
+        .post('/api/descargas')
+        .set('Authorization', `Bearer ${tokens.clienteAAA}`)
+        .send({
+          id_etar: 1,
+          tipo_efluente: 'Industrial',
+          quantidade: 150,
+          numero_recipientes: 1
+        });
+      
+      const tempId = createRes.body.descarga.id_descarga;
+      createdDescargaIds.push(tempId);
+
+      const cancelRes = await request(app)
+        .put(`/api/descargas/${tempId}/cancelar`)
+        .set('Authorization', `Bearer ${tokens.clienteAAA}`);
+
+      expect(cancelRes.status).toBe(200);
+      expect(cancelRes.body.descarga.estado_descarga).toBe('REJEITADA');
+      expect(cancelRes.body.descarga.observacoes).toBe('Cancelada pelo cliente');
+
+      const histRes = await pool.query("SELECT * FROM historico WHERE entidade = 'DESCARGA' AND id_entidade = $1 AND acao = 'CANCELAMENTO'", [tempId]);
+      expect(histRes.rows.length).toBe(1);
+    });
+
+    test('Deve impedir outro cliente de cancelar a descarga', async () => {
+      const createRes = await request(app)
+        .post('/api/descargas')
+        .set('Authorization', `Bearer ${tokens.clienteAAA}`)
+        .send({
+          id_etar: 1,
+          tipo_efluente: 'Industrial',
+          quantidade: 150,
+          numero_recipientes: 1
+        });
+      
+      const tempId = createRes.body.descarga.id_descarga;
+      createdDescargaIds.push(tempId);
+
+      const cancelRes = await request(app)
+        .put(`/api/descargas/${tempId}/cancelar`)
+        .set('Authorization', `Bearer ${tokens.clienteBBB}`);
+
+      expect(cancelRes.status).toBe(403);
+      expect(cancelRes.body.erro).toContain('não pertence à sua conta');
+    });
+
+    test('Deve impedir cancelar uma descarga que já foi recebida', async () => {
+      const cancelRes = await request(app)
+        .put(`/api/descargas/${idDescargaAutoAprovada}/cancelar`)
+        .set('Authorization', `Bearer ${tokens.clienteAAA}`);
+
+      expect(cancelRes.status).toBe(400);
+      expect(cancelRes.body.erro).toContain('não pode ser cancelado');
+    });
+  });
+
+  describe('9. Editar Pedido de Descarga (PUT /api/descargas/:id)', () => {
+    test('Deve permitir editar um pedido REJEITADA e reverter para SOLICITADA/AUTORIZADA', async () => {
+      const createRes = await request(app)
+        .post('/api/descargas')
+        .set('Authorization', `Bearer ${tokens.clienteAAA}`)
+        .send({
+          id_etar: 1,
+          tipo_efluente: 'Industrial',
+          quantidade: 150,
+          numero_recipientes: 1
+        });
+      
+      const tempId = createRes.body.descarga.id_descarga;
+      createdDescargaIds.push(tempId);
+
+      await request(app)
+        .put(`/api/descargas/${tempId}/cancelar`)
+        .set('Authorization', `Bearer ${tokens.clienteAAA}`);
+
+      const editRes = await request(app)
+        .put(`/api/descargas/${tempId}`)
+        .set('Authorization', `Bearer ${tokens.clienteAAA}`)
+        .send({
+          id_etar: 1,
+          tipo_efluente: 'Industrial',
+          quantidade: 80,
+          numero_recipientes: 2
+        });
+
+      expect(editRes.status).toBe(200);
+      expect(editRes.body.descarga.estado_descarga).toBe('AUTORIZADA');
+      expect(editRes.body.descarga.quantidade).toBe("80");
+      expect(editRes.body.descarga.numero_recipientes).toBe(2);
+      expect(editRes.body.descarga.observacoes).toBeNull();
+
+      const histRes = await pool.query("SELECT * FROM historico WHERE entidade = 'DESCARGA' AND id_entidade = $1 AND acao = 'EDICAO'", [tempId]);
+      expect(histRes.rows.length).toBe(1);
+    });
+
+    test('Deve impedir editar uma descarga de outro cliente', async () => {
+      const createRes = await request(app)
+        .post('/api/descargas')
+        .set('Authorization', `Bearer ${tokens.clienteAAA}`)
+        .send({
+          id_etar: 1,
+          tipo_efluente: 'Industrial',
+          quantidade: 150,
+          numero_recipientes: 1
+        });
+      
+      const tempId = createRes.body.descarga.id_descarga;
+      createdDescargaIds.push(tempId);
+
+      await request(app)
+        .put(`/api/descargas/${tempId}/cancelar`)
+        .set('Authorization', `Bearer ${tokens.clienteAAA}`);
+
+      const editRes = await request(app)
+        .put(`/api/descargas/${tempId}`)
+        .set('Authorization', `Bearer ${tokens.clienteBBB}`)
+        .send({
+          id_etar: 1,
+          tipo_efluente: 'Industrial',
+          quantidade: 80
+        });
+
+      expect(editRes.status).toBe(403);
+      expect(editRes.body.erro).toContain('não pertence à sua conta');
+    });
+
+    test('Deve impedir editar uma descarga que não esteja REJEITADA', async () => {
+      const editRes = await request(app)
+        .put(`/api/descargas/${idDescargaAutoAprovada}`)
+        .set('Authorization', `Bearer ${tokens.clienteAAA}`)
+        .send({
+          id_etar: 1,
+          tipo_efluente: 'Industrial',
+          quantidade: 80
+        });
+
+      expect(editRes.status).toBe(400);
+      expect(editRes.body.erro).toContain('Apenas pedidos no estado REJEITADA');
     });
   });
 });

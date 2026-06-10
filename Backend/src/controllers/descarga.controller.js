@@ -52,7 +52,7 @@ exports.criarPedido = async (req, res) => {
       const diaSemana = now.getDay(); // 0 = Domingo, 6 = Sábado
       const eFimDeSemana = (diaSemana === 0 || diaSemana === 6);
 
-      if (totalHoje < auth.quota && auth.auto_aprovacao && !eFimDeSemana) {
+      if ((auth.quota === null || auth.quota === undefined || totalHoje < auth.quota) && auth.auto_aprovacao && !eFimDeSemana) {
         estado = 'AUTORIZADA';
         dataDecisao = now;
         autoAprovado = true;
@@ -318,6 +318,195 @@ exports.agendarDescarga = async (req, res) => {
   } catch (err) {
     console.error('Erro ao agendar descarga:', err);
     return res.status(500).json({ erro: 'Erro interno ao agendar descarga.' });
+  }
+};
+
+/**
+ * Cliente cancela uma descarga (SOLICITADA, AUTORIZADA ou AGENDADA).
+ * O estado é alterado para 'REJEITADA' e a observação para 'Cancelada pelo cliente'.
+ */
+exports.cancelarDescarga = async (req, res) => {
+  const { id } = req.params;
+  const id_cliente = req.user.id_cliente;
+
+  try {
+    const checkRes = await pool.query('SELECT estado_descarga, id_cliente FROM descarga WHERE id_descarga = $1', [id]);
+    if (checkRes.rows.length === 0) {
+      return res.status(404).json({ erro: 'Descarga não encontrada.' });
+    }
+    const descarga = checkRes.rows[0];
+    if (descarga.id_cliente !== id_cliente) {
+      return res.status(403).json({ erro: 'Esta descarga não pertence à sua conta.' });
+    }
+
+    const estadosCancelaveis = ['SOLICITADA', 'AUTORIZADA', 'AGENDADA'];
+    if (!estadosCancelaveis.includes(descarga.estado_descarga)) {
+      return res.status(400).json({ erro: 'Esta descarga já se encontra num estado que não pode ser cancelado.' });
+    }
+
+    const query = `
+      UPDATE descarga
+      SET estado_descarga = 'REJEITADA', observacoes = 'Cancelada pelo cliente', qr_code_token = NULL
+      WHERE id_descarga = $1
+      RETURNING *
+    `;
+    const result = await pool.query(query, [id]);
+    const updatedDescarga = result.rows[0];
+
+    const histQuery = `
+      INSERT INTO historico (entidade, id_entidade, acao, descricao, id_utilizador)
+      VALUES ('DESCARGA', $1, 'CANCELAMENTO', 'Descarga cancelada pelo cliente.', $2)
+    `;
+    await pool.query(histQuery, [id, req.user.id_utilizador]);
+
+    const { enviarNotificacao } = require('../config/socket');
+    enviarNotificacao('gestores-clientes', 'descarga-concluida', {
+      id_descarga: id,
+      mensagem: `A descarga #${id} foi cancelada pelo cliente (${req.user.nome}).`
+    });
+
+    return res.json({
+      mensagem: 'Descarga cancelada com sucesso.',
+      descarga: updatedDescarga
+    });
+
+  } catch (err) {
+    console.error('Erro ao cancelar descarga:', err);
+    return res.status(500).json({ erro: 'Erro interno ao cancelar descarga.' });
+  }
+};
+
+/**
+ * Cliente edita um pedido de descarga rejeitado/cancelado (REJEITADA).
+ * Revalida a ETAR, verifica quotas e atualiza o estado para 'AUTORIZADA' ou 'SOLICITADA'.
+ */
+exports.editarPedido = async (req, res) => {
+  const { id } = req.params;
+  const { id_etar, tipo_efluente, quantidade, numero_recipientes, nome_produtor_externo, morada_produtor_externo } = req.body;
+  const id_cliente = req.user.id_cliente;
+
+  if (!id_etar || !tipo_efluente || !quantidade) {
+    return res.status(400).json({ erro: 'Por favor, indique ETAR, tipo de efluente e quantidade.' });
+  }
+
+  try {
+    // 1. Buscar a descarga e verificar se pertence ao cliente e está REJEITADA
+    const checkRes = await pool.query('SELECT estado_descarga, id_cliente FROM descarga WHERE id_descarga = $1', [id]);
+    if (checkRes.rows.length === 0) {
+      return res.status(404).json({ erro: 'Descarga não encontrada.' });
+    }
+    const descarga = checkRes.rows[0];
+    if (descarga.id_cliente !== id_cliente) {
+      return res.status(403).json({ erro: 'Esta descarga não pertence à sua conta.' });
+    }
+    if (descarga.estado_descarga !== 'REJEITADA') {
+      return res.status(400).json({ erro: 'Apenas pedidos no estado REJEITADA podem ser editados.' });
+    }
+
+    // 2. Verificar se a nova/atual ETAR está disponível
+    const etarRes = await pool.query('SELECT disponivel, nome FROM etar WHERE id_etar = $1', [id_etar]);
+    if (etarRes.rows.length === 0) {
+      return res.status(404).json({ erro: 'ETAR não encontrada.' });
+    }
+    if (!etarRes.rows[0].disponivel) {
+      return res.status(400).json({ erro: `A ${etarRes.rows[0].nome} encontra-se indisponível para receber descargas.` });
+    }
+
+    // 3. Verificar regras de whitelist (autorização prévia)
+    const autQuery = `
+      SELECT quota, auto_aprovacao, ativo 
+      FROM autorizacao 
+      WHERE id_cliente = $1 AND id_etar = $2
+    `;
+    const autRes = await pool.query(autQuery, [id_cliente, id_etar]);
+
+    const now = new Date();
+    let estado = 'SOLICITADA';
+    let dataDecisao = null;
+    let autoAprovado = false;
+
+    if (autRes.rows.length > 0 && autRes.rows[0].ativo) {
+      const auth = autRes.rows[0];
+
+      // Verificar quota de descargas efetuadas hoje
+      const countQuery = `
+        SELECT COUNT(*)::int AS total 
+        FROM descarga 
+        WHERE id_cliente = $1 AND id_etar = $2 
+          AND data_pedido::date = CURRENT_DATE
+      `;
+      const countRes = await pool.query(countQuery, [id_cliente, id_etar]);
+      const totalHoje = countRes.rows[0].total;
+
+      const diaSemana = now.getDay(); // 0 = Domingo, 6 = Sábado
+      const eFimDeSemana = (diaSemana === 0 || diaSemana === 6);
+
+      if ((auth.quota === null || auth.quota === undefined || totalHoje < auth.quota) && auth.auto_aprovacao && !eFimDeSemana) {
+        estado = 'AUTORIZADA';
+        dataDecisao = now;
+        autoAprovado = true;
+      }
+    }
+
+    // 4. Atualizar a descarga
+    const updateQuery = `
+      UPDATE descarga
+      SET id_etar = $1, tipo_efluente = $2, quantidade = $3,
+          numero_recipientes = $4, estado_descarga = $5, data_decisao = $6,
+          nome_produtor_externo = $7, morada_produtor_externo = $8,
+          observacoes = NULL, qr_code_token = NULL
+      WHERE id_descarga = $9
+      RETURNING *
+    `;
+    const values = [
+      id_etar, tipo_efluente, quantidade,
+      numero_recipientes || null, estado, dataDecisao,
+      nome_produtor_externo || null, morada_produtor_externo || null,
+      id
+    ];
+    const updateRes = await pool.query(updateQuery, values);
+    const updatedDescarga = updateRes.rows[0];
+
+    // 5. Registar no histórico
+    const histQuery = `
+      INSERT INTO historico (entidade, id_entidade, acao, descricao, id_utilizador)
+      VALUES ('DESCARGA', $1, 'EDICAO', $2, $3)
+    `;
+    const histDesc = autoAprovado 
+      ? 'Pedido reeditado pelo cliente e aprovado automaticamente (Whitelist/Quota).'
+      : 'Pedido reeditado pelo cliente. A aguardar aprovação manual.';
+    await pool.query(histQuery, [id, histDesc, req.user.id_utilizador]);
+
+    const { enviarNotificacao } = require('../config/socket');
+    
+    if (estado === 'SOLICITADA') {
+      enviarNotificacao('gestores-clientes', 'novo-pedido', {
+        id_descarga: id,
+        cliente_nome: req.user.nome,
+        quantidade: updatedDescarga.quantidade
+      });
+    } else {
+      enviarNotificacao(`cliente-${id_cliente}`, 'decisao-pedido', {
+        id_descarga: id,
+        mensagem: `O seu pedido reeditado #${id} foi aprovado automaticamente.`
+      });
+    }
+
+    enviarNotificacao('gestores-clientes', 'descarga-concluida', {
+      id_descarga: id,
+      mensagem: `O pedido #${id} foi reeditado pelo cliente (${req.user.nome}).`
+    });
+
+    return res.json({
+      mensagem: autoAprovado 
+        ? 'Pedido de descarga reeditado e AUTORIZADO automaticamente.' 
+        : 'Pedido de descarga reeditado com sucesso. A aguardar autorização.',
+      descarga: updatedDescarga
+    });
+
+  } catch (err) {
+    console.error('Erro ao editar pedido:', err);
+    return res.status(500).json({ erro: 'Erro interno ao editar pedido de descarga.' });
   }
 };
 

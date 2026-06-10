@@ -205,6 +205,7 @@ exports.atualizarDisponibilidadeEtar = async (req, res) => {
     return res.status(400).json({ erro: 'Por favor, indique o estado de disponibilidade.' });
   }
 
+  const id_etar = parseInt(id, 10);
   const client = await pool.connect();
 
   try {
@@ -217,7 +218,7 @@ exports.atualizarDisponibilidadeEtar = async (req, res) => {
       WHERE id_etar = $2 
       RETURNING *
     `;
-    const etarResult = await client.query(updateEtarQuery, [!!disponivel, id]);
+    const etarResult = await client.query(updateEtarQuery, [!!disponivel, id_etar]);
 
     if (etarResult.rows.length === 0) {
       await client.query('ROLLBACK');
@@ -231,7 +232,7 @@ exports.atualizarDisponibilidadeEtar = async (req, res) => {
       // 2. Processar descargas AUTORIZADAS (Reagendamento automático)
       const autDescargasRes = await client.query(
         "SELECT * FROM descarga WHERE id_etar = $1 AND estado_descarga = 'AUTORIZADA'",
-        [id]
+        [id_etar]
       );
       const autDescargas = autDescargasRes.rows;
 
@@ -241,7 +242,7 @@ exports.atualizarDisponibilidadeEtar = async (req, res) => {
         // Encontrar ETARs candidatas ativas (excluindo a original)
         const candEtarsRes = await client.query(
           "SELECT id_etar, nome FROM etar WHERE id_etar <> $1 AND disponivel = true",
-          [id]
+          [id_etar]
         );
         const candEtars = candEtarsRes.rows;
 
@@ -265,8 +266,8 @@ exports.atualizarDisponibilidadeEtar = async (req, res) => {
             );
             const totalDia = countRes.rows[0].total;
 
-            if (totalDia < auth.quota) {
-              const diff = Math.abs(cand.id_etar - id);
+            if (auth.quota === null || auth.quota === undefined || totalDia < auth.quota) {
+              const diff = Math.abs(cand.id_etar - id_etar);
               if (diff < minDiff) {
                 minDiff = diff;
                 bestEtar = cand;
@@ -302,7 +303,7 @@ exports.atualizarDisponibilidadeEtar = async (req, res) => {
           });
         } else {
           // Sem alternativa: reverter para SOLICITADA
-          const obsMsg = `[Revertido por ETAR indisponível] A ETAR original (${etar.nome}) ficou indisponível e não foi encontrada alternativa viável com quota disponível.`;
+          const obsMsg = `[Revertido por indisponibilidade urgente da ${etar.nome}].\nNão foi encontrada alternativa viável automaticamente.\nAguarde reencaminhamento por parte da Gestão de Clientes.`;
           const novaObs = d.observacoes ? `${obsMsg}\n${d.observacoes}` : obsMsg;
 
           await client.query(
@@ -341,7 +342,7 @@ exports.atualizarDisponibilidadeEtar = async (req, res) => {
       // 3. Processar descargas AGENDADAS (Apenas marcar com comentário de alerta se não tiver já o alerta)
       const agendadasRes = await client.query(
         "SELECT d.*, c.nome AS cliente_nome, c.telefone AS cliente_telefone FROM descarga d JOIN cliente c ON d.id_cliente = c.id_cliente JOIN utilizador u ON c.id_utilizador = u.id_utilizador WHERE d.id_etar = $1 AND d.estado_descarga = 'AGENDADA'",
-        [id]
+        [id_etar]
       );
       const agendadas = agendadasRes.rows;
 
@@ -429,8 +430,8 @@ exports.obterAutorizacoes = async (req, res) => {
 exports.criarAutorizacao = async (req, res) => {
   const { id_cliente, id_etar, quota, auto_aprovacao } = req.body;
 
-  if (!id_cliente || !id_etar || quota === undefined) {
-    return res.status(400).json({ erro: 'Indique cliente, ETAR e a quota diária autorizada.' });
+  if (!id_cliente || !id_etar) {
+    return res.status(400).json({ erro: 'Indique cliente e ETAR.' });
   }
 
   try {
@@ -442,12 +443,14 @@ exports.criarAutorizacao = async (req, res) => {
       return res.status(400).json({ erro: 'Já existe uma regra de whitelist configurada para este cliente nesta ETAR.' });
     }
 
+    const quotaVal = (quota === undefined || quota === null || quota === '' || isNaN(parseInt(quota, 10))) ? null : parseInt(quota, 10);
+
     const query = `
       INSERT INTO autorizacao (id_cliente, id_etar, quota, ativo, auto_aprovacao)
       VALUES ($1, $2, $3, true, $4)
       RETURNING *
     `;
-    const result = await pool.query(query, [id_cliente, id_etar, parseInt(quota, 10), !!auto_aprovacao]);
+    const result = await pool.query(query, [id_cliente, id_etar, quotaVal, !!auto_aprovacao]);
 
     return res.status(201).json({
       mensagem: 'Regra de whitelist criada com sucesso.',
@@ -464,18 +467,20 @@ exports.atualizarAutorizacao = async (req, res) => {
   const { id } = req.params;
   const { quota, auto_aprovacao, ativo } = req.body;
 
-  if (quota === undefined || auto_aprovacao === undefined || ativo === undefined) {
-    return res.status(400).json({ erro: 'Forneça quota, auto_aprovacao e estado ativo.' });
+  if (auto_aprovacao === undefined || ativo === undefined) {
+    return res.status(400).json({ erro: 'Forneça auto_aprovacao e estado ativo.' });
   }
 
   try {
+    const quotaVal = (quota === undefined || quota === null || quota === '' || isNaN(parseInt(quota, 10))) ? null : parseInt(quota, 10);
+
     const query = `
       UPDATE autorizacao
       SET quota = $1, auto_aprovacao = $2, ativo = $3
       WHERE id_autorizacao = $4
       RETURNING *
     `;
-    const result = await pool.query(query, [parseInt(quota, 10), !!auto_aprovacao, !!ativo, id]);
+    const result = await pool.query(query, [quotaVal, !!auto_aprovacao, !!ativo, id]);
 
     if (result.rows.length === 0) {
       return res.status(404).json({ erro: 'Regra de whitelist não encontrada.' });

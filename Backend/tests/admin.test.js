@@ -24,6 +24,27 @@ describe('Módulo de Administração - Testes de Integração', () => {
   const createdAutIds = [];
   const createdDescargaIds = [];
 
+  let originalEtarStates = [];
+  let originalDescargaStates = [];
+
+  beforeAll(async () => {
+    try {
+      // Guardar estados originais das ETARs
+      const etarsRes = await pool.query('SELECT id_etar, disponivel FROM etar');
+      originalEtarStates = etarsRes.rows;
+
+      // Guardar estados originais de todas as descargas
+      const descargasRes = await pool.query('SELECT id_descarga, id_etar, estado_descarga, observacoes FROM descarga');
+      originalDescargaStates = descargasRes.rows;
+
+      // Garantir estado esperado para os testes
+      await pool.query('UPDATE etar SET disponivel = true WHERE id_etar IN (1, 2, 3)');
+      await pool.query('UPDATE etar SET disponivel = false WHERE id_etar = 4');
+    } catch (err) {
+      console.error('Erro ao inicializar base de dados para testes:', err);
+    }
+  });
+
   // Limpeza de lixo de testes
   afterAll(async () => {
     try {
@@ -42,8 +63,26 @@ describe('Módulo de Administração - Testes de Integração', () => {
       if (createdUserIds.length > 0) {
         await pool.query('DELETE FROM utilizador WHERE id_utilizador = ANY($1)', [createdUserIds]);
       }
-      // Restaurar estado das ETARs
-      await pool.query('UPDATE etar SET disponivel = true WHERE id_etar IN (1, 2, 3)');
+
+      // Restaurar estado original das ETARs
+      for (const etar of originalEtarStates) {
+        await pool.query('UPDATE etar SET disponivel = $1 WHERE id_etar = $2', [etar.disponivel, etar.id_etar]);
+      }
+
+      // Restaurar estado original das descargas pré-existentes
+      for (const desc of originalDescargaStates) {
+        if (!createdDescargaIds.includes(desc.id_descarga)) {
+          await pool.query(
+            'UPDATE descarga SET id_etar = $1, estado_descarga = $2, observacoes = $3 WHERE id_descarga = $4',
+            [desc.id_etar, desc.estado_descarga, desc.observacoes, desc.id_descarga]
+          );
+        }
+      }
+
+      // Limpar histórico dos testes
+      await pool.query(
+        "DELETE FROM historico WHERE id_utilizador = 9 AND acao IN ('REAGENDAMENTO_AUTOMATICO', 'REVERSAO_ESTADO', 'ALERTA_OPERACIONAL')"
+      );
     } catch (err) {
       console.error('Erro ao limpar dados de teste admin:', err);
     }
@@ -175,6 +214,38 @@ describe('Módulo de Administração - Testes de Integração', () => {
       expect(res.status).toBe(201);
       expect(res.body.autorizacao).toBeDefined();
       createdAutIds.push(res.body.autorizacao.id_autorizacao);
+    });
+
+    test('Deve criar uma regra de whitelist com quota nula (Sem limite)', async () => {
+      const res = await request(app)
+        .post('/api/admin/autorizacoes')
+        .set('Authorization', `Bearer ${tokens.gestor}`)
+        .send({
+          id_cliente: createdClientIds[0],
+          id_etar: 3,
+          quota: '',
+          auto_aprovacao: true
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.autorizacao).toBeDefined();
+      expect(res.body.autorizacao.quota).toBeNull();
+      createdAutIds.push(res.body.autorizacao.id_autorizacao);
+    });
+
+    test('Deve atualizar uma regra de whitelist para quota nula (Sem limite)', async () => {
+      const res = await request(app)
+        .put(`/api/admin/autorizacoes/${createdAutIds[0]}`)
+        .set('Authorization', `Bearer ${tokens.gestor}`)
+        .send({
+          quota: null,
+          auto_aprovacao: true,
+          ativo: true
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.autorizacao).toBeDefined();
+      expect(res.body.autorizacao.quota).toBeNull();
     });
 
     test('Deve listar todas as whitelists e quotas', async () => {
@@ -368,7 +439,7 @@ describe('Módulo de Administração - Testes de Integração', () => {
       // 3. Verificar se a descarga foi revertida para SOLICITADA e tem observações adicionadas
       const checkDesc = await pool.query('SELECT id_etar, estado_descarga, observacoes FROM descarga WHERE id_descarga = $1', [testDescargaId]);
       expect(checkDesc.rows[0].estado_descarga).toBe('SOLICITADA');
-      expect(checkDesc.rows[0].observacoes).toContain('[Revertido por ETAR indisponível]');
+      expect(checkDesc.rows[0].observacoes).toContain('[Revertido por indisponibilidade urgente');
     });
 
     test('Deve adicionar alerta operacional em observações de descargas AGENDADAS na ETAR desativada', async () => {

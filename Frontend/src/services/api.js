@@ -120,6 +120,19 @@ export const descargaService = {
     });
   },
   
+  cancelarDescarga(id) {
+    return request(`/descargas/${id}/cancelar`, {
+      method: 'PUT'
+    });
+  },
+  
+  editarPedido(id, pedidoData) {
+    return request(`/descargas/${id}`, {
+      method: 'PUT',
+      body: pedidoData
+    });
+  },
+  
   async abrirFichaPDF(id) {
     const token = localStorage.getItem('token');
     const response = await fetch(`${API_URL}/descargas/${id}/ficha`, {

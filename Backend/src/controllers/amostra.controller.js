@@ -536,7 +536,7 @@ exports.gerarBoletimPDF = async (req, res) => {
     const query = `
       SELECT a.id_amostra, a.estado_amostra, a.data_recolha, a.data_rececao_lab, a.data_inicio_analise, a.data_fim_analise, a.data_validacao, a.qr_code_token AS amostra_token,
              a.boletim_publico,
-             d.id_descarga, d.id_cliente, d.data_rececao, d.tipo_efluente, d.quantidade_real, d.matricula_trator, d.empresa_transportadora,
+             d.id_descarga, d.id_cliente, d.data_rececao, d.tipo_efluente, d.quantidade_real, d.matricula_trator, d.empresa_transportadora, d.nome_produtor_externo,
              c.nome AS cliente_nome, c.morada AS cliente_morada, c.contacto AS cliente_contacto,
              e.nome AS etar_nome,
              u_tec.nome AS tecnico_nome, u_resp.nome AS responsavel_nome,
@@ -662,7 +662,7 @@ exports.gerarBoletimPDF = async (req, res) => {
     // Caixa da Esquerda (Origem e Colheita)
     doc.strokeColor('#DDDDDD').lineWidth(1).rect(40, 132, 250, 93).stroke();
     doc.fontSize(7.5).fillColor('#333333');
-    doc.text(`Referência do cliente: -`, 46, 138);
+    doc.text(`Referência do cliente: ${info.nome_produtor_externo || '-'}`, 46, 138);
     doc.text(`Produto: Água residual (Efluente não tratado)`, 46, 150);
     doc.text(`Especificação a cumprir: Não aplicável`, 46, 162);
     doc.text(`Origem da amostra: Efluente ${info.tipo_efluente}`, 46, 174);
@@ -731,33 +731,36 @@ exports.gerarBoletimPDF = async (req, res) => {
     }
 
     doc.fontSize(8).fillColor('#333333');
-    doc.text(`Observações: ${info.observacoes || 'Sem observações adicionais a registar.'}`, 40, rowY);
+    doc.text(`Observações: ${info.observacoes || 'Sem observações adicionais a registar.'}`, 40, rowY, { width: 515 });
     
-    rowY += 20;
-    doc.fontSize(8).fillColor('#999999').text('------- FIM DO DOCUMENTO -------', 40, rowY, { align: 'center' });
+    rowY = doc.y + 15;
+    doc.fontSize(8).fillColor('#999999').text('------- FIM DO DOCUMENTO -------', 40, rowY, { align: 'center', width: 515 });
 
-    // --- 6. ASSINATURAS (Y fixo ou dinâmico dependendo da página, vamos colocar dinâmico ou no fundo) ---
-    rowY += 25;
-    if (rowY > 680) {
+    // --- 6. ASSINATURAS (Y dinâmico, garantindo espaço suficiente para evitar sobreposição) ---
+    rowY = doc.y + 25;
+    if (rowY > 650) {
       doc.addPage();
       rowY = 50;
     }
 
-    doc.fontSize(8).fillColor('#666666');
-    doc.text(`Emitido em: ${new Date().toLocaleString('pt-PT')}`, 40, rowY);
-    doc.text('Relatório de Ensaio emitido eletronicamente.', 40, rowY + 12, { italic: true });
+    doc.fontSize(7).fillColor('#666666');
+    doc.text(`Emitido em: ${new Date().toLocaleString('pt-PT')}`, 40, rowY, { width: 160 });
+    doc.text('Relatório de Ensaio emitido eletronicamente.', 40, rowY + 12, { italic: true, width: 160 });
 
-    // Área do Técnico e Responsável
+    // Área do Técnico e Responsável com alinhamento perfeito de colunas sem sobreposição
     doc.fontSize(7.5).fillColor('#333333');
-    doc.text('Técnico Executor:', 280, rowY);
-    doc.fontSize(8).text(info.tecnico_nome || 'N/A', 280, rowY + 12, { bold: true });
+    doc.text('Técnico Executor:', 220, rowY, { width: 160 });
+    doc.fontSize(8).text(info.tecnico_nome || 'N/A', 220, rowY + 12, { bold: true, width: 160 });
     
     doc.fontSize(7.5).text('A Responsável Técnica e Qualidade do Laboratório:', 400, rowY, { width: 155 });
-    doc.fontSize(8).text(info.responsavel_nome || 'N/A', 400, rowY + 18, { bold: true });
+    doc.fontSize(8).text(info.responsavel_nome || 'N/A', 400, rowY + 18, { bold: true, width: 155 });
 
     // --- 7. RODAPÉ FIXO (Notas legais e contactos no fundo da folha) ---
     // Usamos Y fixo no fundo da página (A4 tem 842 de altura)
     const renderFooters = (pDoc) => {
+      const oldBottom = pDoc.page.margins.bottom;
+      pDoc.page.margins.bottom = 0;
+
       pDoc.fontSize(6).fillColor('#777777');
       pDoc.text('Legenda: SMEWW - Standard Methods for Examination of Water and Wastewater; ISO - International Standard Organization; EN - Norma Europeia; PIQ - Método interno do Laboratório da Entidade Gestora; WHO - World Health Organization; NP - Norma Portuguesa; EAM - Espectrometria de Absorção Molecular; EAA - Espectrometria de Absorção Atómica; VL - Valor limite.', 40, 725, { width: 515 });
       pDoc.text('(1) O ensaio não está incluído no âmbito da acreditação; (2) Ensaio contratado a laboratório externo; (3) Os resultados aplicam-se exclusivamente à amostra ensaiada.', 40, 755, { width: 515 });
@@ -766,6 +769,8 @@ exports.gerarBoletimPDF = async (req, res) => {
       pDoc.fontSize(6.5).fillColor('#555555').text('ENTIDADE GESTORA - Tratamento de Águas Residuais - Rua dos Trigos, Santo Tirso | Tel: +351 252 000 000 | geral@entidadegestora.pt', 40, 782, { align: 'center', width: 515 });
       pDoc.fontSize(7).text('Lab 7.8A-08.20', 40, 798);
       pDoc.text('Pág. 1 de 1', 505, 798);
+
+      pDoc.page.margins.bottom = oldBottom;
     };
 
     renderFooters(doc);

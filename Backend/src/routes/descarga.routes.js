@@ -18,6 +18,12 @@ router.put('/:id/decisao', verificarPerfis(['GESTOR_CLIENTES']), descargaControl
 // PUT /api/descargas/:id/agendar - Agendar descarga autorizada (Apenas Clientes)
 router.put('/:id/agendar', verificarPerfis(['CLIENTE']), descargaController.agendarDescarga);
 
+// PUT /api/descargas/:id/cancelar - Cancelar descarga pelo cliente (Apenas Clientes)
+router.put('/:id/cancelar', verificarPerfis(['CLIENTE']), descargaController.cancelarDescarga);
+
+// PUT /api/descargas/:id - Editar pedido de descarga rejeitado/cancelado (Apenas Clientes)
+router.put('/:id', verificarPerfis(['CLIENTE']), descargaController.editarPedido);
+
 // GET /api/descargas/validar/:token - Validar QR Code (Operadores de ETAR, Responsáveis de ETAR e Gestores de Clientes)
 router.get('/validar/:token', verificarPerfis(['OPERADOR_ETAR', 'RESPONSAVEL_ETAR', 'GESTOR_CLIENTES']), descargaController.validarTokenQR);
 
