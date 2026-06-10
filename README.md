@@ -127,16 +127,25 @@ DescargasETAR/
 ### 8. Módulo de Administração & Painel do Gestor (Novo)
 *   **Gestão de Clientes**: Criação e listagem de novos clientes contratualizados com geração automática de credenciais de utilizador.
 *   **Whitelists e Quotas**: Configuração e alteração em tempo real das quotas diárias e ativação de auto-aprovação de pedidos por cliente e ETAR.
+*   **Quota Diária Sem Limite**: Suporte à configuração de Whitelists sem limite diário. Ao deixar o campo de quota vazio, o sistema assume "Sem limite" (valor `null` na base de dados), permitindo múltiplos pedidos de descarga por dia com aprovação automática.
 *   **Parametrização Analítica Contratual**: Associação dinâmica de parâmetros adicionais específicos que devem ser analisados para as amostras de cada cliente.
-*   **Contingência de ETARs**: Ativação/suspensão manual e imediata de receção física de efluentes numa ETAR, com envio automático de alertas via WebSockets para os operadores e gestores envolvidos.
+*   **Contingência de ETARs (Reagendamento Automático)**:
+    *   Suspensão e reativação imediata de receção numa ETAR com propagação instantânea via WebSockets.
+    *   **Descargas `AUTORIZADA`**: Reencaminhamento automático para a ETAR disponível mais próxima do cliente (por diferença absoluta de ID) que tenha whitelist ativa e quota diária livre. Se não houver ETAR elegível, o pedido reverte para `SOLICITADA` com notificação aos gestores.
+    *   **Descargas `AGENDADA`**: São mantidas mas marcadas com um alerta vermelho proeminente de `⚠️ CONTACTO URGENTE` nos painéis do Gestor, Operador e Cliente para contacto telefónico imediato.
 *   **Sininho de Alertas**: Painel de notificações interativo com registo persistente local das notificações recebidas (com data, hora e marcação de leitura).
-*   **Ficha de Descarga em PDF**: Geração e download automático de relatórios em formato PDF sintetizando os dados de logística, transportador, volumes (solicitado e real) e observações de receção na ETAR.
+
+### 9. Melhorias de Fluxo e Relatórios (Novo)
+*   **Cancelamento e Edição de Pedidos pelo Cliente**: O cliente pode cancelar pedidos em curso (`SOLICITADA`, `AUTORIZADA` ou `AGENDADA`), que mudam para `REJEITADA` e ganham o badge **CANCELADA**. Pedidos rejeitados ou cancelados podem ser editados e resubmetidos no portal do cliente, reavaliando automaticamente as whitelists e quotas diárias.
+*   **Redesenho de PDFs Eletrónicos**:
+    *   **Ficha de Descarga**: Geração eletrónica em página única sem linhas pontilhadas de preenchimento manual. O documento adapta-se se o cliente for Produtor ou Transportador (exibindo referência de produtor externo e movendo a declaração de responsabilidade).
+    *   **Boletim Analítico**: Logótipo IPAC/ilac-MRA simulado. Formatação decimal nativa portuguesa (vírgula decimal) e conversão automática para notação científica maiúscula (ex: `1,2E+2`) para valores analíticos superiores a 100.
 
 ---
 
 ## 🧪 Como Executar os Testes
 
-Foi desenvolvida uma suite de **34 testes integrados** de ponta a ponta (Jest + Supertest) que validam todas as rotas e regras de negócio com limpeza automática da base de dados pós-execução.
+Foi desenvolvida uma suite de **60 testes integrados** de ponta a ponta (Jest + Supertest) que validam todas as rotas e regras de negócio com limpeza automática da base de dados pós-execução.
 
 Para correr os testes:
 1. Certifique-se de que a base de dados Postgres está ativa e configurada no ficheiro `Backend/.env`.
