@@ -392,20 +392,57 @@ exports.registarResultados = async (req, res) => {
 
     for (const resItem of resultados) {
       const { id_parametro, valor, unidade, metodo, incerteza } = resItem;
+
+      // Obter defaults do parâmetro
+      const paramDefaultRes = await client.query(
+        'SELECT unidade_default, metodo_default_cod, metodo_default_nome, incerteza_default FROM parametro WHERE id_parametro = $1',
+        [id_parametro]
+      );
+      
+      let finalUnidade = unidade;
+      let finalMetodo = metodo;
+      let finalIncerteza = incerteza;
+
+      if (paramDefaultRes.rows.length > 0) {
+        const pDef = paramDefaultRes.rows[0];
+        
+        if (!finalUnidade || (typeof finalUnidade === 'string' && finalUnidade.trim() === '')) {
+          finalUnidade = pDef.unidade_default;
+        }
+        
+        if (!finalMetodo || (typeof finalMetodo === 'string' && finalMetodo.trim() === '')) {
+          if (pDef.metodo_default_cod && pDef.metodo_default_nome) {
+            finalMetodo = `${pDef.metodo_default_cod.trim()} (${pDef.metodo_default_nome.trim()})`;
+          } else if (pDef.metodo_default_cod) {
+            finalMetodo = pDef.metodo_default_cod.trim();
+          } else if (pDef.metodo_default_nome) {
+            finalMetodo = pDef.metodo_default_nome.trim();
+          }
+        }
+
+        if (finalIncerteza === undefined || finalIncerteza === null || finalIncerteza === '') {
+          if (pDef.incerteza_default !== null && pDef.incerteza_default !== undefined) {
+            finalIncerteza = parseFloat(valor) * parseFloat(pDef.incerteza_default);
+          }
+        }
+      }
+
       await client.query(insertQuery, [
         id, 
         id_parametro, 
         valor, 
-        unidade || null, 
-        metodo || null, 
-        incerteza || null
+        finalUnidade || null, 
+        finalMetodo || null, 
+        finalIncerteza !== null && finalIncerteza !== undefined ? finalIncerteza : null
       ]);
     }
 
-    // Atualizar estado da amostra para ANALISADA
+    // Atualizar estado da amostra para ANALISADA (preserva técnico e data originais de conclusão de ensaios se já existirem)
     const updateSampleQuery = `
       UPDATE amostra
-      SET estado_amostra = 'ANALISADA', data_fim_analise = NOW(), id_tecnico = $1
+      SET estado_amostra = 'ANALISADA', 
+          data_fim_analise = COALESCE(data_fim_analise, NOW()), 
+          id_tecnico = COALESCE(id_tecnico, $1)
       WHERE id_amostra = $2
       RETURNING *
     `;
@@ -421,12 +458,15 @@ exports.registarResultados = async (req, res) => {
 
     await client.query('COMMIT');
 
-    const { enviarNotificacao } = require('../config/socket');
-    enviarNotificacao('laboratorio-responsaveis', 'amostra-analisada', {
-      id_amostra: updatedAmostra.id_amostra,
-      qr_code_token: updatedAmostra.qr_code_token,
-      id_descarga: updatedAmostra.id_descarga
-    });
+    // Notificar apenas se os resultados forem inseridos pelo técnico de laboratório
+    if (req.user.perfil === 'TECNICO_LAB') {
+      const { enviarNotificacao } = require('../config/socket');
+      enviarNotificacao('laboratorio-responsaveis', 'amostra-analisada', {
+        id_amostra: updatedAmostra.id_amostra,
+        qr_code_token: updatedAmostra.qr_code_token,
+        id_descarga: updatedAmostra.id_descarga
+      });
+    }
 
     return res.json({ mensagem: 'Resultados registados com sucesso. Amostra analisada.' });
 

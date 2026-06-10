@@ -23,13 +23,13 @@ export default function TecnicoDashboard({ user, onLogout, notifications, onMark
   // Resultados a introduzir
   // Parâmetros do seed: 1-pH, 2-CQO, 3-CBO5, 4-SST, 5-Condutividade, 6-Azoto Kjeldahl, 7-Zinco
   const [resultadosData, setResultadosData] = useState({
-    1: { valor: '', unidade: 'pH', metodo: 'SMEWW 4500-H+' },
-    2: { valor: '', unidade: 'mg/L', metodo: 'SMEWW 5220 B' },
-    3: { valor: '', unidade: 'mg/L', metodo: 'SMEWW 5210 B' },
-    4: { valor: '', unidade: 'mg/L', metodo: 'SMEWW 2540 D' },
-    5: { valor: '', unidade: 'mS/cm', metodo: 'SMEWW 2510 B' },
-    6: { valor: '', unidade: 'mg/L', metodo: 'SMEWW 4500-N' }, // Azoto (Adicional Cliente AAA/BBB)
-    7: { valor: '', unidade: 'mg/L', metodo: 'SMEWW 3111 B' }  // Zinco (Adicional Cliente BBB)
+    1: { valor: '', unidade: 'pH', metodo: '' },
+    2: { valor: '', unidade: 'mg/L', metodo: '' },
+    3: { valor: '', unidade: 'mg/L', metodo: '' },
+    4: { valor: '', unidade: 'mg/L', metodo: '' },
+    5: { valor: '', unidade: 'mS/cm', metodo: '' },
+    6: { valor: '', unidade: 'mg/L', metodo: '' }, // Azoto (Adicional Cliente AAA/BBB)
+    7: { valor: '', unidade: 'mg/L', metodo: '' }  // Zinco (Adicional Cliente BBB)
   });
 
   // Parâmetros específicos (extra) selecionados/ativos para reportar

@@ -50,7 +50,10 @@ CREATE TABLE parametro (
     id_parametro SERIAL PRIMARY KEY,
     nome TEXT UNIQUE NOT NULL,
     tipo_parametro tipo_parametro_enum NOT NULL,
-    unidade_default TEXT
+    unidade_default TEXT,
+    metodo_default_cod TEXT,
+    metodo_default_nome TEXT,
+    incerteza_default NUMERIC CHECK (incerteza_default >= 0)
 );
 
 -- DESCARGA

@@ -4,8 +4,16 @@ const { verificarToken, verificarPerfis } = require('../middlewares/auth.middlew
 
 const router = express.Router();
 
-// Aplicar verificação de autenticação JWT e restrição de perfil GESTOR_CLIENTES a todas as rotas deste ficheiro
+// Aplicar verificação de autenticação JWT a todas as rotas deste ficheiro
 router.use(verificarToken);
+
+// Parâmetros (acessível também por RESPONSAVEL_LAB para gestão do catálogo analítico)
+router.get('/parametros', verificarPerfis(['RESPONSAVEL_LAB', 'GESTOR_CLIENTES', 'GESTOR_ADMIN']), adminController.obterParametros);
+router.get('/parametros/tipos', verificarPerfis(['RESPONSAVEL_LAB', 'GESTOR_CLIENTES', 'GESTOR_ADMIN']), adminController.obterTiposParametro);
+router.post('/parametros/tipos', verificarPerfis(['GESTOR_CLIENTES', 'GESTOR_ADMIN']), adminController.criarTipoParametro);
+router.put('/parametros/:id', verificarPerfis(['RESPONSAVEL_LAB', 'GESTOR_CLIENTES', 'GESTOR_ADMIN']), adminController.atualizarParametro);
+
+// Restringir restantes rotas de administração a gestores
 router.use(verificarPerfis(['GESTOR_CLIENTES', 'GESTOR_ADMIN']));
 
 // 1. Clientes
@@ -25,7 +33,6 @@ router.post('/autorizacoes', adminController.criarAutorizacao);
 router.put('/autorizacoes/:id', adminController.atualizarAutorizacao);
 
 // 4. Parâmetros contratuais
-router.get('/parametros', adminController.obterParametros);
 router.get('/clientes/:id/parametros', adminController.obterParametrosCliente);
 router.post('/clientes/:id/parametros', adminController.atualizarParametrosCliente);
 router.post('/parametros', adminController.criarParametro);
@@ -40,5 +47,13 @@ router.put('/utilizadores/:id', verificarPerfis(['GESTOR_ADMIN']), adminControll
 
 // 7. Auditoria do Sistema
 router.get('/auditoria', verificarPerfis(['GESTOR_ADMIN']), adminController.obterLogsAuditoria);
+
+// 8. Mensagem Geral / Notificações do Sistema
+router.post('/notificacoes/geral', verificarPerfis(['GESTOR_ADMIN']), adminController.enviarMensagemGeral);
+
+// 9. Perfis de Utilizador
+router.get('/perfis', verificarPerfis(['GESTOR_ADMIN']), adminController.obterPerfis);
+router.post('/perfis', verificarPerfis(['GESTOR_ADMIN']), adminController.criarPerfil);
+router.put('/perfis/:id', verificarPerfis(['GESTOR_ADMIN']), adminController.atualizarPerfil);
 
 module.exports = router;

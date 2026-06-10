@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { amostraService, descargaService, adminService } from '../services/api';
-import { ShieldCheck, ClipboardList, CheckSquare, XSquare, Download, LogOut, FileText, ToggleLeft, ToggleRight, Settings, PlusCircle, Check, X, HelpCircle } from 'lucide-react';
+import { ShieldCheck, ClipboardList, CheckSquare, XSquare, Download, LogOut, FileText, ToggleLeft, ToggleRight, Settings, PlusCircle, Check, X, HelpCircle, Megaphone } from 'lucide-react';
 import { webSocketService } from '../services/websocket';
 import NotificationBell from '../components/NotificationBell';
 
@@ -21,6 +21,9 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
   const [analisadas, setAnalisadas] = useState([]);
   const [concluidas, setConcluidas] = useState([]);
   const [selectedAmostra, setSelectedAmostra] = useState(null);
+  const [isViewOnly, setIsViewOnly] = useState(false);
+  const [editResultados, setEditResultados] = useState([]);
+  const [editingParamId, setEditingParamId] = useState(null);
 
   // Estados de Administração (Novo)
   const [clientesList, setClientesList] = useState([]);
@@ -32,6 +35,10 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
 
   // Estados para o novo separador de Utilizadores Internos
   const [utilizadoresList, setUtilizadoresList] = useState([]);
+  const [perfisList, setPerfisList] = useState([]);
+  const [showPerfisModal, setShowPerfisModal] = useState(false);
+  const [editingPerfilId, setEditingPerfilId] = useState(null);
+  const [newPerfilData, setNewPerfilData] = useState({ nome: '' });
   const [showAddUtilizador, setShowAddUtilizador] = useState(false);
   const [editingUtilizadorId, setEditingUtilizadorId] = useState(null);
   const [newUtilizadorData, setNewUtilizadorData] = useState({
@@ -65,12 +72,29 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
   });
 
   const [showAddParam, setShowAddParam] = useState(false);
+  const [editingGlobalParamId, setEditingGlobalParamId] = useState(null);
+  const [tiposParametrosList, setTiposParametrosList] = useState(['FISICO_QUIMICO', 'AZOTO', 'METAIS', 'OLEOS E GORDURAS']);
+  const [showAddTypeInline, setShowAddTypeInline] = useState(false);
+  const [newTypeName, setNewTypeName] = useState('');
   const [newParamData, setNewParamData] = useState({
     nome: '',
     tipo_parametro: 'FISICO_QUIMICO',
     unidade_default: 'mg/L',
     obrigatorio: false
   });
+
+  // Estado para modal de edição do catálogo de parâmetros (Responsável Lab)
+  const [showEditParamCatalog, setShowEditParamCatalog] = useState(false);
+  const [editingParamCatalogData, setEditingParamCatalogData] = useState({
+    id_parametro: null,
+    nome: '',
+    metodo_default_cod: '',
+    metodo_default_nome: '',
+    incerteza_default: ''
+  });
+
+  const [showGeneralMsgModal, setShowGeneralMsgModal] = useState(false);
+  const [generalMsgText, setGeneralMsgText] = useState('');
 
   // Modais de Criação
   const [showAddCliente, setShowAddCliente] = useState(false);
@@ -108,7 +132,7 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
         if (activeTab === 'decisoes') {
           const data = await descargaService.obterDescargas({ estado: 'SOLICITADA' });
           setSolicitadas(data);
-          
+
           // Sincronizar notificações offline para o gestor (descargas revertidas)
           if (Array.isArray(data)) {
             data.forEach(d => {
@@ -124,6 +148,14 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
         } else if (activeTab === 'clientes') {
           const data = await adminService.obterClientes();
           setClientesList(data);
+          const params = await adminService.obterParametros();
+          setParametrosList(params);
+          try {
+            const types = await adminService.obterTiposParametro();
+            setTiposParametrosList(types);
+          } catch (err) {
+            console.error('Erro ao obter tipos de parâmetros:', err);
+          }
         } else if (activeTab === 'autorizacoes') {
           const auts = await adminService.obterAutorizacoes();
           setAutorizacoesList(auts);
@@ -133,6 +165,12 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
           setEtarsList(ets);
           const params = await adminService.obterParametros();
           setParametrosList(params);
+          try {
+            const types = await adminService.obterTiposParametro();
+            setTiposParametrosList(types);
+          } catch (err) {
+            console.error('Erro ao obter tipos de parâmetros:', err);
+          }
         } else if (activeTab === 'etars') {
           const ets = await adminService.obterEtars();
           setEtarsList(ets);
@@ -151,15 +189,17 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
           const utls = await adminService.obterUtilizadores();
           const sortedUtls = Array.isArray(utls)
             ? [...utls].sort((a, b) => {
-                if (Number(a.id_perfil) !== Number(b.id_perfil)) {
-                  return Number(a.id_perfil) - Number(b.id_perfil);
-                }
-                return a.nome.localeCompare(b.nome);
-              })
+              if (Number(a.id_perfil) !== Number(b.id_perfil)) {
+                return Number(a.id_perfil) - Number(b.id_perfil);
+              }
+              return a.nome.localeCompare(b.nome);
+            })
             : [];
           setUtilizadoresList(sortedUtls);
           const ets = await adminService.obterEtars();
           setEtarsList(ets);
+          const pfs = await adminService.obterPerfis();
+          setPerfisList(Array.isArray(pfs) ? pfs : []);
         } else if (activeTab === 'auditoria' && user.perfil === 'GESTOR_ADMIN') {
           const logs = await adminService.obterLogsAuditoria({
             entidade: filtroAuditEntidade,
@@ -170,10 +210,15 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
         }
       } else {
         // Responsável de Lab/ETAR
-        const dataAnal = await amostraService.obterAmostras({ estado: 'ANALISADA' });
-        setAnalisadas(dataAnal);
-        const dataConc = await amostraService.obterAmostras({ estado: 'CONCLUIDA' });
-        setConcluidas(dataConc);
+        if (activeTab === 'catalogo') {
+          const params = await adminService.obterParametros();
+          setParametrosList(params);
+        } else {
+          const dataAnal = await amostraService.obterAmostras({ estado: 'ANALISADA' });
+          setAnalisadas(dataAnal);
+          const dataConc = await amostraService.obterAmostras({ estado: 'CONCLUIDA' });
+          setConcluidas(dataConc);
+        }
       }
     } catch (err) {
       setError(err.message || 'Erro ao carregar dados do painel.');
@@ -310,6 +355,26 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
     }
   };
 
+  const handleSavePerfil = async (e) => {
+    e.preventDefault();
+    setError('');
+    setSuccess('');
+    try {
+      if (editingPerfilId) {
+        await adminService.atualizarPerfil(editingPerfilId, newPerfilData);
+        setSuccess('Perfil atualizado com sucesso!');
+      } else {
+        await adminService.criarPerfil(newPerfilData);
+        setSuccess('Perfil criado com sucesso!');
+      }
+      setEditingPerfilId(null);
+      setNewPerfilData({ nome: '' });
+      loadData();
+    } catch (err) {
+      setError(err.message || 'Erro ao gravar perfil.');
+    }
+  };
+
   // Gestor de Clientes / Admin: Criar Nova ETAR
   const handleSaveEtar = async (e) => {
     e.preventDefault();
@@ -330,24 +395,73 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
     }
   };
 
-  // Gestor: Criar Novo Parâmetro Analítico no Catálogo
+  // Gestor: Criar ou Editar Parâmetro Analítico no Catálogo
   const handleSaveParam = async (e) => {
     e.preventDefault();
     setError('');
     setSuccess('');
     try {
-      await adminService.criarParametro(newParamData);
-      setSuccess('Novo parâmetro analítico registado com sucesso no catálogo!');
+      if (editingGlobalParamId) {
+        await adminService.atualizarParametro(editingGlobalParamId, newParamData);
+        setSuccess('Parâmetro analítico atualizado com sucesso no catálogo!');
+      } else {
+        await adminService.criarParametro(newParamData);
+        setSuccess('Novo parâmetro analítico registado com sucesso no catálogo!');
+      }
       setShowAddParam(false);
+      setEditingGlobalParamId(null);
       setNewParamData({
         nome: '',
-        tipo_parametro: 'FISICO_QUIMICO',
+        tipo_parametro: tiposParametrosList[0] || 'FISICO_QUIMICO',
         unidade_default: 'mg/L',
         obrigatorio: false
       });
       loadData();
     } catch (err) {
-      setError(err.message || 'Erro ao criar parâmetro global.');
+      setError(err.message || 'Erro ao gravar parâmetro global.');
+    }
+  };
+
+  // Responsável Lab: Editar defaults de Metodologia e Incerteza de um Parâmetro
+  const handleSaveParamCatalog = async (e) => {
+    e.preventDefault();
+    setError('');
+    setSuccess('');
+    const incVal = editingParamCatalogData.incerteza_default;
+    if (incVal !== '' && incVal !== null && incVal !== undefined) {
+      const parsed = parseFloat(incVal);
+      if (isNaN(parsed) || parsed < 0) {
+        setError('A incerteza padrão deve ser um número não negativo (ex: 0.05 para 5%).');
+        return;
+      }
+    }
+    try {
+      await adminService.atualizarParametro(editingParamCatalogData.id_parametro, {
+        metodo_default_cod: editingParamCatalogData.metodo_default_cod,
+        metodo_default_nome: editingParamCatalogData.metodo_default_nome,
+        incerteza_default: incVal !== '' && incVal !== null ? parseFloat(incVal) : null
+      });
+      setSuccess(`Parâmetro "${editingParamCatalogData.nome}" atualizado com sucesso no catálogo!`);
+      setShowEditParamCatalog(false);
+      setEditingParamCatalogData({ id_parametro: null, nome: '', metodo_default_cod: '', metodo_default_nome: '', incerteza_default: '' });
+      loadData();
+    } catch (err) {
+      setError(err.message || 'Erro ao atualizar parâmetro.');
+    }
+  };
+
+  // Gestor Admin: Enviar Aviso Geral
+  const handleSendGeneralMessage = async (e) => {
+    e.preventDefault();
+    setError('');
+    setSuccess('');
+    try {
+      await adminService.enviarMensagemGeral(generalMsgText);
+      setSuccess('Aviso geral enviado com sucesso para todos os utilizadores!');
+      setShowGeneralMsgModal(false);
+      setGeneralMsgText('');
+    } catch (err) {
+      setError(err.message || 'Erro ao enviar aviso geral.');
     }
   };
 
@@ -494,13 +608,19 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
         setSuccess(`Resultados laboratoriais prontos para validação: Amostra ${data.qr_code_token} (Descarga #${data.id_descarga}).`);
         loadData();
       };
+      const handleNovoParametro = (data) => {
+        setSuccess(data.mensagem || 'Novo parâmetro adicionado ao catálogo. Configure a metodologia e incerteza padrão.');
+        loadData();
+      };
 
       webSocketService.on('nova-amostra', handleNovaAmostra);
       webSocketService.on('amostra-analisada', handleAmostraAnalisada);
+      webSocketService.on('novo-parametro', handleNovoParametro);
 
       return () => {
         webSocketService.off('nova-amostra', handleNovaAmostra);
         webSocketService.off('amostra-analisada', handleAmostraAnalisada);
+        webSocketService.off('novo-parametro', handleNovoParametro);
       };
     }
   }, [user.perfil]);
@@ -575,14 +695,128 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
     }
   };
 
-  // Carregar os resultados de uma amostra antes de abrir o modal de validação
-  const handleOpenValidacao = async (amostra) => {
+  // Carregar os resultados de uma amostra antes de abrir o modal de validação ou visualização
+  const handleOpenValidacao = async (amostra, viewOnly = false) => {
     setError('');
+    setSuccess('');
+    setIsViewOnly(viewOnly);
+    setEditingParamId(null);
     try {
       const details = await amostraService.obterDetalhesAmostra(amostra.id_amostra);
       setSelectedAmostra(details);
+      if (details && Array.isArray(details.resultados)) {
+        setEditResultados(
+          details.resultados.map(r => ({
+            id_resultado: r.id_resultado,
+            id_parametro: r.id_parametro,
+            parametro_nome: r.parametro_nome,
+            valor: r.valor,
+            unidade: r.unidade,
+            metodo: r.metodo || '',
+            incerteza: r.incerteza || ''
+          }))
+        );
+      } else {
+        setEditResultados([]);
+      }
     } catch (err) {
       setError('Erro ao carregar parâmetros da amostra.');
+    }
+  };
+
+  // Gravar edições parciais ou totais nos resultados analíticos
+  const handleSaveEdits = async (validateAfterSave = false) => {
+    setError('');
+    setSuccess('');
+
+    // Validar limites físicos e lógicos
+    for (const r of editResultados) {
+      const val = Number(r.valor);
+      if (isNaN(val) || val < 0) {
+        setError(`O valor para o parâmetro "${r.parametro_nome}" não pode ser negativo.`);
+        return;
+      }
+      if (r.parametro_nome.toUpperCase() === 'PH') {
+        if (val < 0 || val > 14) {
+          setError('Validação de integridade física falhou: o valor de pH tem de estar entre 0 e 14.');
+          return;
+        }
+      }
+      if (r.incerteza !== '' && r.incerteza !== null && r.incerteza !== undefined) {
+        const inc = Number(r.incerteza);
+        if (isNaN(inc) || inc < 0) {
+          setError(`A incerteza para o parâmetro "${r.parametro_nome}" não pode ser negativa.`);
+          return;
+        }
+      }
+    }
+
+    try {
+      const payload = editResultados.map(r => ({
+        id_parametro: r.id_parametro,
+        valor: Number(r.valor),
+        unidade: r.unidade,
+        metodo: r.metodo || null,
+        incerteza: r.incerteza !== '' && r.incerteza !== null && r.incerteza !== undefined ? Number(r.incerteza) : null
+      }));
+
+      await amostraService.registarResultados(selectedAmostra.amostra.id_amostra, payload);
+
+      if (validateAfterSave) {
+        await amostraService.validarAmostra(selectedAmostra.amostra.id_amostra);
+        setSuccess('Resultados atualizados, boletim validado e assinado digitalmente com sucesso!');
+        setSelectedAmostra(null);
+      } else {
+        setSuccess('Resultados e metodologias atualizados com sucesso!');
+        // Atualizar visualização
+        const updatedDetails = await amostraService.obterDetalhesAmostra(selectedAmostra.amostra.id_amostra);
+        setSelectedAmostra(updatedDetails);
+        setEditingParamId(null);
+      }
+      loadData();
+    } catch (err) {
+      setError(err.message || 'Erro ao guardar alterações nos resultados.');
+    }
+  };
+
+  // Definir metodologia editada como padrão no catálogo de parâmetros
+  const handleDefinirMetodoPadrao = async (paramId, metodoStr) => {
+    setError('');
+    setSuccess('');
+    try {
+      let cod = metodoStr ? metodoStr.trim() : '';
+      let nome = '';
+
+      // Se estiver no formato "Código (Nome)"
+      const match = cod.match(/^([^(]+)\(([^)]+)\)$/);
+      if (match) {
+        cod = match[1].trim();
+        nome = match[2].trim();
+      }
+
+      // Obter os parâmetros atuais para preservar a incerteza e outros campos
+      const allParams = await adminService.obterParametros();
+      const paramObj = allParams.find(p => p.id_parametro === paramId);
+      const currentIncerteza = paramObj ? paramObj.incerteza_default : null;
+
+      await adminService.atualizarParametro(paramId, {
+        metodo_default_cod: cod || null,
+        metodo_default_nome: nome || null,
+        incerteza_default: currentIncerteza
+      });
+
+      // Atualizar lista de parâmetros local se estiver carregada
+      if (Array.isArray(parametrosList)) {
+        setParametrosList(parametrosList.map(p => p.id_parametro === paramId ? {
+          ...p,
+          metodo_default_cod: cod || null,
+          metodo_default_nome: nome || null
+        } : p));
+      }
+
+      setSuccess(`Metodologia padrão do parâmetro atualizada no catálogo para: ${cod}${nome ? ` (${nome})` : ''}`);
+    } catch (err) {
+      setError(err.message || 'Erro ao atualizar metodologia padrão.');
     }
   };
 
@@ -597,11 +831,24 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
           <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
             Olá, <strong>{user.nome}</strong> ({user.perfil.replace('_', ' ')})
           </span>
-          <NotificationBell 
-            notifications={notifications} 
-            onMarkAsRead={onMarkAsRead} 
-            onMarkAllAsRead={onMarkAllAsRead} 
+          <NotificationBell
+            notifications={notifications}
+            onMarkAsRead={onMarkAsRead}
+            onMarkAllAsRead={onMarkAllAsRead}
           />
+          {user.perfil === 'GESTOR_ADMIN' && (
+            <button
+              className="btn btn-secondary"
+              style={{ padding: '0.4rem 0.8rem', display: 'flex', alignItems: 'center', gap: '4px' }}
+              onClick={() => {
+                setGeneralMsgText('');
+                setShowGeneralMsgModal(true);
+              }}
+              title="Enviar Aviso Geral"
+            >
+              <Megaphone size={16} /> Aviso Geral
+            </button>
+          )}
           <button className="btn btn-secondary" style={{ padding: '0.4rem 0.8rem', display: 'flex', alignItems: 'center', gap: '4px' }} onClick={onChangePassword}>
             <Settings size={16} /> Configurações
           </button>
@@ -614,8 +861,16 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
       <main className="content-wrapper animate-fade-in" style={{ maxWidth: '1400px' }}>
         <div className="dashboard-header">
           <div>
-            <h2>Painel de Gestão e Decisão</h2>
-            <p style={{ color: 'var(--text-secondary)' }}>Valide análises laboratoriais e tome decisões de whitelists ou quotas.</p>
+            <h2>
+              {(user.perfil === 'GESTOR_CLIENTES' || user.perfil === 'GESTOR_ADMIN')
+                ? 'Painel de Gestão e Decisão'
+                : 'Painel de Validação Técnica'}
+            </h2>
+            <p style={{ color: 'var(--text-secondary)' }}>
+              {(user.perfil === 'GESTOR_CLIENTES' || user.perfil === 'GESTOR_ADMIN')
+                ? 'Autorize pedidos de descarga, configure whitelists e quotas, gerencie o sistema.'
+                : 'Avalie e aprove os resultados das análises, defina as metodologias e incertezas e assine os boletins analíticos.'}
+            </p>
           </div>
         </div>
 
@@ -757,8 +1012,8 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
                             </td>
                             <td>
                               <div style={{ display: 'flex', gap: '0.5rem' }}>
-                                <button 
-                                  className="btn btn-primary" 
+                                <button
+                                  className="btn btn-primary"
                                   style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem' }}
                                   onClick={() => {
                                     setEditingClienteId(c.id_cliente);
@@ -776,9 +1031,9 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
                                 >
                                   Editar
                                 </button>
-                                <button 
-                                  className="btn btn-secondary" 
-                                  style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem' }} 
+                                <button
+                                  className="btn btn-secondary"
+                                  style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem' }}
                                   onClick={() => handleToggleClienteStatus(c)}
                                 >
                                   {c.ativo ? 'Suspender' : 'Ativar'}
@@ -821,12 +1076,12 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
                           <h4 style={{ marginBottom: '1rem', fontSize: '0.9rem' }}>Ensaios Específicos do Contrato:</h4>
                           {parametrosList.filter(p => !p.obrigatorio).map(p => (
                             <div key={p.id_parametro} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                              <input 
-                                type="checkbox" 
-                                id={`param-${p.id_parametro}`} 
+                              <input
+                                type="checkbox"
+                                id={`param-${p.id_parametro}`}
                                 style={{ width: '18px', height: '18px', cursor: 'pointer' }}
-                                checked={activeParams.includes(p.id_parametro)} 
-                                onChange={() => handleToggleParamCheckbox(p.id_parametro)} 
+                                checked={activeParams.includes(p.id_parametro)}
+                                onChange={() => handleToggleParamCheckbox(p.id_parametro)}
                               />
                               <label htmlFor={`param-${p.id_parametro}`} style={{ fontSize: '0.85rem', cursor: 'pointer' }}>
                                 <strong>{p.nome}</strong> ({p.tipo_parametro.replace('_', ' ')})
@@ -845,7 +1100,16 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
                   <div className="card" style={{ marginBottom: 0 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
                       <h3>Catálogo Global de Parâmetros</h3>
-                      <button className="btn btn-primary" style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '4px' }} onClick={() => setShowAddParam(true)}>
+                      <button className="btn btn-primary" style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '4px' }} onClick={() => {
+                        setEditingGlobalParamId(null);
+                        setNewParamData({
+                          nome: '',
+                          tipo_parametro: tiposParametrosList[0] || 'FISICO_QUIMICO',
+                          unidade_default: 'mg/L',
+                          obrigatorio: false
+                        });
+                        setShowAddParam(true);
+                      }}>
                         <PlusCircle size={14} /> Novo Parâmetro
                       </button>
                     </div>
@@ -859,7 +1123,8 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
                             <th>Nome</th>
                             <th>Tipo</th>
                             <th>Unidade</th>
-                            <th>Obrig.</th>
+                            <th style={{ textAlign: 'center' }}>Obrig.</th>
+                            <th style={{ textAlign: 'center' }}>Ações</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -872,7 +1137,25 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
                                 </span>
                               </td>
                               <td>{p.unidade_default}</td>
-                              <td>{p.obrigatorio ? 'Sim' : 'Não'}</td>
+                              <td style={{ textAlign: 'center' }}>{p.obrigatorio ? 'Sim' : 'Não'}</td>
+                              <td style={{ textAlign: 'center' }}>
+                                <button
+                                  className="btn btn-secondary"
+                                  style={{ padding: '0.2rem 0.4rem', fontSize: '0.75rem' }}
+                                  onClick={() => {
+                                    setEditingGlobalParamId(p.id_parametro);
+                                    setNewParamData({
+                                      nome: p.nome,
+                                      tipo_parametro: p.tipo_parametro,
+                                      unidade_default: p.unidade_default || '',
+                                      obrigatorio: p.obrigatorio
+                                    });
+                                    setShowAddParam(true);
+                                  }}
+                                >
+                                  Editar
+                                </button>
+                              </td>
                             </tr>
                           ))}
                         </tbody>
@@ -931,8 +1214,8 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
                               </td>
                               <td>
                                 <div style={{ display: 'flex', gap: '0.5rem' }}>
-                                  <button 
-                                    className="btn btn-primary" 
+                                  <button
+                                    className="btn btn-primary"
                                     style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem' }}
                                     onClick={() => {
                                       setEditingAutorizacaoId(a.id_autorizacao);
@@ -999,17 +1282,17 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
                               </span>
                             </td>
                             <td>
-                              <button 
-                                className="btn" 
-                                style={{ 
-                                  padding: '0.35rem 0.7rem', 
-                                  fontSize: '0.8rem', 
-                                  backgroundColor: e.disponivel ? 'var(--danger)' : 'var(--success)', 
+                              <button
+                                className="btn"
+                                style={{
+                                  padding: '0.35rem 0.7rem',
+                                  fontSize: '0.8rem',
+                                  backgroundColor: e.disponivel ? 'var(--danger)' : 'var(--success)',
                                   color: '#ffffff',
                                   display: 'flex',
                                   alignItems: 'center',
                                   gap: '0.25rem'
-                                }} 
+                                }}
                                 onClick={() => handleToggleEtarAvailability(e.id_etar, e.disponivel)}
                               >
                                 {e.disponivel ? <ToggleLeft size={16} /> : <ToggleRight size={16} />}
@@ -1067,9 +1350,9 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
                             </td>
                             <td>{d.data_rececao ? new Date(d.data_rececao).toLocaleString() : 'N/A'}</td>
                             <td>
-                              <button 
-                                className="btn btn-primary" 
-                                style={{ padding: '0.35rem 0.7rem', fontSize: '0.8rem', backgroundColor: 'var(--success)' }} 
+                              <button
+                                className="btn btn-primary"
+                                style={{ padding: '0.35rem 0.7rem', fontSize: '0.8rem', backgroundColor: 'var(--success)' }}
                                 onClick={() => handleAbrirFichaDescarga(d.id_descarga)}
                               >
                                 <FileText size={14} style={{ verticalAlign: 'middle', marginRight: '4px' }} /> Ver Ficha
@@ -1112,9 +1395,9 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
                             <td>{am.etar_nome}</td>
                             <td>{new Date(am.data_validacao).toLocaleDateString()}</td>
                             <td style={{ display: 'flex', gap: '0.5rem' }}>
-                              <button 
-                                className="btn btn-primary" 
-                                style={{ padding: '0.35rem 0.7rem', fontSize: '0.8rem', backgroundColor: 'var(--success)' }} 
+                              <button
+                                className="btn btn-primary"
+                                style={{ padding: '0.35rem 0.7rem', fontSize: '0.8rem', backgroundColor: 'var(--success)' }}
                                 onClick={() => handleDownloadBoletim(am)}
                               >
                                 <Download size={14} style={{ verticalAlign: 'middle', marginRight: '4px' }} /> Boletim PDF
@@ -1251,13 +1534,13 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
                                   {r.estado_descarga}
                                 </span>
                                 {r.observacoes && r.observacoes.includes('ALERTA OPERACIONAL') && (
-                                  <div style={{ 
-                                    fontSize: '0.65rem', 
-                                    color: 'var(--danger)', 
-                                    backgroundColor: 'var(--danger-light)', 
-                                    padding: '2px 4px', 
-                                    borderRadius: '4px', 
-                                    border: '1px solid var(--danger)', 
+                                  <div style={{
+                                    fontSize: '0.65rem',
+                                    color: 'var(--danger)',
+                                    backgroundColor: 'var(--danger-light)',
+                                    padding: '2px 4px',
+                                    borderRadius: '4px',
+                                    border: '1px solid var(--danger)',
                                     marginTop: '0.2rem',
                                     whiteSpace: 'normal',
                                     lineHeight: '1.1'
@@ -1266,13 +1549,13 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
                                   </div>
                                 )}
                                 {r.observacoes && r.observacoes.includes('Revertido') && (
-                                  <div style={{ 
-                                    fontSize: '0.65rem', 
-                                    color: 'var(--danger)', 
-                                    backgroundColor: 'var(--danger-light)', 
-                                    padding: '2px 4px', 
-                                    borderRadius: '4px', 
-                                    border: '1px solid var(--danger)', 
+                                  <div style={{
+                                    fontSize: '0.65rem',
+                                    color: 'var(--danger)',
+                                    backgroundColor: 'var(--danger-light)',
+                                    padding: '2px 4px',
+                                    borderRadius: '4px',
+                                    border: '1px solid var(--danger)',
                                     marginTop: '0.2rem',
                                     whiteSpace: 'normal',
                                     lineHeight: '1.1'
@@ -1305,14 +1588,14 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
                                 {hasResultados ? (
                                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.3rem', fontSize: '0.75rem' }}>
                                     {r.resultados.map((res, idx) => (
-                                      <span 
-                                        key={idx} 
-                                        style={{ 
-                                          backgroundColor: 'var(--bg-base)', 
-                                          border: '1px solid var(--border)', 
-                                          borderRadius: '4px', 
-                                          padding: '2px 6px', 
-                                          whiteSpace: 'nowrap' 
+                                      <span
+                                        key={idx}
+                                        style={{
+                                          backgroundColor: 'var(--bg-base)',
+                                          border: '1px solid var(--border)',
+                                          borderRadius: '4px',
+                                          padding: '2px 6px',
+                                          whiteSpace: 'nowrap'
                                         }}
                                       >
                                         <strong>{res.parametro}:</strong> {res.valor} {res.unidade || ''}
@@ -1342,24 +1625,37 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
               <div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
                   <h3>Gestão de Utilizadores Internos</h3>
-                  <button 
-                    className="btn btn-primary" 
-                    style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
-                    onClick={() => {
-                      setEditingUtilizadorId(null);
-                      setNewUtilizadorData({
-                        nome: '',
-                        email: '',
-                        id_perfil: '2',
-                        id_etar: '',
-                        password: '',
-                        ativo: true
-                      });
-                      setShowAddUtilizador(true);
-                    }}
-                  >
-                    <PlusCircle size={18} /> Adicionar Utilizador
-                  </button>
+                  <div style={{ display: 'flex', gap: '0.75rem' }}>
+                    <button
+                      className="btn btn-secondary"
+                      style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+                      onClick={() => {
+                        setEditingPerfilId(null);
+                        setNewPerfilData({ nome: '' });
+                        setShowPerfisModal(true);
+                      }}
+                    >
+                      Gerir Perfis
+                    </button>
+                    <button
+                      className="btn btn-primary"
+                      style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+                      onClick={() => {
+                        setEditingUtilizadorId(null);
+                        setNewUtilizadorData({
+                          nome: '',
+                          email: '',
+                          id_perfil: '2',
+                          id_etar: '',
+                          password: '',
+                          ativo: true
+                        });
+                        setShowAddUtilizador(true);
+                      }}
+                    >
+                      <PlusCircle size={18} /> Adicionar Utilizador
+                    </button>
+                  </div>
                 </div>
 
                 {loading ? (
@@ -1404,8 +1700,8 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
                               </span>
                             </td>
                             <td>
-                              <button 
-                                className="btn btn-primary" 
+                              <button
+                                className="btn btn-primary"
                                 style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem' }}
                                 onClick={() => {
                                   setEditingUtilizadorId(u.id_utilizador);
@@ -1472,13 +1768,13 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
 
                   <div style={{ flex: 2, minWidth: '250px' }}>
                     <label className="form-label" style={{ marginBottom: '0.25rem', fontSize: '0.8rem' }}>Pesquisa por utilizador ou descrição</label>
-                    <input 
-                      type="text" 
-                      className="form-input" 
-                      placeholder="Pesquise por nome, email ou detalhes do log..." 
-                      value={pesquisaAudit} 
-                      onChange={(e) => setPesquisaAudit(e.target.value)} 
-                      style={{ padding: '0.4rem' }} 
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="Pesquise por nome, email ou detalhes do log..."
+                      value={pesquisaAudit}
+                      onChange={(e) => setPesquisaAudit(e.target.value)}
+                      style={{ padding: '0.4rem' }}
                     />
                   </div>
                 </div>
@@ -1548,9 +1844,9 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
                                 </span>
                               </td>
                               <td>
-                                <span className="badge" style={{ 
-                                  color: entityColor, 
-                                  backgroundColor: entityBg, 
+                                <span className="badge" style={{
+                                  color: entityColor,
+                                  backgroundColor: entityBg,
                                   border: `1px solid ${entityColor}`,
                                   fontSize: '0.75rem',
                                   textTransform: 'capitalize'
@@ -1588,10 +1884,80 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
               <button className={`tab-btn ${activeTab === 'concluidas' ? 'active' : ''}`} onClick={() => { setActiveTab('concluidas'); setError(''); setSuccess(''); }}>
                 Boletins Concluídos
               </button>
+              {user.perfil === 'RESPONSAVEL_LAB' && (
+                <button className={`tab-btn ${activeTab === 'catalogo' ? 'active' : ''}`} onClick={() => { setActiveTab('catalogo'); setError(''); setSuccess(''); }}>
+                  Catálogo de Parâmetros
+                </button>
+              )}
             </div>
 
             {loading ? (
               <p>A carregar registos...</p>
+            ) : activeTab === 'catalogo' && user.perfil === 'RESPONSAVEL_LAB' ? (
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                  <div>
+                    <h3 style={{ marginBottom: '0.25rem' }}>Catálogo de Parâmetros Analíticos</h3>
+                    <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
+                      Consulte e edite a metodologia padrão e incerteza base de cada parâmetro. Estas configurações são aplicadas automaticamente quando o técnico de laboratório regista os ensaios.
+                    </p>
+                  </div>
+                </div>
+                <div className="table-container">
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th>Parâmetro</th>
+                        <th>Tipo</th>
+                        <th>Unidade</th>
+                        <th>Código do Método</th>
+                        <th>Nome do Método</th>
+                        <th style={{ textAlign: 'center' }}>Incerteza Padrão (%)</th>
+                        <th style={{ textAlign: 'center' }}>Ação</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {Array.isArray(parametrosList) && parametrosList.map((p) => (
+                        <tr key={p.id_parametro}>
+                          <td><strong>{p.nome}</strong>{p.obrigatorio && <span className="badge badge-info" style={{ marginLeft: '6px', fontSize: '0.7rem' }}>Obrig.</span>}</td>
+                          <td><span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{p.tipo_parametro}</span></td>
+                          <td>{p.unidade_default || '-'}</td>
+                          <td style={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>{p.metodo_default_cod || <span style={{ color: 'var(--text-secondary)' }}>-</span>}</td>
+                          <td style={{ fontSize: '0.85rem' }}>{p.metodo_default_nome || <span style={{ color: 'var(--text-secondary)' }}>-</span>}</td>
+                          <td style={{ textAlign: 'center' }}>
+                            {p.incerteza_default !== null && p.incerteza_default !== undefined
+                              ? <strong>{(parseFloat(p.incerteza_default) * 100).toFixed(1)}%</strong>
+                              : <span style={{ color: 'var(--text-secondary)' }}>-</span>
+                            }
+                          </td>
+                          <td style={{ textAlign: 'center' }}>
+                            <button
+                              className="btn btn-primary"
+                              style={{ padding: '0.25rem 0.6rem', fontSize: '0.78rem' }}
+                              onClick={() => {
+                                setEditingParamCatalogData({
+                                  id_parametro: p.id_parametro,
+                                  nome: p.nome,
+                                  metodo_default_cod: p.metodo_default_cod || '',
+                                  metodo_default_nome: p.metodo_default_nome || '',
+                                  incerteza_default: p.incerteza_default !== null && p.incerteza_default !== undefined
+                                    ? String(parseFloat(p.incerteza_default))
+                                    : ''
+                                });
+                                setShowEditParamCatalog(true);
+                                setError('');
+                                setSuccess('');
+                              }}
+                            >
+                              Editar
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             ) : activeTab === 'validacoes' ? (
               analisadas.length === 0 ? (
                 <div className="card" style={{ textAlign: 'center', padding: '3.5rem' }}>
@@ -1618,8 +1984,11 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
                           <td>{am.cliente_nome}</td>
                           <td>{am.etar_nome}</td>
                           <td>{new Date(am.data_fim_analise).toLocaleString()}</td>
-                          <td>
-                            <button className="btn btn-primary" style={{ padding: '0.35rem 0.7rem', fontSize: '0.8rem' }} onClick={() => handleOpenValidacao(am)}>
+                          <td style={{ display: 'flex', gap: '0.5rem' }}>
+                            <button className="btn btn-secondary" style={{ padding: '0.35rem 0.7rem', fontSize: '0.8rem' }} onClick={() => handleOpenValidacao(am, true)}>
+                              Visualizar
+                            </button>
+                            <button className="btn btn-primary" style={{ padding: '0.35rem 0.7rem', fontSize: '0.8rem' }} onClick={() => handleOpenValidacao(am, false)}>
                               Validar
                             </button>
                           </td>
@@ -1653,9 +2022,14 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
                         <td>{am.etar_nome}</td>
                         <td>{new Date(am.data_validacao).toLocaleDateString()}</td>
                         <td>
-                          <button className="btn btn-primary" style={{ padding: '0.35rem 0.7rem', fontSize: '0.8rem', backgroundColor: 'var(--success)' }} onClick={() => handleDownloadBoletim(am)}>
-                            <Download size={14} /> Boletim PDF
-                          </button>
+                          <div style={{ display: 'flex', gap: '0.5rem' }}>
+                            <button className="btn btn-primary" style={{ padding: '0.35rem 0.7rem', fontSize: '0.8rem', backgroundColor: 'var(--success)' }} onClick={() => handleDownloadBoletim(am)}>
+                              <Download size={14} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '4px' }} /> Boletim PDF
+                            </button>
+                            <button className="btn btn-secondary" style={{ padding: '0.35rem 0.7rem', fontSize: '0.8rem' }} onClick={() => handleOpenValidacao(am, true)}>
+                              Visualizar
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -1666,7 +2040,74 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
           </div>
         )}
 
-        {/* Modal de Decisão (Gestor de Clientes) */}
+        {/* Modal: Editar Parâmetro no Catálogo Analítico (Responsável Lab) */}
+        {showEditParamCatalog && (
+          <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: '1rem' }}>
+            <div className="card animate-fade-in" style={{ width: '100%', maxWidth: '500px', marginBottom: 0 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                <div>
+                  <h3 style={{ marginBottom: '0.25rem' }}>Editar Parâmetro: {editingParamCatalogData.nome}</h3>
+                  <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem' }}>
+                    As alterações aplicam-se apenas a futuros registos. Os boletins já validados não são afetados.
+                  </p>
+                </div>
+                <button style={{ background: 'none', border: 'none', cursor: 'pointer' }} onClick={() => setShowEditParamCatalog(false)}><X size={20} /></button>
+              </div>
+              <form onSubmit={handleSaveParamCatalog}>
+                <div className="form-group">
+                  <label className="form-label">Código do Método (ex: SMEWW 4500-H+)</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="Ex: SMEWW 5220 B"
+                    value={editingParamCatalogData.metodo_default_cod}
+                    onChange={e => setEditingParamCatalogData({ ...editingParamCatalogData, metodo_default_cod: e.target.value })}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Nome do Método (ex: Refluxo Fechado / Titulometria)</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="Ex: Eletrometria"
+                    value={editingParamCatalogData.metodo_default_nome}
+                    onChange={e => setEditingParamCatalogData({ ...editingParamCatalogData, metodo_default_nome: e.target.value })}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Incerteza Padrão (em decimal — ex: 0.05 para 5%)</label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <input
+                      type="number"
+                      className="form-input"
+                      placeholder="Ex: 0.05"
+                      step="0.001"
+                      min="0"
+                      max="1"
+                      value={editingParamCatalogData.incerteza_default}
+                      onChange={e => setEditingParamCatalogData({ ...editingParamCatalogData, incerteza_default: e.target.value })}
+                      style={{ flex: 1 }}
+                    />
+                    <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+                      {editingParamCatalogData.incerteza_default !== '' && editingParamCatalogData.incerteza_default !== null && !isNaN(parseFloat(editingParamCatalogData.incerteza_default))
+                        ? `= ${(parseFloat(editingParamCatalogData.incerteza_default) * 100).toFixed(1)}%`
+                        : ''}
+                    </span>
+                  </div>
+                  <small style={{ color: 'var(--text-secondary)', fontSize: '0.78rem' }}>
+                    A incerteza absoluta é calculada automaticamente como: valor × percentagem (ex: CQO 100 mg/L × 5% = ±5 mg/L)
+                  </small>
+                </div>
+                <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem' }}>
+                  <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>Gravar Alterações</button>
+                  <button type="button" className="btn btn-secondary" onClick={() => setShowEditParamCatalog(false)}>Cancelar</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+
         {selectedDescarga && (
           <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }}>
             <div className="card" style={{ width: '100%', maxWidth: '480px', marginBottom: 0 }}>
@@ -1674,14 +2115,14 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
               <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', margin: '0.5rem 0 1.5rem 0' }}>
                 Aprove ou rejeite o pedido da <strong>{selectedDescarga.cliente_nome}</strong> para a <strong>{selectedDescarga.etar_nome}</strong> (Qtd: {selectedDescarga.quantidade} Litros).
               </p>
-              
+
               {selectedDescarga.observacoes && (
-                <div className="card" style={{ 
-                  backgroundColor: selectedDescarga.observacoes.includes('Revertido') ? 'var(--danger-light)' : 'var(--warning-light)', 
-                  color: selectedDescarga.observacoes.includes('Revertido') ? 'var(--danger)' : 'var(--warning)', 
-                  padding: '0.75rem', 
-                  marginBottom: '1rem', 
-                  borderLeft: selectedDescarga.observacoes.includes('Revertido') ? '4px solid var(--danger)' : '4px solid var(--warning)', 
+                <div className="card" style={{
+                  backgroundColor: selectedDescarga.observacoes.includes('Revertido') ? 'var(--danger-light)' : 'var(--warning-light)',
+                  color: selectedDescarga.observacoes.includes('Revertido') ? 'var(--danger)' : 'var(--warning)',
+                  padding: '0.75rem',
+                  marginBottom: '1rem',
+                  borderLeft: selectedDescarga.observacoes.includes('Revertido') ? '4px solid var(--danger)' : '4px solid var(--warning)',
                   fontSize: '0.85rem',
                   borderRadius: 'var(--radius-sm)'
                 }}>
@@ -1718,46 +2159,201 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
         {/* Modal de Validação (Responsável Laboratório) */}
         {selectedAmostra && selectedAmostra.amostra && (
           <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: '1rem' }}>
-            <div className="card" style={{ width: '100%', maxWidth: '520px', marginBottom: 0, overflowY: 'auto', maxHeight: '90vh' }}>
-              <h3>Validar Boletim Analítico</h3>
+            <div className="card" style={{ width: '100%', maxWidth: isViewOnly ? '560px' : '820px', marginBottom: 0, overflowY: 'auto', maxHeight: '90vh', transition: 'max-width 0.3s ease-in-out' }}>
+              <h3>{isViewOnly ? 'Visualizar Resultados Analíticos' : 'Validar Boletim Analítico'}</h3>
               <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '1rem' }}>
-                Revise os resultados laboratoriais registados para a amostra <strong>{selectedAmostra.amostra.qr_code_token}</strong>.
+                {isViewOnly
+                  ? `Resultados laboratoriais concluídos para a amostra ${selectedAmostra.amostra.qr_code_token}.`
+                  : `Revise os resultados laboratoriais registados para a amostra ${selectedAmostra.amostra.qr_code_token}.`
+                }
               </p>
 
-              <div style={{ backgroundColor: 'var(--bg-base)', padding: '0.75rem', borderRadius: 'var(--radius-sm)', fontSize: '0.85rem', marginBottom: '1rem', border: '1px solid var(--border)' }}>
-                <strong>Detalhes:</strong>
-                <div>Cliente: {selectedAmostra.amostra.cliente_nome}</div>
-                <div>Volume Real: {selectedAmostra.amostra.quantidade_real} Litros</div>
+              <div style={{ backgroundColor: 'var(--bg-base)', padding: '0.75rem', borderRadius: 'var(--radius-sm)', fontSize: '0.85rem', marginBottom: '1rem', border: '1px solid var(--border)', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+                <div>
+                  <strong>Detalhes:</strong>
+                  <div>Cliente: {selectedAmostra.amostra.cliente_nome}</div>
+                  <div>Volume Real: {selectedAmostra.amostra.quantidade_real} Litros</div>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <div>Data de Recolha: {new Date(selectedAmostra.amostra.data_recolha).toLocaleDateString()}</div>
+                  {selectedAmostra.amostra.data_validacao && (
+                    <div>Validado em: {new Date(selectedAmostra.amostra.data_validacao).toLocaleDateString()}</div>
+                  )}
+                </div>
               </div>
 
-              <div className="table-container" style={{ maxHeight: '200px', overflowY: 'auto' }}>
+              <div className="table-container" style={{ maxHeight: '350px', overflowY: 'auto' }}>
                 <table className="data-table">
                   <thead>
                     <tr>
                       <th>Parâmetro</th>
                       <th>Valor Medido</th>
+                      <th>Metodologia</th>
+                      <th>Incerteza</th>
+                      {!isViewOnly && <th style={{ textAlign: 'center' }}>Ação</th>}
                     </tr>
                   </thead>
                   <tbody>
-                    {selectedAmostra.resultados.map((r) => (
-                      <tr key={r.id_resultado}>
-                        <td>{r.parametro_nome}</td>
-                        <td>
-                          <strong>{Number(r.valor).toFixed(2)}</strong> {r.unidade}
-                          <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>{r.metodo}</div>
-                        </td>
-                      </tr>
-                    ))}
+                    {editResultados.map((r) => {
+                      const isEditing = editingParamId === r.id_parametro;
+                      return (
+                        <tr key={r.id_resultado || r.id_parametro}>
+                          <td style={{ verticalAlign: 'middle', fontWeight: '500' }}>{r.parametro_nome}</td>
+                          <td style={{ verticalAlign: 'middle' }}>
+                            {isEditing ? (
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                <input
+                                  type="number"
+                                  step="any"
+                                  className="form-input"
+                                  style={{ width: '85px', padding: '0.3rem', margin: 0 }}
+                                  value={r.valor}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    setEditResultados(prev => prev.map(item => item.id_parametro === r.id_parametro ? { ...item, valor: val } : item));
+                                  }}
+                                />
+                                <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{r.unidade}</span>
+                              </div>
+                            ) : (
+                              <div>
+                                <strong>{Number(r.valor).toFixed(2)}</strong> <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{r.unidade}</span>
+                              </div>
+                            )}
+                          </td>
+                          <td style={{ verticalAlign: 'middle' }}>
+                            {isEditing ? (
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                <input
+                                  type="text"
+                                  className="form-input"
+                                  style={{ width: '130px', padding: '0.3rem', margin: 0 }}
+                                  placeholder="ex: SMEWW"
+                                  value={r.metodo}
+                                  onChange={(e) => {
+                                    const m = e.target.value;
+                                    setEditResultados(prev => prev.map(item => item.id_parametro === r.id_parametro ? { ...item, metodo: m } : item));
+                                  }}
+                                />
+                                <button
+                                  type="button"
+                                  className="btn btn-secondary"
+                                  style={{ padding: '0.3rem', minWidth: 'auto', display: 'flex', alignItems: 'center' }}
+                                  title="Definir esta metodologia como padrão para o catálogo"
+                                  onClick={() => handleDefinirMetodoPadrao(r.id_parametro, r.metodo)}
+                                >
+                                  <Settings size={14} />
+                                </button>
+                              </div>
+                            ) : (
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', fontSize: '0.85rem' }}>
+                                <span>{r.metodo || <span style={{ color: 'var(--text-secondary)' }}>-</span>}</span>
+                                {r.metodo && !isViewOnly && (
+                                  <button
+                                    type="button"
+                                    className="btn btn-secondary"
+                                    style={{ padding: '0.2rem 0.4rem', fontSize: '0.7rem', minWidth: 'auto', display: 'flex', alignItems: 'center', gap: '2px' }}
+                                    title="Definir esta metodologia como padrão para o catálogo"
+                                    onClick={() => handleDefinirMetodoPadrao(r.id_parametro, r.metodo)}
+                                  >
+                                    <Settings size={12} /> Usar como Padrão
+                                  </button>
+                                )}
+                              </div>
+                            )}
+                          </td>
+                          <td style={{ verticalAlign: 'middle' }}>
+                            {isEditing ? (
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                <input
+                                  type="number"
+                                  step="any"
+                                  className="form-input"
+                                  style={{ width: '80px', padding: '0.3rem', margin: 0 }}
+                                  placeholder="Incerteza"
+                                  value={r.incerteza}
+                                  onChange={(e) => {
+                                    const inc = e.target.value;
+                                    setEditResultados(prev => prev.map(item => item.id_parametro === r.id_parametro ? { ...item, incerteza: inc } : item));
+                                  }}
+                                />
+                              </div>
+                            ) : (
+                              <div style={{ fontSize: '0.85rem' }}>
+                                {r.incerteza !== '' && r.incerteza !== null && r.incerteza !== undefined ? (
+                                  Number(r.incerteza) < 1
+                                    ? `±${Math.round(Number(r.incerteza) * 100)}%`
+                                    : `±${Math.round(Number(r.incerteza))}%`
+                                ) : (
+                                  <span style={{ color: 'var(--text-secondary)' }}>-</span>
+                                )}
+                              </div>
+                            )}
+                          </td>
+                          {!isViewOnly && (
+                            <td style={{ verticalAlign: 'middle', textAlign: 'center' }}>
+                              {isEditing ? (
+                                <div style={{ display: 'flex', gap: '4px', justifyContent: 'center' }}>
+                                  <button
+                                    type="button"
+                                    className="btn btn-primary"
+                                    style={{ padding: '0.25rem 0.4rem', backgroundColor: 'var(--success)', minWidth: 'auto' }}
+                                    onClick={() => setEditingParamId(null)}
+                                    title="Confirmar"
+                                  >
+                                    <Check size={14} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="btn btn-secondary"
+                                    style={{ padding: '0.25rem 0.4rem', minWidth: 'auto' }}
+                                    onClick={() => {
+                                      const orig = selectedAmostra.resultados.find(orig => orig.id_parametro === r.id_parametro);
+                                      setEditResultados(prev => prev.map(item => item.id_parametro === r.id_parametro ? {
+                                        ...item,
+                                        valor: orig.valor,
+                                        metodo: orig.metodo || '',
+                                        incerteza: orig.incerteza || ''
+                                      } : item));
+                                      setEditingParamId(null);
+                                    }}
+                                    title="Cancelar"
+                                  >
+                                    <X size={14} />
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  type="button"
+                                  className="btn btn-secondary"
+                                  style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', minWidth: 'auto' }}
+                                  onClick={() => setEditingParamId(r.id_parametro)}
+                                >
+                                  Editar
+                                </button>
+                              )}
+                            </td>
+                          )}
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
 
-              <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.5rem' }}>
-                <button className="btn btn-primary" style={{ flex: 1, backgroundColor: 'var(--success)' }} onClick={() => handleValidarAmostra(selectedAmostra.amostra.id_amostra)}>
-                  <ShieldCheck size={16} /> Validar e Assinar Boletim
-                </button>
-                <button className="btn btn-secondary" onClick={() => setSelectedAmostra(null)}>
-                  Fechar
+              <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.5rem', flexWrap: 'wrap' }}>
+                {!isViewOnly ? (
+                  <>
+                    <button className="btn btn-primary" style={{ flex: 1, minWidth: '150px' }} onClick={() => handleSaveEdits(false)}>
+                      Gravar Alterações
+                    </button>
+                    <button className="btn btn-primary" style={{ flex: 1, minWidth: '220px', backgroundColor: 'var(--success)' }} onClick={() => handleSaveEdits(true)}>
+                      <ShieldCheck size={16} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '4px' }} /> Validar e Assinar Boletim
+                    </button>
+                  </>
+                ) : null}
+                <button className="btn btn-secondary" style={{ flex: isViewOnly ? 1 : 'none', minWidth: '80px' }} onClick={() => setSelectedAmostra(null)}>
+                  {isViewOnly ? 'Fechar' : 'Cancelar'}
                 </button>
               </div>
             </div>
@@ -1783,16 +2379,16 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
                 </div>
                 <div className="form-group">
                   <label className="form-label">
-                    {editingClienteId 
-                      ? 'Alterar Palavra-passe do Cliente (Opcional - deixar em branco para manter)' 
+                    {editingClienteId
+                      ? 'Alterar Palavra-passe do Cliente (Opcional - deixar em branco para manter)'
                       : 'Palavra-passe (Opcional - por omissão: Descargas123!)'}
                   </label>
-                  <input 
-                    type="password" 
-                    className="form-input" 
-                    placeholder={editingClienteId ? "Deixe em branco para manter" : "Introduza a password"} 
-                    value={newClienteData.password || ''} 
-                    onChange={e => setNewClienteData({ ...newClienteData, password: e.target.value })} 
+                  <input
+                    type="password"
+                    className="form-input"
+                    placeholder={editingClienteId ? "Deixe em branco para manter" : "Introduza a password"}
+                    value={newClienteData.password || ''}
+                    onChange={e => setNewClienteData({ ...newClienteData, password: e.target.value })}
                   />
                 </div>
                 <div className="form-group">
@@ -1862,12 +2458,12 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
                   <input type="number" className="form-input" min="1" value={newAutorizacaoData.quota} onChange={e => setNewAutorizacaoData({ ...newAutorizacaoData, quota: e.target.value })} />
                 </div>
                 <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', margin: '1rem 0' }}>
-                  <input 
-                    type="checkbox" 
-                    id="auto-aprovacao-check" 
+                  <input
+                    type="checkbox"
+                    id="auto-aprovacao-check"
                     style={{ width: '20px', height: '20px', cursor: 'pointer' }}
-                    checked={newAutorizacaoData.auto_aprovacao} 
-                    onChange={e => setNewAutorizacaoData({ ...newAutorizacaoData, auto_aprovacao: e.target.checked })} 
+                    checked={newAutorizacaoData.auto_aprovacao}
+                    onChange={e => setNewAutorizacaoData({ ...newAutorizacaoData, auto_aprovacao: e.target.checked })}
                   />
                   <label htmlFor="auto-aprovacao-check" style={{ fontSize: '0.85rem', cursor: 'pointer' }}>
                     <strong>Ativar Auto-Aprovação</strong> (Ignora triagem manual)
@@ -1888,63 +2484,76 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
             <div className="card" style={{ width: '100%', maxWidth: '480px', marginBottom: 0, maxHeight: '90vh', overflowY: 'auto' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
                 <h3>{editingUtilizadorId ? 'Editar Utilizador Interno' : 'Registar Novo Utilizador Interno'}</h3>
-                <button 
-                  style={{ background: 'none', border: 'none', cursor: 'pointer' }} 
+                <button
+                  style={{ background: 'none', border: 'none', cursor: 'pointer' }}
                   onClick={() => setShowAddUtilizador(false)}
                 >
                   <X size={20} />
                 </button>
               </div>
-              
+
               <form onSubmit={handleSaveUtilizador}>
                 <div className="form-group">
                   <label className="form-label">Nome Completo *</label>
-                  <input 
-                    type="text" 
-                    className="form-input" 
-                    placeholder="Ex: Carlos Silva" 
-                    required 
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="Ex: Carlos Silva"
+                    required
                     disabled={!!editingUtilizadorId}
-                    value={newUtilizadorData.nome} 
-                    onChange={e => setNewUtilizadorData({ ...newUtilizadorData, nome: e.target.value })} 
+                    value={newUtilizadorData.nome}
+                    onChange={e => setNewUtilizadorData({ ...newUtilizadorData, nome: e.target.value })}
                   />
                 </div>
-                
+
                 <div className="form-group">
                   <label className="form-label">Endereço de Email (Acesso) *</label>
-                  <input 
-                    type="email" 
-                    className="form-input" 
-                    placeholder="carlos.silva@etar.pt" 
-                    required 
-                    value={newUtilizadorData.email} 
-                    onChange={e => setNewUtilizadorData({ ...newUtilizadorData, email: e.target.value })} 
+                  <input
+                    type="email"
+                    className="form-input"
+                    placeholder="carlos.silva@etar.pt"
+                    required
+                    value={newUtilizadorData.email}
+                    onChange={e => setNewUtilizadorData({ ...newUtilizadorData, email: e.target.value })}
                   />
                 </div>
 
                 <div className="form-group">
                   <label className="form-label">Perfil / Permissões de Acesso *</label>
-                  <select 
-                    className="form-input" 
-                    required 
-                    value={newUtilizadorData.id_perfil} 
+                  <select
+                    className="form-input"
+                    required
+                    value={newUtilizadorData.id_perfil}
                     onChange={e => setNewUtilizadorData({ ...newUtilizadorData, id_perfil: e.target.value, id_etar: (e.target.value !== '2' && e.target.value !== '3') ? '' : newUtilizadorData.id_etar })}
                   >
-                    <option value="2">Operador de ETAR</option>
-                    <option value="3">Responsável de ETAR</option>
-                    <option value="4">Técnico de Laboratório</option>
-                    <option value="5">Responsável de Laboratório</option>
-                    <option value="6">Gestor de Clientes</option>
+                    {perfisList.length > 0 ? (
+                      perfisList
+                        .filter(p => Number(p.id_perfil) !== 1)
+                        .map(p => (
+                          <option key={p.id_perfil} value={String(p.id_perfil)}>
+                            {p.nome.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, c => c.toUpperCase())}
+                          </option>
+                        ))
+                    ) : (
+                      <>
+                        <option value="2">Operador de ETAR</option>
+                        <option value="3">Responsável de ETAR</option>
+                        <option value="4">Técnico de Laboratório</option>
+                        <option value="5">Responsável de Laboratório</option>
+                        <option value="6">Gestor de Clientes</option>
+                        <option value="7">Gestor Admin</option>
+                      </>
+                    )}
                   </select>
                 </div>
 
                 {(newUtilizadorData.id_perfil === '2' || newUtilizadorData.id_perfil === '3') && (
                   <div className="form-group">
                     <label className="form-label">ETAR Associada *</label>
-                    <select 
-                      className="form-input" 
-                      required 
-                      value={newUtilizadorData.id_etar} 
+                    <select
+                      className="form-input"
+                      required
+                      value={newUtilizadorData.id_etar}
                       onChange={e => setNewUtilizadorData({ ...newUtilizadorData, id_etar: e.target.value })}
                     >
                       <option value="">-- Escolha uma ETAR --</option>
@@ -1957,25 +2566,25 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
 
                 <div className="form-group">
                   <label className="form-label">
-                    {editingUtilizadorId 
-                      ? 'Alterar Palavra-passe (Opcional - deixar em branco para manter)' 
+                    {editingUtilizadorId
+                      ? 'Alterar Palavra-passe (Opcional - deixar em branco para manter)'
                       : 'Palavra-passe (Opcional - por omissão: Descargas123!)'}
                   </label>
-                  <input 
-                    type="password" 
-                    className="form-input" 
-                    placeholder={editingUtilizadorId ? "Deixe em branco para manter" : "Introduza a palavra-passe"} 
-                    value={newUtilizadorData.password || ''} 
-                    onChange={e => setNewUtilizadorData({ ...newUtilizadorData, password: e.target.value })} 
+                  <input
+                    type="password"
+                    className="form-input"
+                    placeholder={editingUtilizadorId ? "Deixe em branco para manter" : "Introduza a palavra-passe"}
+                    value={newUtilizadorData.password || ''}
+                    onChange={e => setNewUtilizadorData({ ...newUtilizadorData, password: e.target.value })}
                   />
                 </div>
 
                 <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '1.25rem' }}>
-                  <input 
-                    type="checkbox" 
+                  <input
+                    type="checkbox"
                     id="utilizador_ativo"
-                    checked={!!newUtilizadorData.ativo} 
-                    onChange={e => setNewUtilizadorData({ ...newUtilizadorData, ativo: e.target.checked })} 
+                    checked={!!newUtilizadorData.ativo}
+                    onChange={e => setNewUtilizadorData({ ...newUtilizadorData, ativo: e.target.checked })}
                   />
                   <label htmlFor="utilizador_ativo" className="form-label" style={{ marginBottom: 0, cursor: 'pointer' }}>
                     Conta de Utilizador Ativa (Permite login)
@@ -1986,9 +2595,9 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
                   <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>
                     {editingUtilizadorId ? 'Gravar Alterações' : 'Criar Utilizador'}
                   </button>
-                  <button 
-                    type="button" 
-                    className="btn btn-secondary" 
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
                     onClick={() => setShowAddUtilizador(false)}
                   >
                     Cancelar
@@ -2010,32 +2619,32 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
               <form onSubmit={handleSaveEtar}>
                 <div className="form-group">
                   <label className="form-label">Nome da ETAR *</label>
-                  <input 
-                    type="text" 
-                    className="form-input" 
-                    placeholder="Ex: ETAR Leste" 
-                    required 
-                    value={newEtarData.nome} 
-                    onChange={e => setNewEtarData({ ...newEtarData, nome: e.target.value })} 
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="Ex: ETAR Leste"
+                    required
+                    value={newEtarData.nome}
+                    onChange={e => setNewEtarData({ ...newEtarData, nome: e.target.value })}
                   />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Localização (Concelho/Cidade)</label>
-                  <input 
-                    type="text" 
-                    className="form-input" 
-                    placeholder="Ex: Vila Real" 
-                    value={newEtarData.localizacao} 
-                    onChange={e => setNewEtarData({ ...newEtarData, localizacao: e.target.value })} 
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="Ex: Vila Real"
+                    value={newEtarData.localizacao}
+                    onChange={e => setNewEtarData({ ...newEtarData, localizacao: e.target.value })}
                   />
                 </div>
                 <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', margin: '1rem 0' }}>
-                  <input 
-                    type="checkbox" 
-                    id="etar-disponivel-check" 
+                  <input
+                    type="checkbox"
+                    id="etar-disponivel-check"
                     style={{ width: '20px', height: '20px', cursor: 'pointer' }}
-                    checked={newEtarData.disponivel} 
-                    onChange={e => setNewEtarData({ ...newEtarData, disponivel: e.target.checked })} 
+                    checked={newEtarData.disponivel}
+                    onChange={e => setNewEtarData({ ...newEtarData, disponivel: e.target.checked })}
                   />
                   <label htmlFor="etar-disponivel-check" style={{ fontSize: '0.85rem', cursor: 'pointer' }}>
                     <strong>Ativa / Disponível para receber descargas</strong>
@@ -2055,63 +2664,258 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
           <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: '1rem' }}>
             <div className="card" style={{ width: '100%', maxWidth: '450px', marginBottom: 0 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-                <h3>Registar Novo Parâmetro</h3>
-                <button style={{ background: 'none', border: 'none', cursor: 'pointer' }} onClick={() => setShowAddParam(false)}><X size={20} /></button>
+                <h3>{editingGlobalParamId ? 'Editar Parâmetro' : 'Registar Novo Parâmetro'}</h3>
+                <button style={{ background: 'none', border: 'none', cursor: 'pointer' }} onClick={() => { setShowAddParam(false); setEditingGlobalParamId(null); setShowAddTypeInline(false); setNewTypeName(''); }}><X size={20} /></button>
               </div>
               <form onSubmit={handleSaveParam}>
                 <div className="form-group">
                   <label className="form-label">Nome do Parâmetro *</label>
-                  <input 
-                    type="text" 
-                    className="form-input" 
-                    placeholder="Ex: CBO5" 
-                    required 
-                    value={newParamData.nome} 
-                    onChange={e => setNewParamData({ ...newParamData, nome: e.target.value })} 
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="Ex: CBO5"
+                    required
+                    value={newParamData.nome}
+                    onChange={e => setNewParamData({ ...newParamData, nome: e.target.value })}
                   />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Tipo de Parâmetro *</label>
-                  <select 
-                    className="form-input" 
-                    required 
-                    value={newParamData.tipo_parametro} 
-                    onChange={e => setNewParamData({ ...newParamData, tipo_parametro: e.target.value })}
-                  >
-                    <option value="FISICO_QUIMICO">Físico-Químico</option>
-                    <option value="AZOTO">Azoto / Nutrientes</option>
-                    <option value="METAIS">Metais Pesados</option>
-                    <option value="OLEOS E GORDURAS">Óleos e Gorduras</option>
-                  </select>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                    <label className="form-label" style={{ marginBottom: 0 }}>Tipo de Parâmetro *</label>
+                    <button
+                      type="button"
+                      className="btn-link"
+                      style={{ fontSize: '0.8rem', background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer', padding: 0 }}
+                      onClick={() => setShowAddTypeInline(!showAddTypeInline)}
+                    >
+                      {showAddTypeInline ? 'Cancelar' : '+ Novo Tipo'}
+                    </button>
+                  </div>
+                  {!showAddTypeInline ? (
+                    <select
+                      className="form-input"
+                      required
+                      value={newParamData.tipo_parametro}
+                      onChange={e => setNewParamData({ ...newParamData, tipo_parametro: e.target.value })}
+                    >
+                      {tiposParametrosList.map(type => (
+                        <option key={type} value={type}>
+                          {type.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, c => c.toUpperCase())}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                      <input
+                        type="text"
+                        className="form-input"
+                        style={{ margin: 0, flex: 1 }}
+                        placeholder="Ex: Microbiologia"
+                        value={newTypeName}
+                        onChange={e => setNewTypeName(e.target.value)}
+                      />
+                      <button
+                        type="button"
+                        className="btn btn-primary"
+                        style={{ padding: '0.4rem 0.8rem', minWidth: 'auto' }}
+                        onClick={async () => {
+                          if (!newTypeName.trim()) return;
+                          try {
+                            const res = await adminService.criarTipoParametro(newTypeName);
+                            const newType = res.tipo;
+                            // Adicionar à lista local de tipos
+                            setTiposParametrosList(prev => [...prev, newType].sort());
+                            // Selecionar o novo tipo criado
+                            setNewParamData(prev => ({ ...prev, tipo_parametro: newType }));
+                            setNewTypeName('');
+                            setShowAddTypeInline(false);
+                            setSuccess('Novo tipo de parâmetro adicionado com sucesso!');
+                          } catch (err) {
+                            setError(err.message || 'Erro ao criar novo tipo.');
+                          }
+                        }}
+                      >
+                        Adicionar
+                      </button>
+                    </div>
+                  )}
                 </div>
                 <div className="form-group">
                   <label className="form-label">Unidade Padrão *</label>
-                  <input 
-                    type="text" 
-                    className="form-input" 
-                    placeholder="Ex: mg/L" 
-                    required 
-                    value={newParamData.unidade_default} 
-                    onChange={e => setNewParamData({ ...newParamData, unidade_default: e.target.value })} 
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="Ex: mg/L"
+                    required
+                    value={newParamData.unidade_default}
+                    onChange={e => setNewParamData({ ...newParamData, unidade_default: e.target.value })}
                   />
                 </div>
                 <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', margin: '1rem 0' }}>
-                  <input 
-                    type="checkbox" 
-                    id="param-obrigatorio-check" 
+                  <input
+                    type="checkbox"
+                    id="param-obrigatorio-check"
                     style={{ width: '20px', height: '20px', cursor: 'pointer' }}
-                    checked={newParamData.obrigatorio} 
-                    onChange={e => setNewParamData({ ...newParamData, obrigatorio: e.target.checked })} 
+                    checked={newParamData.obrigatorio}
+                    onChange={e => setNewParamData({ ...newParamData, obrigatorio: e.target.checked })}
                   />
                   <label htmlFor="param-obrigatorio-check" style={{ fontSize: '0.85rem', cursor: 'pointer' }}>
                     <strong>Obrigatório em todas as análises</strong>
                   </label>
                 </div>
                 <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem' }}>
-                  <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>Gravar Parâmetro</button>
-                  <button type="button" className="btn btn-secondary" onClick={() => setShowAddParam(false)}>Cancelar</button>
+                  <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>{editingGlobalParamId ? 'Gravar Alterações' : 'Gravar Parâmetro'}</button>
+                  <button type="button" className="btn btn-secondary" onClick={() => { setShowAddParam(false); setEditingGlobalParamId(null); setShowAddTypeInline(false); setNewTypeName(''); }}>Cancelar</button>
                 </div>
               </form>
+            </div>
+          </div>
+        )}
+
+        {/* Modal: Enviar Aviso Geral a Todos os Utilizadores */}
+        {showGeneralMsgModal && (
+          <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: '1rem' }}>
+            <div className="card animate-fade-in" style={{ width: '100%', maxWidth: '480px', marginBottom: 0 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Megaphone size={20} /> Enviar Aviso Geral</h3>
+                <button style={{ background: 'none', border: 'none', cursor: 'pointer' }} onClick={() => setShowGeneralMsgModal(false)}><X size={20} /></button>
+              </div>
+              <form onSubmit={handleSendGeneralMessage}>
+                <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '1.25rem' }}>
+                  Escreva um aviso ou mensagem de sistema. Esta mensagem será enviada em tempo real para o sininho de notificações de **todos** os utilizadores do sistema (clientes, operadores, técnicos, etc.).
+                </p>
+                <div className="form-group">
+                  <label className="form-label">Mensagem *</label>
+                  <textarea
+                    className="form-input"
+                    required
+                    rows={4}
+                    value={generalMsgText}
+                    onChange={e => setGeneralMsgText(e.target.value)}
+                    placeholder="Ex: Informamos que a ETAR Norte estará em manutenção programada amanhã..."
+                    style={{ resize: 'vertical' }}
+                  />
+                </div>
+                <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem' }}>
+                  <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>Enviar Aviso</button>
+                  <button type="button" className="btn btn-secondary" onClick={() => setShowGeneralMsgModal(false)}>Cancelar</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* Modal: Gerir Perfis / Cargos */}
+        {showPerfisModal && (
+          <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: '1rem' }}>
+            <div className="card animate-fade-in" style={{ width: '100%', maxWidth: '500px', marginBottom: 0, maxHeight: '90vh', overflowY: 'auto' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                <h3>Gerir Perfis e Cargos</h3>
+                <button
+                  style={{ background: 'none', border: 'none', cursor: 'pointer' }}
+                  onClick={() => {
+                    setShowPerfisModal(false);
+                    setEditingPerfilId(null);
+                    setNewPerfilData({ nome: '' });
+                  }}
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              {/* Form de Criação/Edição */}
+              <form onSubmit={handleSavePerfil} style={{ marginBottom: '2rem', paddingBottom: '1.5rem', borderBottom: '1px solid var(--border)' }}>
+                <h4 style={{ marginBottom: '1rem' }}>
+                  {editingPerfilId ? 'Editar Nome do Perfil' : 'Adicionar Novo Perfil'}
+                </h4>
+                <div className="form-group">
+                  <label className="form-label">Nome do Perfil *</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="Ex: Técnico de Qualidade"
+                    required
+                    value={newPerfilData.nome}
+                    onChange={e => setNewPerfilData({ nome: e.target.value })}
+                  />
+                </div>
+                <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1rem' }}>
+                  <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>
+                    {editingPerfilId ? 'Gravar Alteração' : 'Criar Perfil'}
+                  </button>
+                  {editingPerfilId && (
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      onClick={() => {
+                        setEditingPerfilId(null);
+                        setNewPerfilData({ nome: '' });
+                      }}
+                    >
+                      Cancelar
+                    </button>
+                  )}
+                </div>
+              </form>
+
+              {/* Listagem de Perfis existentes */}
+              <div>
+                <h4 style={{ marginBottom: '1rem' }}>Perfis Disponíveis no Sistema</h4>
+                <div className="table-container" style={{ maxHeight: '300px', overflowY: 'auto' }}>
+                  <table className="data-table" style={{ fontSize: '0.85rem' }}>
+                    <thead>
+                      <tr>
+                        <th>ID</th>
+                        <th>Perfil</th>
+                        <th style={{ textAlign: 'right' }}>Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {perfisList.map(p => (
+                        <tr key={p.id_perfil}>
+                          <td><strong>#{p.id_perfil}</strong></td>
+                          <td>
+                            <span className="badge badge-info" style={{ fontSize: '0.75rem' }}>
+                              {p.nome}
+                            </span>
+                          </td>
+                          <td style={{ textAlign: 'right' }}>
+                            {p.id_perfil !== 1 ? (
+                              <button
+                                type="button"
+                                className="btn btn-primary"
+                                style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem' }}
+                                onClick={() => {
+                                  setEditingPerfilId(p.id_perfil);
+                                  setNewPerfilData({ nome: p.nome.replace(/_/g, ' ') });
+                                }}
+                              >
+                                Editar
+                              </button>
+                            ) : (
+                              <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontStyle: 'italic' }}>Sistema</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div style={{ marginTop: '1.5rem', display: 'flex', justifyContent: 'flex-end' }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => {
+                    setShowPerfisModal(false);
+                    setEditingPerfilId(null);
+                    setNewPerfilData({ nome: '' });
+                  }}
+                >
+                  Fechar
+                </button>
+              </div>
             </div>
           </div>
         )}

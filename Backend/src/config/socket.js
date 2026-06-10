@@ -49,7 +49,7 @@ function inicializarSocket(server) {
       const room = `cliente-${id_cliente}`;
       socket.join(room);
       console.log(`   └─ Juntou-se à sala: ${room}`);
-    } else if (perfil === 'OPERADOR_ETAR' && id_etar) {
+    } else if ((perfil === 'OPERADOR_ETAR' || perfil === 'RESPONSAVEL_ETAR') && id_etar) {
       const room = `etar-${id_etar}`;
       socket.join(room);
       console.log(`   └─ Juntou-se à sala: ${room}`);
@@ -57,7 +57,7 @@ function inicializarSocket(server) {
       const room = 'laboratorio-tecnicos';
       socket.join(room);
       console.log(`   └─ Juntou-se à sala: ${room}`);
-    } else if (perfil === 'RESPONSAVEL_LAB' || perfil === 'RESPONSAVEL_ETAR') {
+    } else if (perfil === 'RESPONSAVEL_LAB') {
       const room = 'laboratorio-responsaveis';
       socket.join(room);
       console.log(`   └─ Juntou-se à sala: ${room}`);
@@ -88,7 +88,21 @@ function enviarNotificacao(sala, evento, dados) {
   io.to(sala).emit(evento, dados);
 }
 
+/**
+ * Função utilitária para emitir eventos para todos os utilizadores (broadcast geral)
+ */
+function enviarNotificacaoGeral(evento, dados) {
+  if (!io) {
+    console.warn('⚠️ Tentou-se enviar notificação antes do Socket.io ser inicializado.');
+    return;
+  }
+  
+  console.log(`📢 Emitindo evento geral [${evento}] para todos os utilizadores ligados`);
+  io.emit(evento, dados);
+}
+
 module.exports = {
   inicializarSocket,
-  enviarNotificacao
+  enviarNotificacao,
+  enviarNotificacaoGeral
 };

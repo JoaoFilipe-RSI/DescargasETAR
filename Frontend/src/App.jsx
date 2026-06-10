@@ -80,6 +80,13 @@ export default function App() {
 
         const handlers = [];
 
+        // Ouvir avisos gerais do sistema
+        const handleMensagemGeral = (data) => {
+          addNotification(`[MENSAGEM GERAL] ${data.mensagem}`);
+        };
+        webSocketService.on('mensagem-geral', handleMensagemGeral);
+        handlers.push({ event: 'mensagem-geral', cb: handleMensagemGeral });
+
         // Mapear eventos por perfil do utilizador para alimentar o sininho
         if (user.perfil === 'CLIENTE') {
           const handleDecisao = (data) => addNotification(data.mensagem);

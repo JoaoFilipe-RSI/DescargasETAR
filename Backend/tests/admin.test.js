@@ -30,6 +30,7 @@ describe('Módulo de Administração - Testes de Integração', () => {
   const createdDescargaIds = [];
   const createdEtarIds = [];
   const createdParamIds = [];
+  const createdPerfilIds = [];
 
   let originalEtarStates = [];
   let originalDescargaStates = [];
@@ -55,10 +56,17 @@ describe('Módulo de Administração - Testes de Integração', () => {
   // Limpeza de lixo de testes
   afterAll(async () => {
     try {
+      await pool.query("DELETE FROM notificacao WHERE mensagem LIKE '%[TESTE_AVISO_GERAL]%' OR mensagem LIKE '%CBO5 Teste%' OR mensagem LIKE '%Chumbo Teste%'");
+      await pool.query("DELETE FROM historico WHERE acao = 'ENVIO_AVISO_GERAL' AND descricao LIKE '%[TESTE_AVISO_GERAL]%'");
+
       if (createdParamIds.length > 0) {
         await pool.query("DELETE FROM historico WHERE entidade = 'PARAMETRO' AND id_entidade = ANY($1)", [createdParamIds]);
         await pool.query('DELETE FROM cliente_parametro WHERE id_parametro = ANY($1)', [createdParamIds]);
         await pool.query('DELETE FROM parametro WHERE id_parametro = ANY($1)', [createdParamIds]);
+      }
+      if (createdPerfilIds.length > 0) {
+        await pool.query("DELETE FROM historico WHERE entidade = 'PERFIL' AND id_entidade = ANY($1)", [createdPerfilIds]);
+        await pool.query('DELETE FROM perfil WHERE id_perfil = ANY($1)', [createdPerfilIds]);
       }
       if (createdDescargaIds.length > 0) {
         await pool.query('DELETE FROM descarga WHERE id_descarga = ANY($1)', [createdDescargaIds]);
@@ -633,6 +641,12 @@ describe('Módulo de Administração - Testes de Integração', () => {
       expect(res.body.parametro.nome).toBe('CBO5 Teste');
       expect(res.body.parametro.tipo_parametro).toBe('FISICO_QUIMICO');
       createdParamIds.push(res.body.parametro.id_parametro);
+
+      // Verificar se a notificação para o responsável de laboratório foi gerada na BD
+      const notifRes = await pool.query(
+        "SELECT COUNT(*)::int AS total FROM notificacao WHERE mensagem LIKE '%CBO5 Teste%' AND tipo = 'LABORATORIO'"
+      );
+      expect(notifRes.rows[0].total).toBeGreaterThan(0);
     });
 
     test('Deve criar (201) um novo parâmetro analítico no catálogo por um gestor admin', async () => {
@@ -679,6 +693,208 @@ describe('Módulo de Administração - Testes de Integração', () => {
         });
       expect(res.status).toBe(400);
       expect(res.body.erro).toBe('Tipo de parâmetro inválido.');
+    });
+
+    test('Deve obter (200) a lista de tipos de parâmetros válidos', async () => {
+      const res = await request(app)
+        .get('/api/admin/parametros/tipos')
+        .set('Authorization', `Bearer ${tokens.gestor}`);
+      expect(res.status).toBe(200);
+      expect(Array.isArray(res.body)).toBe(true);
+      expect(res.body).toContain('FISICO_QUIMICO');
+    });
+
+    test('Deve criar (201) um novo tipo de parâmetro por um gestor admin', async () => {
+      const uniqueTypeName = `TEST_TYPE_${Date.now()}`;
+      const res = await request(app)
+        .post('/api/admin/parametros/tipos')
+        .set('Authorization', `Bearer ${tokens.gestorAdmin}`)
+        .send({ nome: uniqueTypeName });
+      expect(res.status).toBe(201);
+      expect(res.body.tipo).toBe(uniqueTypeName);
+
+      // E agora deve aparecer na lista
+      const checkRes = await request(app)
+        .get('/api/admin/parametros/tipos')
+        .set('Authorization', `Bearer ${tokens.gestor}`);
+      expect(checkRes.status).toBe(200);
+      expect(checkRes.body).toContain(uniqueTypeName);
+    });
+
+    test('Deve atualizar (200) dados de um parâmetro analítico no catálogo', async () => {
+      const idParam = createdParamIds[0];
+      const res = await request(app)
+        .put(`/api/admin/parametros/${idParam}`)
+        .set('Authorization', `Bearer ${tokens.gestor}`)
+        .send({
+          nome: 'CBO5 Teste Modificado',
+          tipo_parametro: 'FISICO_QUIMICO',
+          unidade_default: 'g/L',
+          obrigatorio: true,
+          metodo_default_cod: 'SMEWW 5210 B',
+          metodo_default_nome: 'Respirometria',
+          incerteza_default: 0.12
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.parametro.nome).toBe('CBO5 Teste Modificado');
+      expect(res.body.parametro.unidade_default).toBe('g/L');
+      expect(res.body.parametro.obrigatorio).toBe(true);
+      expect(res.body.parametro.metodo_default_cod).toBe('SMEWW 5210 B');
+      expect(res.body.parametro.metodo_default_nome).toBe('Respirometria');
+      expect(Number(res.body.parametro.incerteza_default)).toBe(0.12);
+    });
+  });
+
+  describe('10. Envio de Mensagem Geral', () => {
+    test('Deve impedir (401) o envio de mensagem geral por utilizador não autenticado', async () => {
+      const res = await request(app)
+        .post('/api/admin/notificacoes/geral')
+        .send({ mensagem: 'Aviso [TESTE_AVISO_GERAL] não autenticado' });
+      expect(res.status).toBe(401);
+    });
+
+    test('Deve impedir (403) o envio de mensagem geral por gestores comuns ou clientes', async () => {
+      const resGestor = await request(app)
+        .post('/api/admin/notificacoes/geral')
+        .set('Authorization', `Bearer ${tokens.gestor}`)
+        .send({ mensagem: 'Aviso [TESTE_AVISO_GERAL] gestor comum' });
+      expect(resGestor.status).toBe(403);
+
+      const resCliente = await request(app)
+        .post('/api/admin/notificacoes/geral')
+        .set('Authorization', `Bearer ${tokens.cliente}`)
+        .send({ mensagem: 'Aviso [TESTE_AVISO_GERAL] cliente' });
+      expect(resCliente.status).toBe(403);
+    });
+
+    test('Deve permitir (201) o envio de mensagem geral por um gestor admin', async () => {
+      const res = await request(app)
+        .post('/api/admin/notificacoes/geral')
+        .set('Authorization', `Bearer ${tokens.gestorAdmin}`)
+        .send({ mensagem: 'Atenção todos: [TESTE_AVISO_GERAL] manutenção agendada.' });
+
+      expect(res.status).toBe(201);
+      expect(res.body.mensagem).toContain('Aviso geral enviado e registado com sucesso');
+      expect(res.body.id_historico).toBeDefined();
+
+      // Verificar na BD se as notificações foram criadas
+      const countRes = await pool.query(
+        "SELECT COUNT(*)::int AS total FROM notificacao WHERE mensagem LIKE '%[TESTE_AVISO_GERAL]%'"
+      );
+      expect(countRes.rows[0].total).toBeGreaterThan(0);
+
+      // Verificar se o histórico foi criado
+      const histRes = await pool.query(
+        "SELECT * FROM historico WHERE id_historico = $1",
+        [res.body.id_historico]
+      );
+      expect(histRes.rows.length).toBe(1);
+      expect(histRes.rows[0].acao).toBe('ENVIO_AVISO_GERAL');
+    });
+
+    test('Deve impedir (400) o envio de mensagem geral sem texto', async () => {
+      const res = await request(app)
+        .post('/api/admin/notificacoes/geral')
+        .set('Authorization', `Bearer ${tokens.gestorAdmin}`)
+        .send({ mensagem: '' });
+      expect(res.status).toBe(400);
+      expect(res.body.erro).toBe('Por favor, indique a mensagem geral a enviar.');
+    });
+  });
+
+  describe('11. Gestão de Perfis de Utilizador', () => {
+    test('Deve impedir (401) o acesso de utilizador não autenticado', async () => {
+      const res = await request(app).get('/api/admin/perfis');
+      expect(res.status).toBe(401);
+    });
+
+    test('Deve impedir (403) o acesso de cliente ou gestor de clientes comum à listagem de perfis', async () => {
+      const resCliente = await request(app)
+        .get('/api/admin/perfis')
+        .set('Authorization', `Bearer ${tokens.cliente}`);
+      expect(resCliente.status).toBe(403);
+
+      const resGestor = await request(app)
+        .get('/api/admin/perfis')
+        .set('Authorization', `Bearer ${tokens.gestor}`);
+      expect(resGestor.status).toBe(403);
+    });
+
+    test('Deve permitir (200) a listagem de perfis por gestor admin', async () => {
+      const res = await request(app)
+        .get('/api/admin/perfis')
+        .set('Authorization', `Bearer ${tokens.gestorAdmin}`);
+      expect(res.status).toBe(200);
+      expect(Array.isArray(res.body)).toBe(true);
+      expect(res.body.length).toBeGreaterThanOrEqual(7);
+      
+      const nomes = res.body.map(p => p.nome);
+      expect(nomes).toContain('CLIENTE');
+      expect(nomes).toContain('GESTOR_ADMIN');
+    });
+
+    test('Deve criar (201) um novo perfil por gestor admin com normalização de nome', async () => {
+      const res = await request(app)
+        .post('/api/admin/perfis')
+        .set('Authorization', `Bearer ${tokens.gestorAdmin}`)
+        .send({ nome: ' Técnico de  Qualidade ' });
+
+      expect(res.status).toBe(201);
+      expect(res.body.perfil).toBeDefined();
+      expect(res.body.perfil.id_perfil).toBeDefined();
+      expect(res.body.perfil.nome).toBe('TECNICO_DE_QUALIDADE');
+      createdPerfilIds.push(res.body.perfil.id_perfil);
+
+      const hist = await pool.query(
+        "SELECT * FROM historico WHERE entidade = 'PERFIL' AND id_entidade = $1 AND acao = 'CRIACAO'",
+        [res.body.perfil.id_perfil]
+      );
+      expect(hist.rows.length).toBe(1);
+    });
+
+    test('Deve impedir (400) a criação de perfil duplicado', async () => {
+      const res = await request(app)
+        .post('/api/admin/perfis')
+        .set('Authorization', `Bearer ${tokens.gestorAdmin}`)
+        .send({ nome: 'tecnico_de_qualidade' });
+      expect(res.status).toBe(400);
+      expect(res.body.erro).toBe('Já existe um perfil com este nome.');
+    });
+
+    test('Deve atualizar (200) um perfil existente por gestor admin', async () => {
+      if (createdPerfilIds.length === 0) return;
+      const id = createdPerfilIds[0];
+      const res = await request(app)
+        .put(`/api/admin/perfis/${id}`)
+        .set('Authorization', `Bearer ${tokens.gestorAdmin}`)
+        .send({ nome: 'Técnico Qualidade Atualizado' });
+
+      expect(res.status).toBe(200);
+      expect(res.body.perfil.nome).toBe('TECNICO_QUALIDADE_ATUALIZADO');
+
+      const hist = await pool.query(
+        "SELECT * FROM historico WHERE entidade = 'PERFIL' AND id_entidade = $1 AND acao = 'EDICAO'",
+        [id]
+      );
+      expect(hist.rows.length).toBe(1);
+    });
+
+    test('Deve impedir (400) a atualização para um nome de perfil duplicado', async () => {
+      const resOutro = await request(app)
+        .post('/api/admin/perfis')
+        .set('Authorization', `Bearer ${tokens.gestorAdmin}`)
+        .send({ nome: 'OUTRO_PERFIL_TESTE' });
+      expect(resOutro.status).toBe(201);
+      createdPerfilIds.push(resOutro.body.perfil.id_perfil);
+
+      const id = resOutro.body.perfil.id_perfil;
+      const resColisao = await request(app)
+        .put(`/api/admin/perfis/${id}`)
+        .set('Authorization', `Bearer ${tokens.gestorAdmin}`)
+        .send({ nome: 'TECNICO_QUALIDADE_ATUALIZADO' });
+      expect(resColisao.status).toBe(400);
+      expect(resColisao.body.erro).toBe('Já existe outro perfil registado com este nome.');
     });
   });
 });

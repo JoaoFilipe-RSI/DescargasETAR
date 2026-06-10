@@ -273,6 +273,15 @@ export const adminService = {
   obterParametros() {
     return request('/admin/parametros');
   },
+  obterTiposParametro() {
+    return request('/admin/parametros/tipos');
+  },
+  criarTipoParametro(nome) {
+    return request('/admin/parametros/tipos', {
+      method: 'POST',
+      body: { nome }
+    });
+  },
   obterParametrosCliente(id) {
     return request(`/admin/clientes/${id}/parametros`);
   },
@@ -285,6 +294,12 @@ export const adminService = {
   criarParametro(dados) {
     return request('/admin/parametros', {
       method: 'POST',
+      body: dados
+    });
+  },
+  atualizarParametro(id, dados) {
+    return request(`/admin/parametros/${id}`, {
+      method: 'PUT',
       body: dados
     });
   },
@@ -324,5 +339,26 @@ export const adminService = {
     }
     const queryStr = params.toString();
     return request(`/admin/auditoria${queryStr ? '?' + queryStr : ''}`);
+  },
+  enviarMensagemGeral(mensagem) {
+    return request('/admin/notificacoes/geral', {
+      method: 'POST',
+      body: { mensagem }
+    });
+  },
+  obterPerfis() {
+    return request('/admin/perfis');
+  },
+  criarPerfil(dados) {
+    return request('/admin/perfis', {
+      method: 'POST',
+      body: dados
+    });
+  },
+  atualizarPerfil(id, dados) {
+    return request(`/admin/perfis/${id}`, {
+      method: 'PUT',
+      body: dados
+    });
   }
 };

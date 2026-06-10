@@ -844,16 +844,20 @@ exports.criarParametro = async (req, res) => {
     return res.status(400).json({ erro: 'Por favor, indique o nome do parâmetro.' });
   }
 
-  if (!tipo_parametro) {
-    return res.status(400).json({ erro: 'Por favor, indique o tipo do parâmetro.' });
-  }
-
-  const tiposValidos = ['FISICO_QUIMICO', 'AZOTO', 'METAIS', 'OLEOS E GORDURAS'];
-  if (!tiposValidos.includes(tipo_parametro)) {
-    return res.status(400).json({ erro: 'Tipo de parâmetro inválido.' });
-  }
-
   try {
+    // Obter tipos válidos dinamicamente do ENUM do PostgreSQL
+    const enumQuery = `
+      SELECT enumlabel 
+      FROM pg_enum 
+      JOIN pg_type ON pg_enum.enumtypid = pg_type.oid 
+      WHERE pg_type.typname = 'tipo_parametro_enum'
+    `;
+    const enumRes = await pool.query(enumQuery);
+    const tiposValidos = enumRes.rows.map(r => r.enumlabel);
+
+    if (!tiposValidos.includes(tipo_parametro)) {
+      return res.status(400).json({ erro: 'Tipo de parâmetro inválido.' });
+    }
     // Verificar duplicado
     const nameCheck = await pool.query('SELECT id_parametro FROM parametro WHERE LOWER(nome) = LOWER($1)', [nome.trim()]);
     if (nameCheck.rows.length > 0) {
@@ -880,6 +884,32 @@ exports.criarParametro = async (req, res) => {
       ['PARAMETRO', newParam.id_parametro, 'CRIACAO', `Parâmetro analítico global ${newParam.nome} (${newParam.tipo_parametro}) criado no catálogo do sistema.`, req.user.id_utilizador]
     );
 
+    // Notificar Responsáveis de Laboratório (id_perfil = 5)
+    try {
+      const respLabUsers = await pool.query("SELECT id_utilizador FROM utilizador WHERE id_perfil = 5 AND ativo = true");
+      if (respLabUsers.rows.length > 0) {
+        const notifMsg = `Novo parâmetro adicionado ao catálogo: "${newParam.nome}". Configure a metodologia e incerteza padrão.`;
+        
+        // Inserir na tabela de notificações persistentes
+        const insertNotifQuery = `
+          INSERT INTO notificacao (id_utilizador, mensagem, tipo, enviada)
+          VALUES ($1, $2, 'LABORATORIO', true)
+        `;
+        for (const u of respLabUsers.rows) {
+          await pool.query(insertNotifQuery, [u.id_utilizador, notifMsg]);
+        }
+
+        // Enviar via WebSocket em tempo real
+        const { enviarNotificacao } = require('../config/socket');
+        enviarNotificacao('laboratorio-responsaveis', 'novo-parametro', {
+          mensagem: notifMsg,
+          parametro: newParam
+        });
+      }
+    } catch (notifErr) {
+      console.error('Erro ao notificar responsáveis do laboratório sobre novo parâmetro:', notifErr);
+    }
+
     return res.status(201).json({
       mensagem: 'Parâmetro analítico criado com sucesso no catálogo global.',
       parametro: newParam
@@ -890,4 +920,344 @@ exports.criarParametro = async (req, res) => {
   }
 };
 
+exports.atualizarParametro = async (req, res) => {
+  const { id } = req.params;
+  const { 
+    metodo_default_cod, 
+    metodo_default_nome, 
+    incerteza_default,
+    nome,
+    tipo_parametro,
+    unidade_default,
+    obrigatorio
+  } = req.body;
 
+  if (incerteza_default !== undefined && incerteza_default !== null && incerteza_default !== '') {
+    const incertezaVal = parseFloat(incerteza_default);
+    if (isNaN(incertezaVal) || incertezaVal < 0) {
+      return res.status(400).json({ erro: 'A incerteza padrão deve ser um número não negativo.' });
+    }
+  }
+
+  try {
+    // Obter dados atuais do parâmetro
+    const checkExist = await pool.query('SELECT * FROM parametro WHERE id_parametro = $1', [id]);
+    if (checkExist.rows.length === 0) {
+      return res.status(404).json({ erro: 'Parâmetro não encontrado.' });
+    }
+    const paramAtual = checkExist.rows[0];
+
+    // Se mudou o nome, verificar duplicados
+    if (nome && nome.trim().toLowerCase() !== paramAtual.nome.toLowerCase()) {
+      const nameCheck = await pool.query(
+        'SELECT id_parametro FROM parametro WHERE LOWER(nome) = LOWER($1) AND id_parametro <> $2',
+        [nome.trim(), id]
+      );
+      if (nameCheck.rows.length > 0) {
+        return res.status(400).json({ erro: 'Já existe um parâmetro registado com este nome.' });
+      }
+    }
+
+    // Validar tipo de parâmetro se fornecido
+    if (tipo_parametro) {
+      const enumQuery = `
+        SELECT enumlabel 
+        FROM pg_enum 
+        JOIN pg_type ON pg_enum.enumtypid = pg_type.oid 
+        WHERE pg_type.typname = 'tipo_parametro_enum'
+      `;
+      const enumRes = await pool.query(enumQuery);
+      const tiposValidos = enumRes.rows.map(r => r.enumlabel);
+      if (!tiposValidos.includes(tipo_parametro)) {
+        return res.status(400).json({ erro: 'Tipo de parâmetro inválido.' });
+      }
+    }
+
+    const finalNome = nome !== undefined ? nome.trim() : paramAtual.nome;
+    const finalTipo = tipo_parametro !== undefined ? tipo_parametro : paramAtual.tipo_parametro;
+    const finalUnidade = unidade_default !== undefined ? unidade_default.trim() : paramAtual.unidade_default;
+    const finalObrigatorio = obrigatorio !== undefined ? !!obrigatorio : paramAtual.obrigatorio;
+
+    const finalMetodoCod = metodo_default_cod !== undefined 
+      ? (metodo_default_cod ? metodo_default_cod.trim() : null) 
+      : paramAtual.metodo_default_cod;
+    const finalMetodoNome = metodo_default_nome !== undefined 
+      ? (metodo_default_nome ? metodo_default_nome.trim() : null) 
+      : paramAtual.metodo_default_nome;
+    
+    let finalIncerteza = paramAtual.incerteza_default;
+    if (incerteza_default !== undefined) {
+      finalIncerteza = (incerteza_default === null || incerteza_default === '') ? null : parseFloat(incerteza_default);
+    }
+
+    const query = `
+      UPDATE parametro
+      SET nome = $1,
+          tipo_parametro = $2,
+          unidade_default = $3,
+          obrigatorio = $4,
+          metodo_default_cod = $5,
+          metodo_default_nome = $6,
+          incerteza_default = $7
+      WHERE id_parametro = $8
+      RETURNING *
+    `;
+    const result = await pool.query(query, [
+      finalNome,
+      finalTipo,
+      finalUnidade,
+      finalObrigatorio,
+      finalMetodoCod,
+      finalMetodoNome,
+      finalIncerteza,
+      id
+    ]);
+
+    const updatedParam = result.rows[0];
+
+    // Logar no histórico (auditoria)
+    await pool.query(
+      "INSERT INTO historico (entidade, id_entidade, acao, descricao, id_utilizador) VALUES ($1, $2, $3, $4, $5)",
+      [
+        'PARAMETRO',
+        id,
+        'EDICAO',
+        `Parâmetro ${paramAtual.nome} atualizado no catálogo. Nome: ${updatedParam.nome}, Tipo: ${updatedParam.tipo_parametro}, Obrigatório: ${updatedParam.obrigatorio ? 'Sim' : 'Não'}.`,
+        req.user.id_utilizador
+      ]
+    );
+
+    return res.json({
+      mensagem: 'Parâmetro analítico atualizado com sucesso.',
+      parametro: updatedParam
+    });
+  } catch (err) {
+    console.error('Erro ao atualizar parâmetro global:', err);
+    return res.status(500).json({ erro: 'Erro interno ao atualizar parâmetro.' });
+  }
+};
+
+exports.enviarMensagemGeral = async (req, res) => {
+  const { mensagem } = req.body;
+
+  if (!mensagem || !mensagem.trim()) {
+    return res.status(400).json({ erro: 'Por favor, indique a mensagem geral a enviar.' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // 1. Obter todos os utilizadores ativos
+    const usersRes = await client.query('SELECT id_utilizador FROM utilizador WHERE ativo = true');
+
+    // 2. Registar no histórico (auditoria)
+    const logDescricao = `Aviso Geral enviado a todos os utilizadores: "${mensagem.trim().substring(0, 80)}${mensagem.trim().length > 80 ? '...' : ''}"`;
+    const histRes = await client.query(
+      "INSERT INTO historico (entidade, id_entidade, acao, descricao, id_utilizador) VALUES ($1, $2, $3, $4, $5) RETURNING id_historico",
+      ['SISTEMA', 0, 'ENVIO_AVISO_GERAL', logDescricao, req.user.id_utilizador]
+    );
+
+    // 3. Inserir notificações individuais para persistência (na tabela notificacao)
+    const insertQuery = `
+      INSERT INTO notificacao (id_utilizador, mensagem, tipo, enviada)
+      VALUES ($1, $2, 'SISTEMA', true)
+    `;
+    for (const row of usersRes.rows) {
+      await client.query(insertQuery, [row.id_utilizador, mensagem.trim()]);
+    }
+
+    await client.query('COMMIT');
+
+    // 4. Emitir via WebSocket para todos
+    const { enviarNotificacaoGeral } = require('../config/socket');
+    enviarNotificacaoGeral('mensagem-geral', {
+      mensagem: mensagem.trim(),
+      autor: req.user.nome
+    });
+
+    return res.status(201).json({
+      mensagem: 'Aviso geral enviado e registado com sucesso para todos os utilizadores.',
+      id_historico: histRes.rows[0].id_historico
+    });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('Erro ao enviar mensagem geral:', err);
+    return res.status(500).json({ erro: 'Erro interno ao enviar aviso geral.' });
+  } finally {
+    client.release();
+  }
+};
+
+/**
+ * 9. Perfis de Utilizador
+ */
+exports.obterPerfis = async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM perfil ORDER BY id_perfil');
+    return res.json(result.rows);
+  } catch (err) {
+    console.error('Erro ao obter perfis:', err);
+    return res.status(500).json({ erro: 'Erro interno ao obter perfis de utilizador.' });
+  }
+};
+
+exports.criarPerfil = async (req, res) => {
+  const { nome } = req.body;
+
+  if (!nome || !nome.trim()) {
+    return res.status(400).json({ erro: 'Por favor, indique o nome do perfil.' });
+  }
+
+  const nomeNormalizado = nome
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase()
+    .trim()
+    .replace(/[\s-]+/g, '_')
+    .replace(/_+/g, '_');
+
+  if (!nomeNormalizado) {
+    return res.status(400).json({ erro: 'Nome do perfil inválido.' });
+  }
+
+  try {
+    const checkQuery = 'SELECT id_perfil FROM perfil WHERE UPPER(nome) = $1';
+    const checkRes = await pool.query(checkQuery, [nomeNormalizado]);
+    if (checkRes.rows.length > 0) {
+      return res.status(400).json({ erro: 'Já existe um perfil com este nome.' });
+    }
+
+    const insertQuery = 'INSERT INTO perfil (nome) VALUES ($1) RETURNING *';
+    const insertRes = await pool.query(insertQuery, [nomeNormalizado]);
+    const newPerfil = insertRes.rows[0];
+
+    await pool.query(
+      "INSERT INTO historico (entidade, id_entidade, acao, descricao, id_utilizador) VALUES ($1, $2, $3, $4, $5)",
+      ['PERFIL', newPerfil.id_perfil, 'CRIACAO', `Perfil de utilizador ${newPerfil.nome} criado com sucesso.`, req.user.id_utilizador]
+    );
+
+    return res.status(201).json({
+      mensagem: 'Perfil criado com sucesso.',
+      perfil: newPerfil
+    });
+  } catch (err) {
+    console.error('Erro ao criar perfil:', err);
+    return res.status(500).json({ erro: 'Erro interno ao criar perfil.' });
+  }
+};
+
+exports.atualizarPerfil = async (req, res) => {
+  const { id } = req.params;
+  const { nome } = req.body;
+
+  if (!nome || !nome.trim()) {
+    return res.status(400).json({ erro: 'Por favor, indique o nome do perfil.' });
+  }
+
+  const nomeNormalizado = nome
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase()
+    .trim()
+    .replace(/[\s-]+/g, '_')
+    .replace(/_+/g, '_');
+
+  if (!nomeNormalizado) {
+    return res.status(400).json({ erro: 'Nome do perfil inválido.' });
+  }
+
+  try {
+    const checkExist = await pool.query('SELECT nome FROM perfil WHERE id_perfil = $1', [id]);
+    if (checkExist.rows.length === 0) {
+      return res.status(404).json({ erro: 'Perfil não encontrado.' });
+    }
+    const nomeAntigo = checkExist.rows[0].nome;
+
+    const checkDuplicate = await pool.query('SELECT id_perfil FROM perfil WHERE UPPER(nome) = $1 AND id_perfil <> $2', [nomeNormalizado, id]);
+    if (checkDuplicate.rows.length > 0) {
+      return res.status(400).json({ erro: 'Já existe outro perfil registado com este nome.' });
+    }
+
+    const updateQuery = 'UPDATE perfil SET nome = $1 WHERE id_perfil = $2 RETURNING *';
+    const updateRes = await pool.query(updateQuery, [nomeNormalizado, id]);
+    const updatedPerfil = updateRes.rows[0];
+
+    await pool.query(
+      "INSERT INTO historico (entidade, id_entidade, acao, descricao, id_utilizador) VALUES ($1, $2, $3, $4, $5)",
+      ['PERFIL', updatedPerfil.id_perfil, 'EDICAO', `Perfil ${nomeAntigo} atualizado para ${updatedPerfil.nome}.`, req.user.id_utilizador]
+    );
+
+    return res.json({
+      mensagem: 'Perfil atualizado com sucesso.',
+      perfil: updatedPerfil
+    });
+  } catch (err) {
+    console.error('Erro ao atualizar perfil:', err);
+    return res.status(500).json({ erro: 'Erro interno ao atualizar perfil.' });
+  }
+};
+
+exports.obterTiposParametro = async (req, res) => {
+  try {
+    const enumQuery = `
+      SELECT enumlabel 
+      FROM pg_enum 
+      JOIN pg_type ON pg_enum.enumtypid = pg_type.oid 
+      WHERE pg_type.typname = 'tipo_parametro_enum'
+      ORDER BY enumlabel ASC
+    `;
+    const enumRes = await pool.query(enumQuery);
+    const types = enumRes.rows.map(r => r.enumlabel);
+    return res.json(types);
+  } catch (err) {
+    console.error('Erro ao obter tipos de parâmetros:', err);
+    return res.status(500).json({ erro: 'Erro interno ao obter tipos de parâmetros.' });
+  }
+};
+
+exports.criarTipoParametro = async (req, res) => {
+  const { nome } = req.body;
+  if (!nome || !nome.trim()) {
+    return res.status(400).json({ erro: 'Por favor, indique o nome do novo tipo.' });
+  }
+
+  const nomeNormalizado = nome
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase()
+    .trim()
+    .replace(/[\s-]+/g, '_')
+    .replace(/_+/g, '_');
+
+  if (!nomeNormalizado || !/^[A-Z0-9_]+$/.test(nomeNormalizado)) {
+    return res.status(400).json({ erro: 'Nome do tipo inválido. Apenas são permitidas letras, números e underscores.' });
+  }
+
+  try {
+    const enumQuery = `
+      SELECT enumlabel 
+      FROM pg_enum 
+      JOIN pg_type ON pg_enum.enumtypid = pg_type.oid 
+      WHERE pg_type.typname = 'tipo_parametro_enum'
+    `;
+    const enumRes = await pool.query(enumQuery);
+    const types = enumRes.rows.map(r => r.enumlabel);
+
+    if (types.includes(nomeNormalizado)) {
+      return res.status(400).json({ erro: 'Este tipo de parâmetro já existe.' });
+    }
+
+    // ALTER TYPE ADD VALUE não pode correr em transações nem aceita placeholders $1 no PostgreSQL.
+    // Como nomeNormalizado é estritamente validado por regex, a interpolação é segura contra SQL injection.
+    await pool.query(`ALTER TYPE tipo_parametro_enum ADD VALUE '${nomeNormalizado}'`);
+
+    return res.status(201).json({
+      mensagem: 'Novo tipo de parâmetro criado com sucesso.',
+      tipo: nomeNormalizado
+    });
+  } catch (err) {
+    console.error('Erro ao criar tipo de parâmetro:', err);
+    return res.status(500).json({ erro: 'Erro interno ao criar tipo de parâmetro.' });
+  }
+};

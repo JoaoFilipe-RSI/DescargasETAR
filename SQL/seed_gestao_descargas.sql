@@ -62,14 +62,14 @@ INSERT INTO etar (nome, localizacao, disponivel) VALUES
 ('ETAR Sul', 'Lisboa', true),
 ('ETAR Algarve', 'Faro', false); -- Simulando ETAR em manutenção (Para testar o RNF06)
 
-INSERT INTO parametro (nome, tipo_parametro, unidade_default, obrigatorio) VALUES
-('pH', 'FISICO_QUIMICO', 'pH', TRUE),
-('CQO', 'FISICO_QUIMICO', 'mg/L', TRUE),
-('CBO5', 'FISICO_QUIMICO', 'mg/L', TRUE),
-('SST', 'FISICO_QUIMICO', 'mg/L', TRUE),
-('Condutividade', 'FISICO_QUIMICO', 'mS/cm', TRUE),
-('Azoto Kjeldahl', 'AZOTO', 'mg/L', FALSE),
-('Zinco', 'METAIS', 'mg/L', FALSE);
+INSERT INTO parametro (nome, tipo_parametro, unidade_default, obrigatorio, metodo_default_cod, metodo_default_nome, incerteza_default) VALUES
+('pH', 'FISICO_QUIMICO', 'pH', TRUE, 'SMEWW 4500-H+', 'Eletrometria', 0.015),
+('CQO', 'FISICO_QUIMICO', 'mg/L', TRUE, 'SMEWW 5220 B', 'Refluxo Fechado / Titulometria', 0.05),
+('CBO5', 'FISICO_QUIMICO', 'mg/L', TRUE, 'SMEWW 5210 B', 'Incubação / Eletrométrico', 0.08),
+('SST', 'FISICO_QUIMICO', 'mg/L', TRUE, 'SMEWW 2540 D', 'Secagem a 103-105ºC / Gravimetria', 0.10),
+('Condutividade', 'FISICO_QUIMICO', 'mS/cm', TRUE, 'SMEWW 2510 B', 'Condutimetria', 0.05),
+('Azoto Kjeldahl', 'AZOTO', 'mg/L', FALSE, 'SMEWW 4500-N', 'Digestão / Destilação / Titulometria', 0.06),
+('Zinco', 'METAIS', 'mg/L', FALSE, 'SMEWW 3111 B', 'Espectrofotometria de Absorção Atómica (EAA)', 0.05);
 
 -- CLIENTE_PARAMETRO (parametros adicionais por cliente)
 INSERT INTO cliente_parametro (id_cliente, id_parametro, ativo) VALUES
@@ -141,13 +141,15 @@ INSERT INTO amostra (
     id_descarga, estado_amostra,
     data_recolha, data_rececao_lab,
     data_inicio_analise,
-    id_tecnico, id_responsavel
+    id_tecnico, id_responsavel,
+    qr_code_token
 ) VALUES (
     4, 'EM_ANALISE',
     NOW() - INTERVAL '1 day',
     NOW() - INTERVAL '1 day',
     NOW(),
-    16, 18
+    16, 18,
+    'AMOSTRA-2026-BBB99F'
 );
 
 -- RESULTADOS ANALITICOS
