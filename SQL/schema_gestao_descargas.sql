@@ -204,6 +204,69 @@ ALTER TABLE descarga ADD CONSTRAINT chk_data_rececao_agendamento
 ALTER TABLE descarga ADD CONSTRAINT chk_data_decisao_pedido 
     CHECK (data_decisao IS NULL OR data_decisao >= data_pedido);
 
--- 6. Restrição para a tabela AMOSTRA (Aplica-se aqui porque as colunas pertencem a esta tabela)
+ALTER TABLE descarga ADD CONSTRAINT chk_data_agendamento_decisao
+    CHECK (data_agendamento IS NULL OR data_decisao IS NULL OR data_agendamento >= data_decisao);
+
+ALTER TABLE descarga ADD CONSTRAINT chk_numero_recipientes_positivo
+    CHECK (numero_recipientes IS NULL OR numero_recipientes > 0);
+
+ALTER TABLE descarga ADD CONSTRAINT chk_quantidade_real_desvio
+    CHECK (quantidade_real IS NULL OR 
+           (quantidade_real >= quantidade * 0.1 AND quantidade_real <= quantidade * 2.0));
+
+-- 6. Restrições para a tabela AMOSTRA
 ALTER TABLE amostra ADD CONSTRAINT chk_data_analise_laboratorio 
     CHECK (data_inicio_analise IS NULL OR data_inicio_analise >= data_rececao_lab);
+
+ALTER TABLE amostra ADD CONSTRAINT chk_data_rececao_lab_recolha
+    CHECK (data_rececao_lab IS NULL OR data_recolha IS NULL OR data_rececao_lab >= data_recolha);
+
+ALTER TABLE amostra ADD CONSTRAINT chk_data_fim_analise_inicio
+    CHECK (data_fim_analise IS NULL OR data_inicio_analise IS NULL OR data_fim_analise >= data_inicio_analise);
+
+ALTER TABLE amostra ADD CONSTRAINT chk_data_validacao_fim_analise
+    CHECK (data_validacao IS NULL OR data_fim_analise IS NULL OR data_validacao >= data_fim_analise);
+
+-- Uma descarga só pode ter uma amostra
+ALTER TABLE amostra ADD CONSTRAINT uq_amostra_por_descarga
+    UNIQUE (id_descarga);
+
+-- 7. Restrições para RESULTADO_ANALITICO
+ALTER TABLE resultado_analitico ADD CONSTRAINT chk_valor_positivo
+    CHECK (valor IS NULL OR valor >= 0);
+
+ALTER TABLE resultado_analitico ADD CONSTRAINT chk_incerteza_positiva
+    CHECK (incerteza IS NULL OR incerteza >= 0);
+
+-- O mesmo parâmetro não pode ser repetido na mesma amostra
+ALTER TABLE resultado_analitico ADD CONSTRAINT uq_resultado_amostra_parametro
+    UNIQUE (id_amostra, id_parametro);
+
+-- 8. Restrições para AUTORIZACAO
+ALTER TABLE autorizacao ADD CONSTRAINT chk_quota_positiva
+    CHECK (quota IS NULL OR quota > 0);
+
+-- 9. Restrições para UTILIZADOR
+ALTER TABLE utilizador ADD CONSTRAINT chk_utilizador_nome_not_empty
+    CHECK (TRIM(nome) <> '');
+
+ALTER TABLE utilizador ADD CONSTRAINT chk_email_formato
+    CHECK (email ~* '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$');
+
+-- 10. Restrições para CLIENTE
+ALTER TABLE cliente ADD CONSTRAINT chk_cliente_nome_not_empty
+    CHECK (TRIM(nome) <> '');
+
+ALTER TABLE cliente ADD CONSTRAINT chk_periodicidade_analise
+    CHECK (periodicidade_analise IS NULL OR 
+           periodicidade_analise IN ('POR_DESCARGA', 'QUINZENAL', 'MENSAL', 'TRIMESTRAL', 'SEMESTRAL', 'ANUAL'));
+
+-- 11. Restrições para ETAR
+ALTER TABLE etar ADD CONSTRAINT chk_etar_nome_not_empty
+    CHECK (TRIM(nome) <> '');
+
+-- 12. Restrições para HISTORICO
+ALTER TABLE historico ADD CONSTRAINT chk_entidade_valida
+    CHECK (entidade IN ('DESCARGA', 'AMOSTRA', 'PARAMETRO', 'AUTORIZACAO', 
+                        'ETAR', 'PERFIL', 'SISTEMA', 'UTILIZADOR', 'CLIENTE'));
+
