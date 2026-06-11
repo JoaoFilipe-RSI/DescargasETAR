@@ -1,0 +1,22 @@
+# Documentos Word, PDF e imagens (ficheiros locais de trabalho)
+*.docx
+*.pdf
+*.jpg
+*.jpeg
+*.png
+!SQL/ER.png
+!Frontend/public/pwa-192x192.png
+!Frontend/public/pwa-512x512.png
+!Frontend/public/vite.svg
+!Frontend/src/assets/react.svg
+
+# Ficheiros temporários do Word e Office
+~$*
+~WRL*.tmp
+*.tmp
+
+# Ficheiros de ambiente e dependências
+node_modules/
+.env
+*.log
+dist/
