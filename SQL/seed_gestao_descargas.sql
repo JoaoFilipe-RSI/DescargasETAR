@@ -46,7 +46,7 @@ INSERT INTO utilizador (id_perfil, nome, email, password_hash, ativo) VALUES
 -- Gestor de Clientes / Admin (id_perfil = 6 / 7)
 (6, 'Mariana Costa', 'mariana.costa@administracao.pt', '$2b$12$K3vZg7mQxO7pL2R1vK9uOuE7eHB5V2p8FzJ9w6tGx4yM1qR3oSa2q', true),
 (6, 'António Almeida', 'antonio.almeida@administracao.pt', '$2b$12$K3vZg7mQxO7pL2R1vK9uOuE7eHB5V2p8FzJ9w6tGx4yM1qR3oSa2q', true),
-(7, 'Filipe Ferreira', 'filipe.ferreira@admin.entidadegestora.pt', '$2b$12$K3vZg7mQxO7pL2R1vK9uOuE7eHB5V2p8FzJ9w6tGx4yM1qR3oSa2q', true);
+(7, 'Filipe Ferreira', 'filipe.ferreira@admin.entidadegestora.pt', '$2b$12$QbE4uKgKYnKJ6jiWeTcl5usvjv6mB8zvffVoeuoA6W2oVdeieKBaK', true);
 
 
 -- CLIENTES

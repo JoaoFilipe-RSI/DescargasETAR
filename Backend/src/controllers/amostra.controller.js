@@ -740,7 +740,7 @@ exports.gerarBoletimPDF = async (req, res) => {
 
     // Buscar resultados
     const resQuery = `
-      SELECT r.valor, r.unidade, r.metodo, r.incerteza, p.nome AS parametro_nome
+      SELECT r.valor, r.unidade, r.metodo, r.incerteza, p.nome AS parametro_nome, p.metodo_default_nome
       FROM resultado_analitico r
       JOIN parametro p ON r.id_parametro = p.id_parametro
       WHERE r.id_amostra = $1
@@ -852,40 +852,62 @@ exports.gerarBoletimPDF = async (req, res) => {
     doc.fontSize(8).text(`N.º Amostra: ${info.id_amostra}/${anoVal}`, 440, 175, { bold: true });
 
     // --- 4. TABELA DE RESULTADOS (Y=235 em diante) ---
-    // Cabeçalho da Tabela
+    // Layout das colunas:
+    // Parâmetro:      X=46,  W=125
+    // Método ensaio:  X=175, W=130
+    // Resultado:      X=310, W=60  (right-align)
+    // Incerteza:      X=375, W=75  (center)
+    // Unidades:       X=455, W=60  (center)
+    // VL:             X=520, W=30  (center)
+    const COL = { param: 46, metodo: 175, result: 310, incert: 375, unid: 455, vl: 520 };
+
     doc.rect(40, 235, 515, 18).fill('#5E5E5E');
     doc.fillColor('#FFFFFF').fontSize(7.5);
-    doc.text('Parâmetro', 46, 240, { bold: true });
-    doc.text('Método de ensaio / Técnica analítica', 46, 240, { bold: true, align: 'center', width: 260 });
-    doc.text('Resultado', 310, 240, { bold: true, align: 'right', width: 60 });
-    doc.text('Incerteza expandida', 380, 240, { bold: true, align: 'center', width: 75 });
-    doc.text('Unidades', 465, 240, { bold: true, align: 'center', width: 55 });
-    doc.text('VL', 525, 240, { bold: true, align: 'center', width: 25 });
+    doc.text('Parâmetro', COL.param, 240, { bold: true, width: 125 });
+    doc.text('Método de ensaio / Técnica analítica', COL.metodo, 240, { bold: true, width: 130 });
+    doc.text('Resultado', COL.result, 240, { bold: true, align: 'right', width: 60 });
+    doc.text('Incerteza exp.', COL.incert, 240, { bold: true, align: 'center', width: 75 });
+    doc.text('Unid.', COL.unid, 240, { bold: true, align: 'center', width: 60 });
+    doc.text('VL', COL.vl, 240, { bold: true, align: 'center', width: 30 });
 
     let rowY = 258;
-    doc.fillColor('#333333');
+    const ROW_H = 18;
 
-    resultados.forEach((resItem) => {
+    resultados.forEach((resItem, idx) => {
       if (rowY > 600) {
         doc.addPage();
         rowY = 50;
       }
 
-      // Parâmetro e Método
-      doc.fontSize(7.5).text(resItem.parametro_nome || 'N/A', 46, rowY, { bold: true });
-      doc.fontSize(6.5).fillColor('#666666').text(resItem.metodo || 'SMEWW / Interno', 46, rowY + 9, { italic: true });
-      doc.fillColor('#333333');
+      // Fundo alternado
+      if (idx % 2 === 0) {
+        doc.rect(40, rowY - 2, 515, ROW_H).fill('#F7F9FC');
+      }
 
-      // Resultado
-      doc.fontSize(7.5).text(formatarNumeroPT(resItem.valor), 310, rowY + 3, { align: 'right', width: 60 });
-      // Incerteza
-      doc.text(formatarIncerteza(resItem.incerteza), 380, rowY + 3, { align: 'center', width: 75 });
-      // Unidades
-      doc.text(resItem.unidade || 'mg/L', 465, rowY + 3, { align: 'center', width: 55 });
-      // VL
-      doc.text('-', 525, rowY + 3, { align: 'center', width: 25 });
+      const midY = rowY + 3;
 
-      rowY += 23;
+      // Parâmetro (coluna 1)
+      doc.fillColor('#111111').fontSize(7.5).text(resItem.parametro_nome || 'N/A', COL.param, midY, { bold: true, width: 125, ellipsis: true });
+
+      // Método / Técnica analítica (coluna 2)
+      const metodoTexto = resItem.metodo_default_nome 
+        ? `${resItem.metodo || ''} - ${resItem.metodo_default_nome}`.trim()
+        : (resItem.metodo || '-');
+      doc.fillColor('#444444').fontSize(7).text(metodoTexto, COL.metodo, midY, { width: 130, ellipsis: true });
+
+      // Resultado (coluna 3)
+      doc.fillColor('#111111').fontSize(7.5).text(formatarNumeroPT(resItem.valor), COL.result, midY, { align: 'right', width: 60 });
+
+      // Incerteza (coluna 4)
+      doc.text(formatarIncerteza(resItem.incerteza), COL.incert, midY, { align: 'center', width: 75 });
+
+      // Unidades (coluna 5)
+      doc.text(resItem.unidade || 'mg/L', COL.unid, midY, { align: 'center', width: 60 });
+
+      // VL (coluna 6)
+      doc.text('-', COL.vl, midY, { align: 'center', width: 30 });
+
+      rowY += ROW_H;
     });
 
     rowY += 10;

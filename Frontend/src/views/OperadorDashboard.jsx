@@ -29,9 +29,10 @@ export default function OperadorDashboard({ user, onLogout, notifications, onMar
 
   // Histórico de descargas concluídas/recebidas
   const [descargasRececionadas, setDescargasRececionadas] = useState([]);
-  const today = new Date();
-  const [selectedMonth, setSelectedMonth] = useState((today.getMonth() + 1).toString().padStart(2, '0'));
-  const [selectedYear, setSelectedYear] = useState(today.getFullYear().toString());
+  const [filtroMesEtar, setFiltroMesEtar] = useState('all');
+  const [filtroAnoEtar, setFiltroAnoEtar] = useState('all');
+  const [periodoInicioEtar, setPeriodoInicioEtar] = useState('');
+  const [periodoFimEtar, setPeriodoFimEtar] = useState('');
 
   // Carregar lista de descargas agendadas
   const loadAgendados = async () => {
@@ -147,13 +148,59 @@ export default function OperadorDashboard({ user, onLogout, notifications, onMar
     }
   };
 
-  const filteredDescargas = descargasRececionadas.filter(d => {
-    if (!d.data_rececao) return false;
-    const dateObj = new Date(d.data_rececao);
-    const m = (dateObj.getMonth() + 1).toString().padStart(2, '0');
-    const y = dateObj.getFullYear().toString();
-    return m === selectedMonth && y === selectedYear;
-  });
+  const parseDate = (v) => {
+    if (!v) return null;
+    if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v)) {
+      const [y, m, day] = v.split('-').map(Number);
+      return new Date(y, m - 1, day);
+    }
+    const d = new Date(v);
+    return isNaN(d.getTime()) ? null : d;
+  };
+
+  const dateOnly = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+
+  const matchesPeriod = (itemDateStr, { inicio, fim, mes, ano }) => {
+    if (!itemDateStr) return false;
+    const d = parseDate(itemDateStr);
+    if (!d) return false;
+    const itemDay = dateOnly(d);
+    if (inicio) {
+      const s = parseDate(inicio);
+      if (s && itemDay < dateOnly(s)) return false;
+    }
+    if (fim) {
+      const f = parseDate(fim);
+      if (f && itemDay > dateOnly(f)) return false;
+    }
+    if (mes !== 'all' || ano !== 'all') {
+      const month = d.getMonth() + 1;
+      const year = d.getFullYear();
+      if (mes !== 'all' && Number(mes) !== month) return false;
+      if (ano !== 'all' && Number(ano) !== year) return false;
+    }
+    return true;
+  };
+
+  const hasFiltroEtar = periodoInicioEtar || periodoFimEtar || filtroMesEtar !== 'all' || filtroAnoEtar !== 'all';
+
+  const filteredDescargas = [...descargasRececionadas]
+    .filter(d => {
+      const dateField = d.data_rececao || d.data_pedido;
+      return hasFiltroEtar
+        ? matchesPeriod(dateField, {
+          inicio: periodoInicioEtar,
+          fim: periodoFimEtar,
+          mes: filtroMesEtar,
+          ano: filtroAnoEtar
+        })
+        : true;
+    })
+    .sort((a, b) => {
+      const da = parseDate(a.data_rececao || a.data_pedido);
+      const db = parseDate(b.data_rececao || b.data_pedido);
+      return (db && da) ? db - da : 0;
+    });
 
   const totalVolume = filteredDescargas.reduce((sum, d) => sum + parseFloat(d.quantidade_real || d.quantidade || 0), 0);
   const totalDescargas = filteredDescargas.length;
@@ -387,32 +434,56 @@ export default function OperadorDashboard({ user, onLogout, notifications, onMar
               Histórico de descargas rececionadas na {user.etar_nome || `ETAR ${user.id_etar}`}
             </h3>
             
-            {/* Filtros de Mês e Ano */}
-            <div className="card" style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', padding: '1rem', marginBottom: '1.5rem', alignItems: 'center' }}>
-              <div style={{ flex: 1, minWidth: '140px' }}>
-                <label className="form-label" style={{ marginBottom: '0.25rem', fontSize: '0.8rem' }}>Mês</label>
-                <select className="form-input" value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} style={{ padding: '0.4rem' }}>
-                  <option value="01">Janeiro</option>
-                  <option value="02">Fevereiro</option>
-                  <option value="03">Março</option>
-                  <option value="04">Abril</option>
-                  <option value="05">Maio</option>
-                  <option value="06">Junho</option>
-                  <option value="07">Julho</option>
-                  <option value="08">Agosto</option>
-                  <option value="09">Setembro</option>
+            {/* Filtros de Mês, Ano e Período */}
+            <div className="card" style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', padding: '0.75rem', marginBottom: '1.5rem', alignItems: 'center' }}>
+              <div>
+                <label className="form-label" style={{ fontSize: '0.75rem' }}>Mês</label>
+                <select className="form-input" value={filtroMesEtar} onChange={(e) => setFiltroMesEtar(e.target.value)} style={{ padding: '0.35rem', minWidth: '120px' }}>
+                  <option value="all">-- Todos --</option>
+                  <option value="1">Janeiro</option>
+                  <option value="2">Fevereiro</option>
+                  <option value="3">Março</option>
+                  <option value="4">Abril</option>
+                  <option value="5">Maio</option>
+                  <option value="6">Junho</option>
+                  <option value="7">Julho</option>
+                  <option value="8">Agosto</option>
+                  <option value="9">Setembro</option>
                   <option value="10">Outubro</option>
                   <option value="11">Novembro</option>
                   <option value="12">Dezembro</option>
                 </select>
               </div>
-              <div style={{ flex: 1, minWidth: '100px' }}>
-                <label className="form-label" style={{ marginBottom: '0.25rem', fontSize: '0.8rem' }}>Ano</label>
-                <select className="form-input" value={selectedYear} onChange={(e) => setSelectedYear(e.target.value)} style={{ padding: '0.4rem' }}>
+              <div>
+                <label className="form-label" style={{ fontSize: '0.75rem' }}>Ano</label>
+                <select className="form-input" value={filtroAnoEtar} onChange={(e) => setFiltroAnoEtar(e.target.value)} style={{ padding: '0.35rem', minWidth: '100px' }}>
+                  <option value="all">-- Todos --</option>
+                  <option value="2024">2024</option>
                   <option value="2025">2025</option>
                   <option value="2026">2026</option>
                   <option value="2027">2027</option>
                 </select>
+              </div>
+              <div>
+                <label className="form-label" style={{ fontSize: '0.75rem' }}>Período Início</label>
+                <input type="date" className="form-input" value={periodoInicioEtar} onChange={(e) => setPeriodoInicioEtar(e.target.value)} style={{ padding: '0.35rem' }} />
+              </div>
+              <div>
+                <label className="form-label" style={{ fontSize: '0.75rem' }}>Período Fim</label>
+                <input type="date" className="form-input" value={periodoFimEtar} onChange={(e) => setPeriodoFimEtar(e.target.value)} style={{ padding: '0.35rem' }} />
+              </div>
+              <div style={{ display: 'flex', gap: '0.5rem', marginLeft: 'auto' }}>
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => {
+                    setFiltroMesEtar('all');
+                    setFiltroAnoEtar('all');
+                    setPeriodoInicioEtar('');
+                    setPeriodoFimEtar('');
+                  }}
+                >
+                  Limpar
+                </button>
               </div>
             </div>
 
@@ -437,7 +508,11 @@ export default function OperadorDashboard({ user, onLogout, notifications, onMar
               <p>A ler histórico...</p>
             ) : filteredDescargas.length === 0 ? (
               <div className="card" style={{ textAlign: 'center', padding: '2rem' }}>
-                <p style={{ color: 'var(--text-secondary)' }}>Não existem descargas rececionadas para o mês e ano selecionados.</p>
+                <p style={{ color: 'var(--text-secondary)' }}>
+                  {hasFiltroEtar
+                    ? 'Nenhuma descarga encontrada para os filtros selecionados. Ajuste o período ou clique em Limpar.'
+                    : 'Não existem descargas rececionadas registadas.'}
+                </p>
               </div>
             ) : (
               <div className="table-container">

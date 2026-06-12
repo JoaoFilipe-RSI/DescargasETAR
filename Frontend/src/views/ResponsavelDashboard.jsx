@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { amostraService, descargaService, adminService } from '../services/api';
-import { ShieldCheck, ClipboardList, CheckSquare, XSquare, Download, LogOut, FileText, ToggleLeft, ToggleRight, Settings, PlusCircle, Check, X, HelpCircle, Megaphone } from 'lucide-react';
+import { ShieldCheck, ClipboardList, CheckSquare, XSquare, Download, LogOut, FileText, ToggleLeft, ToggleRight, Settings, PlusCircle, Check, X, HelpCircle, Megaphone, Eye } from 'lucide-react';
 import { webSocketService } from '../services/websocket';
 import NotificationBell from '../components/NotificationBell';
 
@@ -54,9 +54,27 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
   const [relatoriosData, setRelatoriosData] = useState([]);
   const [filtroCliente, setFiltroCliente] = useState('all');
   const [filtroEtar, setFiltroEtar] = useState('all');
-  const [filtroMes, setFiltroMes] = useState('all');
-  const [filtroAno, setFiltroAno] = useState('all');
+  const [filtroMesRelatorios, setFiltroMesRelatorios] = useState('all');
+  const [filtroAnoRelatorios, setFiltroAnoRelatorios] = useState('all');
   const [filtroEstado, setFiltroEstado] = useState('all');
+  const [periodoInicioRelatorios, setPeriodoInicioRelatorios] = useState('');
+  const [periodoFimRelatorios, setPeriodoFimRelatorios] = useState('');
+
+  const [filtroMesDescargas, setFiltroMesDescargas] = useState('all');
+  const [filtroAnoDescargas, setFiltroAnoDescargas] = useState('all');
+  const [periodoInicioDescargas, setPeriodoInicioDescargas] = useState('');
+  const [periodoFimDescargas, setPeriodoFimDescargas] = useState('');
+
+  const [filtroMesAmostras, setFiltroMesAmostras] = useState('all');
+  const [filtroAnoAmostras, setFiltroAnoAmostras] = useState('all');
+  const [periodoInicioAmostras, setPeriodoInicioAmostras] = useState('');
+  const [periodoFimAmostras, setPeriodoFimAmostras] = useState('');
+
+  const [filtroMesConcluidasLab, setFiltroMesConcluidasLab] = useState('all');
+  const [filtroAnoConcluidasLab, setFiltroAnoConcluidasLab] = useState('all');
+  const [periodoInicioConcluidasLab, setPeriodoInicioConcluidasLab] = useState('');
+  const [periodoFimConcluidasLab, setPeriodoFimConcluidasLab] = useState('');
+  const [pesquisaConcluidasLab, setPesquisaConcluidasLab] = useState('');
 
   // Estados para o novo separador de Auditoria
   const [auditoriaList, setAuditoriaList] = useState([]);
@@ -147,7 +165,8 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
           }
         } else if (activeTab === 'clientes') {
           const data = await adminService.obterClientes();
-          setClientesList(data);
+          const sorted = Array.isArray(data) ? [...data].sort((a, b) => a.nome.localeCompare(b.nome)) : [];
+          setClientesList(sorted);
           const params = await adminService.obterParametros();
           setParametrosList(params);
           try {
@@ -158,9 +177,9 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
           }
         } else if (activeTab === 'autorizacoes') {
           const auts = await adminService.obterAutorizacoes();
-          setAutorizacoesList(auts);
+          setAutorizacoesList(Array.isArray(auts) ? [...auts].sort((x, y) => (x.cliente_nome || '').localeCompare(y.cliente_nome || '')) : []);
           const cls = await adminService.obterClientes();
-          setClientesList(cls);
+          setClientesList(Array.isArray(cls) ? [...cls].sort((a, b) => a.nome.localeCompare(b.nome)) : []);
           const ets = await adminService.obterEtars();
           setEtarsList(ets);
           const params = await adminService.obterParametros();
@@ -182,7 +201,7 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
           setAmostrasConcluidas(data);
         } else if (activeTab === 'relatorios') {
           const cls = await adminService.obterClientes();
-          setClientesList(cls);
+          setClientesList(Array.isArray(cls) ? [...cls].sort((a, b) => a.nome.localeCompare(b.nome)) : []);
           const ets = await adminService.obterEtars();
           setEtarsList(ets);
         } else if (activeTab === 'utilizadores' && user.perfil === 'GESTOR_ADMIN') {
@@ -235,15 +254,27 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
       const data = await adminService.obterRelatorios({
         id_cliente: filtroCliente,
         id_etar: filtroEtar,
-        mes: filtroMes,
-        ano: filtroAno,
-        estado: filtroEstado
+        mes: filtroMesRelatorios,
+        ano: filtroAnoRelatorios,
+        estado: filtroEstado,
+        data_inicio: periodoInicioRelatorios || undefined,
+        data_fim: periodoFimRelatorios || undefined
       });
-      setRelatoriosData(data);
+
+      const sorted = Array.isArray(data) ? [...data].sort((a, b) => {
+        const da = parseDate(a.data_rececao);
+        const db = parseDate(b.data_rececao);
+        if (!da && !db) return 0;
+        if (!da) return 1;
+        if (!db) return -1;
+        return db - da;
+      }) : [];
+
+      setRelatoriosData(sorted);
 
       // Sincronizar notificações de alertas operacionais offline para o gestor
-      if (Array.isArray(data)) {
-        data.forEach(d => {
+      if (Array.isArray(sorted)) {
+        sorted.forEach(d => {
           if (d.estado_descarga === 'AGENDADA' && d.observacoes && d.observacoes.includes('ALERTA OPERACIONAL')) {
             const etarNome = d.etar_nome || `ETAR ${d.id_etar}`;
             const notifMsg = `Aviso: A descarga agendada #${d.id_descarga} para a ${etarNome} (agora indisponível) requer contacto imediato com o cliente.`;
@@ -271,7 +302,7 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
     if (activeTab === 'relatorios') {
       loadRelatorios();
     }
-  }, [filtroCliente, filtroEtar, filtroMes, filtroAno, filtroEstado, activeTab]);
+  }, [filtroCliente, filtroEtar, filtroMesRelatorios, filtroAnoRelatorios, filtroEstado, periodoInicioRelatorios, periodoFimRelatorios, activeTab]);
 
   useEffect(() => {
     if (activeTab === 'auditoria') {
@@ -662,6 +693,16 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
     }
   };
 
+  // Abrir PDF do Boletim em novo separador
+  const handleVerBoletim = async (amostra) => {
+    setError('');
+    try {
+      await amostraService.verBoletimPDF(amostra.id_amostra);
+    } catch (err) {
+      setError(err.message || 'Erro ao abrir o Boletim.');
+    }
+  };
+
   // Descarregar PDF
   const handleDownloadBoletim = async (amostra) => {
     setError('');
@@ -819,6 +860,128 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
       setError(err.message || 'Erro ao atualizar metodologia padrão.');
     }
   };
+
+  // Derived filtered / sorted lists (temporal filters + sorting)
+  const parseDate = (v) => {
+    if (!v) return null;
+    if (typeof v === 'string') {
+      if (/^\d{4}-\d{2}-\d{2}$/.test(v)) {
+        const [y, m, day] = v.split('-').map(Number);
+        return new Date(y, m - 1, day);
+      }
+      const formatted = v.replace(' ', 'T');
+      const d = new Date(formatted);
+      return isNaN(d.getTime()) ? null : d;
+    }
+    const d = new Date(v);
+    return isNaN(d.getTime()) ? null : d;
+  };
+
+  const dateOnly = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+
+  const matchesPeriod = (itemDateStr, { inicio, fim, mes, ano }) => {
+    if (!itemDateStr) return false;
+    const d = parseDate(itemDateStr);
+    if (!d) return false;
+    const itemDay = dateOnly(d);
+    if (inicio) {
+      const s = parseDate(inicio);
+      if (s && itemDay < dateOnly(s)) return false;
+    }
+    if (fim) {
+      const f = parseDate(fim);
+      if (f && itemDay > dateOnly(f)) return false;
+    }
+    if (mes !== 'all' || ano !== 'all') {
+      const month = d.getMonth() + 1;
+      const year = d.getFullYear();
+      if (mes !== 'all' && Number(mes) !== month) return false;
+      if (ano !== 'all' && Number(ano) !== year) return false;
+    }
+    return true;
+  };
+
+  const hasFiltroDescargas = periodoInicioDescargas || periodoFimDescargas || filtroMesDescargas !== 'all' || filtroAnoDescargas !== 'all';
+  const hasFiltroAmostras = periodoInicioAmostras || periodoFimAmostras || filtroMesAmostras !== 'all' || filtroAnoAmostras !== 'all';
+
+  const descargasFiltradas = Array.isArray(descargasConcluidas)
+    ? [...descargasConcluidas]
+      .filter(d => {
+        // prefer data_rececao, fallback to data_pedido
+        const dateField = d.data_rececao || d.data_pedido;
+        const hasFilter = periodoInicioDescargas || periodoFimDescargas || filtroMesDescargas !== 'all' || filtroAnoDescargas !== 'all';
+        return hasFilter ? matchesPeriod(dateField, {
+          inicio: periodoInicioDescargas,
+          fim: periodoFimDescargas,
+          mes: filtroMesDescargas,
+          ano: filtroAnoDescargas
+        }) : true;
+      })
+      .sort((a, b) => {
+        const da = parseDate(a.data_rececao);
+        const db = parseDate(b.data_rececao);
+        if (!da && !db) return 0;
+        if (!da) return 1;
+        if (!db) return -1;
+        return db - da;
+      })
+    : [];
+
+  const amostrasFiltradas = Array.isArray(amostrasConcluidas)
+    ? [...amostrasConcluidas]
+      .filter(am => {
+        // prefer data_recolha for filtering/sorting
+        const dateField = am.data_recolha || am.data_validacao || am.data_rececao || am.data_pedido;
+        const hasFilter = periodoInicioAmostras || periodoFimAmostras || filtroMesAmostras !== 'all' || filtroAnoAmostras !== 'all';
+        return hasFilter ? matchesPeriod(dateField, {
+          inicio: periodoInicioAmostras,
+          fim: periodoFimAmostras,
+          mes: filtroMesAmostras,
+          ano: filtroAnoAmostras
+        }) : true;
+      })
+      .sort((a, b) => {
+        const da = parseDate(a.data_recolha);
+        const db = parseDate(b.data_recolha);
+        if (!da && !db) return 0;
+        if (!da) return 1;
+        if (!db) return -1;
+        return db - da;
+      })
+    : [];
+
+  const hasFiltroConcluidasLab = periodoInicioConcluidasLab || periodoFimConcluidasLab
+    || filtroMesConcluidasLab !== 'all' || filtroAnoConcluidasLab !== 'all' || pesquisaConcluidasLab.trim();
+
+  const concluidasFiltradas = Array.isArray(concluidas)
+    ? [...concluidas]
+      .filter(am => {
+        const dateField = am.data_validacao || am.data_recolha || am.data_rececao;
+        const hasDateFilter = periodoInicioConcluidasLab || periodoFimConcluidasLab
+          || filtroMesConcluidasLab !== 'all' || filtroAnoConcluidasLab !== 'all';
+        if (hasDateFilter && !matchesPeriod(dateField, {
+          inicio: periodoInicioConcluidasLab,
+          fim: periodoFimConcluidasLab,
+          mes: filtroMesConcluidasLab,
+          ano: filtroAnoConcluidasLab
+        })) return false;
+        if (pesquisaConcluidasLab.trim()) {
+          const q = pesquisaConcluidasLab.trim().toLowerCase();
+          const match = [am.qr_code_token, am.id_amostra, am.cliente_nome, am.etar_nome]
+            .some(v => v != null && String(v).toLowerCase().includes(q));
+          if (!match) return false;
+        }
+        return true;
+      })
+      .sort((a, b) => {
+        const da = parseDate(a.data_validacao);
+        const db = parseDate(b.data_validacao);
+        if (!da && !db) return 0;
+        if (!da) return 1;
+        if (!db) return -1;
+        return db - da;
+      })
+    : [];
 
   return (
     <div className="app-container">
@@ -1314,1666 +1477,1870 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
                 <h3 style={{ marginBottom: '1.5rem' }}>Histórico de Descargas Concluídas</h3>
                 {loading ? (
                   <p>A carregar descargas...</p>
-                ) : descargasConcluidas.length === 0 ? (
-                  <p>Não existem descargas concluídas registadas no sistema.</p>
                 ) : (
-                  <div className="table-container">
-                    <table className="data-table">
-                      <thead>
-                        <tr>
-                          <th>Ref/Data</th>
-                          <th>Cliente</th>
-                          <th>ETAR Destino</th>
-                          <th>Efluente</th>
-                          <th>Qtd. Real (Solicitada)</th>
-                          <th>Data Receção</th>
-                          <th>Ações</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {descargasConcluidas.map((d) => (
-                          <tr key={d.id_descarga}>
-                            <td>
-                              <strong>#{d.id_descarga}</strong>
-                              <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-                                {new Date(d.data_pedido).toLocaleDateString()}
-                              </div>
-                            </td>
-                            <td>{d.cliente_nome}</td>
-                            <td>{d.etar_nome || `ETAR ${d.id_etar}`}</td>
-                            <td>{d.tipo_efluente}</td>
-                            <td>
-                              <strong>{d.quantidade_real ? `${d.quantidade_real} L` : 'N/A'}</strong>
-                              <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginLeft: '4px' }}>
-                                ({d.quantidade} L)
-                              </span>
-                            </td>
-                            <td>{d.data_rececao ? new Date(d.data_rececao).toLocaleString() : 'N/A'}</td>
-                            <td>
-                              <button
-                                className="btn btn-primary"
-                                style={{ padding: '0.35rem 0.7rem', fontSize: '0.8rem', backgroundColor: 'var(--success)' }}
-                                onClick={() => handleAbrirFichaDescarga(d.id_descarga)}
-                              >
-                                <FileText size={14} style={{ verticalAlign: 'middle', marginRight: '4px' }} /> Ver Ficha
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                  <>
+                    <div className="card" style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', marginBottom: '1rem', padding: '0.75rem', flexWrap: 'wrap' }}>
+                      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                        <div>
+                          <label className="form-label" style={{ fontSize: '0.75rem' }}>Mês</label>
+                          <select className="form-input" value={filtroMesDescargas} onChange={(e) => setFiltroMesDescargas(e.target.value)} style={{ padding: '0.35rem', minWidth: '120px' }}>
+                            <option value="all">-- Todos --</option>
+                            <option value="1">Janeiro</option>
+                            <option value="2">Fevereiro</option>
+                            <option value="3">Março</option>
+                            <option value="4">Abril</option>
+                            <option value="5">Maio</option>
+                            <option value="6">Junho</option>
+                            <option value="7">Julho</option>
+                            <option value="8">Agosto</option>
+                            <option value="9">Setembro</option>
+                            <option value="10">Outubro</option>
+                            <option value="11">Novembro</option>
+                            <option value="12">Dezembro</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="form-label" style={{ fontSize: '0.75rem' }}>Ano</label>
+                          <select className="form-input" value={filtroAnoDescargas} onChange={(e) => setFiltroAnoDescargas(e.target.value)} style={{ padding: '0.35rem', minWidth: '100px' }}>
+                            <option value="all">-- Todos --</option>
+                            <option value="2024">2024</option>
+                            <option value="2025">2025</option>
+                            <option value="2026">2026</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="form-label" style={{ fontSize: '0.75rem' }}>Período Início</label>
+                          <input type="date" className="form-input" value={periodoInicioDescargas} onChange={(e) => setPeriodoInicioDescargas(e.target.value)} style={{ padding: '0.35rem' }} />
+                        </div>
+                        <div>
+                          <label className="form-label" style={{ fontSize: '0.75rem' }}>Período Fim</label>
+                          <input type="date" className="form-input" value={periodoFimDescargas} onChange={(e) => setPeriodoFimDescargas(e.target.value)} style={{ padding: '0.35rem' }} />
+                        </div>
+                        <div style={{ display: 'flex', gap: '0.5rem', marginLeft: 'auto' }}>
+                          <button className="btn btn-secondary" onClick={() => { setFiltroMesDescargas('all'); setFiltroAnoDescargas('all'); setPeriodoInicioDescargas(''); setPeriodoFimDescargas(''); }}>Limpar</button>
+                        </div>
+                      </div>
+                    </div>
+                    {descargasFiltradas.length === 0 ? (
+                      <p style={{ color: 'var(--text-secondary)' }}>
+                        {hasFiltroDescargas
+                          ? 'Nenhuma descarga encontrada para os filtros selecionados. Ajuste o período ou clique em Limpar.'
+                          : 'Não existem descargas concluídas registadas.'}
+                      </p>
+                    ) : (
+                      <div className="table-container">
+                        <table className="data-table">
+                          <thead>
+                            <tr>
+                              <th>Ref/Data Pedido</th>
+                              <th>Cliente</th>
+                              <th>ETAR Destino</th>
+                              <th>Efluente</th>
+                              <th>Qtd. Real (Solicitada)</th>
+                              <th>Data Receção</th>
+                              <th>Ações</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {descargasFiltradas.map((d) => (
+                              <tr key={d.id_descarga}>
+                                <td>
+                                  <strong>#{d.id_descarga}</strong>
+                                  <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                                    {new Date(d.data_pedido).toLocaleDateString()}
+                                  </div>
+                                </td>
+                                <td>{d.cliente_nome}</td>
+                                <td>{d.etar_nome || `ETAR ${d.id_etar}`}</td>
+                                <td>{d.tipo_efluente}</td>
+                                <td>
+                                  <strong>{d.quantidade_real ? `${d.quantidade_real} L` : 'N/A'}</strong>
+                                  <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginLeft: '4px' }}>
+                                    ({d.quantidade} L)
+                                  </span>
+                                </td>
+                                <td>{d.data_rececao ? new Date(d.data_rececao).toLocaleString() : 'N/A'}</td>
+                                <td>
+                                  <button
+                                    className="btn btn-primary"
+                                    style={{ padding: '0.35rem 0.7rem', fontSize: '0.8rem', backgroundColor: 'var(--success)' }}
+                                    onClick={() => handleAbrirFichaDescarga(d.id_descarga)}
+                                  >
+                                    <FileText size={14} style={{ verticalAlign: 'middle', marginRight: '4px' }} /> Ver Ficha
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             )}
 
             {/* TAB: HISTÓRICO DE BOLETINS ANALÍTICOS (AMOSTRAS CONCLUÍDAS) */}
             {activeTab === 'historicoAmostras' && (
-              <div>
-                <h3 style={{ marginBottom: '1.5rem' }}>Boletins Analíticos de Amostras Concluídas</h3>
-                {loading ? (
-                  <p>A carregar boletins...</p>
-                ) : amostrasConcluidas.length === 0 ? (
-                  <p>Não existem amostras concluídas ou boletins validados no sistema.</p>
-                ) : (
-                  <div className="table-container">
-                    <table className="data-table">
-                      <thead>
-                        <tr>
-                          <th>Ref. Amostra</th>
-                          <th>Cliente</th>
-                          <th>ETAR Origem</th>
-                          <th>Data Conclusão</th>
-                          <th>Ações</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {amostrasConcluidas.map((am) => (
-                          <tr key={am.id_amostra}>
-                            <td><strong>{am.qr_code_token}</strong></td>
-                            <td>{am.cliente_nome}</td>
-                            <td>{am.etar_nome}</td>
-                            <td>{new Date(am.data_validacao).toLocaleDateString()}</td>
-                            <td style={{ display: 'flex', gap: '0.5rem' }}>
-                              <button
-                                className="btn btn-primary"
-                                style={{ padding: '0.35rem 0.7rem', fontSize: '0.8rem', backgroundColor: 'var(--success)' }}
-                                onClick={() => handleDownloadBoletim(am)}
-                              >
-                                <Download size={14} style={{ verticalAlign: 'middle', marginRight: '4px' }} /> Boletim PDF
-                              </button>
-                              {am.boletim_publico ? (
-                                <span className="badge" style={{ backgroundColor: 'var(--success-light)', color: 'var(--success)', border: '1px solid var(--success)', padding: '0.35rem 0.7rem', fontSize: '0.8rem', display: 'inline-flex', alignItems: 'center', gap: '4px', borderRadius: 'var(--radius-sm)' }}>
-                                  <Check size={14} /> Disponibilizado
-                                </span>
-                              ) : (
-                                <button
-                                  className="btn btn-secondary"
-                                  style={{ padding: '0.35rem 0.7rem', fontSize: '0.8rem' }}
-                                  onClick={() => handleDisponibilizarBoletim(am.id_amostra)}
-                                >
-                                  Disponibilizar ao Cliente
-                                </button>
-                              )}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                  <div>
+                    <h3 style={{ marginBottom: '1.5rem' }}>Boletins Analíticos de Amostras Concluídas</h3>
+                    {loading ? (
+                      <p>A carregar boletins...</p>
+                    ) : (
+                      <>
+                        <div className="card" style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', marginBottom: '1rem', padding: '0.75rem', flexWrap: 'wrap' }}>
+                          <div>
+                            <label className="form-label" style={{ fontSize: '0.75rem' }}>Mês</label>
+                            <select className="form-input" value={filtroMesAmostras} onChange={(e) => setFiltroMesAmostras(e.target.value)} style={{ padding: '0.35rem', minWidth: '120px' }}>
+                              <option value="all">-- Todos --</option>
+                              <option value="1">Janeiro</option>
+                              <option value="2">Fevereiro</option>
+                              <option value="3">Março</option>
+                              <option value="4">Abril</option>
+                              <option value="5">Maio</option>
+                              <option value="6">Junho</option>
+                              <option value="7">Julho</option>
+                              <option value="8">Agosto</option>
+                              <option value="9">Setembro</option>
+                              <option value="10">Outubro</option>
+                              <option value="11">Novembro</option>
+                              <option value="12">Dezembro</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="form-label" style={{ fontSize: '0.75rem' }}>Ano</label>
+                            <select className="form-input" value={filtroAnoAmostras} onChange={(e) => setFiltroAnoAmostras(e.target.value)} style={{ padding: '0.35rem', minWidth: '100px' }}>
+                              <option value="all">-- Todos --</option>
+                              <option value="2024">2024</option>
+                              <option value="2025">2025</option>
+                              <option value="2026">2026</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="form-label" style={{ fontSize: '0.75rem' }}>Período Início</label>
+                            <input type="date" className="form-input" value={periodoInicioAmostras} onChange={(e) => setPeriodoInicioAmostras(e.target.value)} style={{ padding: '0.35rem' }} />
+                          </div>
+                          <div>
+                            <label className="form-label" style={{ fontSize: '0.75rem' }}>Período Fim</label>
+                            <input type="date" className="form-input" value={periodoFimAmostras} onChange={(e) => setPeriodoFimAmostras(e.target.value)} style={{ padding: '0.35rem' }} />
+                          </div>
+                          <div style={{ display: 'flex', gap: '0.5rem', marginLeft: 'auto' }}>
+                            <button className="btn btn-secondary" onClick={() => { setFiltroMesAmostras('all'); setFiltroAnoAmostras('all'); setPeriodoInicioAmostras(''); setPeriodoFimAmostras(''); }}>Limpar</button>
+                          </div>
+                        </div>
+                        {amostrasFiltradas.length === 0 ? (
+                          <p style={{ color: 'var(--text-secondary)' }}>
+                            {hasFiltroAmostras
+                              ? 'Nenhum boletim encontrado para os filtros selecionados. Ajuste o período ou clique em Limpar.'
+                              : 'Não existem amostras concluídas ou boletins validados.'}
+                          </p>
+                        ) : (
+                          <div className="table-container">
+                            <table className="data-table">
+                              <thead>
+                                <tr>
+                                  <th>Ref. Amostra</th>
+                                  <th>Data Recolha</th>
+                                  <th>Cliente</th>
+                                  <th>ETAR</th>
+                                  <th>Data Conclusão</th>
+                                  <th>Ações</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {amostrasFiltradas.map((am) => (
+                                  <tr key={am.id_amostra}>
+                                    <td><strong>{am.qr_code_token}</strong></td>
+                                    <td>{am.data_recolha ? new Date(am.data_recolha).toLocaleDateString() : 'N/A'}</td>
+                                    <td>{am.cliente_nome}</td>
+                                    <td>{am.etar_nome}</td>
+                                    <td>{am.data_validacao ? new Date(am.data_validacao).toLocaleDateString() : 'N/A'}</td>
+                                    <td style={{ display: 'flex', gap: '0.5rem' }}>
+                                      <button
+                                        className="btn btn-secondary"
+                                        style={{ padding: '0.35rem 0.7rem', fontSize: '0.8rem' }}
+                                        onClick={() => handleVerBoletim({ id_amostra: am.id_amostra, qr_code_token: am.qr_code_token })}
+                                      >
+                                        <Eye size={14} style={{ verticalAlign: 'middle', marginRight: '4px' }} /> Ver Boletim
+                                      </button>
+                                      <button
+                                        className="btn btn-secondary"
+                                        style={{ padding: '0.35rem 0.7rem', fontSize: '0.8rem' }}
+                                        onClick={() => handleDownloadBoletim({ id_amostra: am.id_amostra, qr_code_token: am.qr_code_token })}
+                                        title="Descarregar PDF"
+                                      >
+                                        <Download size={14} />
+                                      </button>
+                                      {am.boletim_publico ? (
+                                        <span className="badge" style={{ backgroundColor: 'var(--success-light)', color: 'var(--success)', border: '1px solid var(--success)', padding: '0.35rem 0.7rem', fontSize: '0.8rem', display: 'inline-flex', alignItems: 'center', gap: '4px', borderRadius: 'var(--radius-sm)' }}>
+                                          <Check size={14} /> Disponibilizado
+                                        </span>
+                                      ) : (
+                                        <button
+                                          className="btn btn-secondary"
+                                          style={{ padding: '0.35rem 0.7rem', fontSize: '0.8rem' }}
+                                          onClick={() => handleDisponibilizarBoletim(am.id_amostra)}
+                                        >
+                                          Disponibilizar ao Cliente
+                                        </button>
+                                      )}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </>
+                    )}
                   </div>
                 )}
-              </div>
-            )}
 
             {/* TAB: RELATÓRIOS CONSOLIDADOS */}
             {activeTab === 'relatorios' && (
-              <div>
-                <h3 style={{ marginBottom: '1.5rem' }}>Relatórios</h3>
+                      <div>
+                        <h3 style={{ marginBottom: '1.5rem' }}>Relatórios</h3>
 
-                {/* Filtros de Pesquisa */}
-                <div className="card" style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', padding: '1rem', marginBottom: '1.5rem', alignItems: 'center' }}>
-                  <div style={{ flex: 1, minWidth: '150px' }}>
-                    <label className="form-label" style={{ marginBottom: '0.25rem', fontSize: '0.8rem' }}>Cliente</label>
-                    <select className="form-input" value={filtroCliente} onChange={(e) => setFiltroCliente(e.target.value)} style={{ padding: '0.4rem' }}>
-                      <option value="all">-- Todos os Clientes --</option>
-                      {clientesList.map(c => (
-                        <option key={c.id_cliente} value={c.id_cliente}>{c.nome}</option>
-                      ))}
-                    </select>
-                  </div>
+                        <div style={{ marginBottom: '0.75rem', display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                          <div>
+                            <label className="form-label" style={{ fontSize: '0.75rem' }}>Período Início</label>
+                            <input type="date" className="form-input" value={periodoInicioRelatorios} onChange={(e) => setPeriodoInicioRelatorios(e.target.value)} style={{ padding: '0.35rem' }} />
+                          </div>
+                          <div>
+                            <label className="form-label" style={{ fontSize: '0.75rem' }}>Período Fim</label>
+                            <input type="date" className="form-input" value={periodoFimRelatorios} onChange={(e) => setPeriodoFimRelatorios(e.target.value)} style={{ padding: '0.35rem' }} />
+                          </div>
+                          <div style={{ display: 'flex', gap: '0.5rem', alignSelf: 'flex-end', marginBottom: '2px' }}>
+                            <button
+                              className="btn btn-secondary"
+                              style={{ padding: '0.35rem 0.75rem' }}
+                              onClick={() => {
+                                setFiltroMesRelatorios('all');
+                                setFiltroAnoRelatorios('all');
+                                setPeriodoInicioRelatorios('');
+                                setPeriodoFimRelatorios('');
+                              }}
+                            >
+                              Limpar
+                            </button>
+                          </div>
+                        </div>
 
-                  <div style={{ flex: 1, minWidth: '150px' }}>
-                    <label className="form-label" style={{ marginBottom: '0.25rem', fontSize: '0.8rem' }}>ETAR</label>
-                    <select className="form-input" value={filtroEtar} onChange={(e) => setFiltroEtar(e.target.value)} style={{ padding: '0.4rem' }}>
-                      <option value="all">-- Todas as ETARs --</option>
-                      {etarsList.map(e => (
-                        <option key={e.id_etar} value={e.id_etar}>{e.nome}</option>
-                      ))}
-                    </select>
-                  </div>
+                        {/* Filtros de Pesquisa */}
+                        <div className="card" style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', padding: '1rem', marginBottom: '1.5rem', alignItems: 'center' }}>
+                          <div style={{ flex: 1, minWidth: '150px' }}>
+                            <label className="form-label" style={{ marginBottom: '0.25rem', fontSize: '0.8rem' }}>Cliente</label>
+                            <select className="form-input" value={filtroCliente} onChange={(e) => setFiltroCliente(e.target.value)} style={{ padding: '0.4rem' }}>
+                              <option value="all">-- Todos os Clientes --</option>
+                              {clientesList.map(c => (
+                                <option key={c.id_cliente} value={c.id_cliente}>{c.nome}</option>
+                              ))}
+                            </select>
+                          </div>
 
-                  <div style={{ flex: 1, minWidth: '110px' }}>
-                    <label className="form-label" style={{ marginBottom: '0.25rem', fontSize: '0.8rem' }}>Mês</label>
-                    <select className="form-input" value={filtroMes} onChange={(e) => setFiltroMes(e.target.value)} style={{ padding: '0.4rem' }}>
-                      <option value="all">-- Todos --</option>
-                      <option value="1">Janeiro</option>
-                      <option value="2">Fevereiro</option>
-                      <option value="3">Março</option>
-                      <option value="4">Abril</option>
-                      <option value="5">Maio</option>
-                      <option value="6">Junho</option>
-                      <option value="7">Julho</option>
-                      <option value="8">Agosto</option>
-                      <option value="9">Setembro</option>
-                      <option value="10">Outubro</option>
-                      <option value="11">Novembro</option>
-                      <option value="12">Dezembro</option>
-                    </select>
-                  </div>
+                          <div style={{ flex: 1, minWidth: '150px' }}>
+                            <label className="form-label" style={{ marginBottom: '0.25rem', fontSize: '0.8rem' }}>ETAR</label>
+                            <select className="form-input" value={filtroEtar} onChange={(e) => setFiltroEtar(e.target.value)} style={{ padding: '0.4rem' }}>
+                              <option value="all">-- Todas as ETARs --</option>
+                              {etarsList.map(e => (
+                                <option key={e.id_etar} value={e.id_etar}>{e.nome}</option>
+                              ))}
+                            </select>
+                          </div>
 
-                  <div style={{ flex: 1, minWidth: '110px' }}>
-                    <label className="form-label" style={{ marginBottom: '0.25rem', fontSize: '0.8rem' }}>Ano</label>
-                    <select className="form-input" value={filtroAno} onChange={(e) => setFiltroAno(e.target.value)} style={{ padding: '0.4rem' }}>
-                      <option value="all">-- Todos --</option>
-                      <option value="2025">2025</option>
-                      <option value="2026">2026</option>
-                      <option value="2027">2027</option>
-                    </select>
-                  </div>
+                          <div style={{ flex: 1, minWidth: '110px' }}>
+                            <label className="form-label" style={{ marginBottom: '0.25rem', fontSize: '0.8rem' }}>Mês</label>
+                            <select className="form-input" value={filtroMesRelatorios} onChange={(e) => setFiltroMesRelatorios(e.target.value)} style={{ padding: '0.4rem' }}>
+                              <option value="all">-- Todos --</option>
+                              <option value="1">Janeiro</option>
+                              <option value="2">Fevereiro</option>
+                              <option value="3">Março</option>
+                              <option value="4">Abril</option>
+                              <option value="5">Maio</option>
+                              <option value="6">Junho</option>
+                              <option value="7">Julho</option>
+                              <option value="8">Agosto</option>
+                              <option value="9">Setembro</option>
+                              <option value="10">Outubro</option>
+                              <option value="11">Novembro</option>
+                              <option value="12">Dezembro</option>
+                            </select>
+                          </div>
 
-                  <div style={{ flex: 1, minWidth: '130px' }}>
-                    <label className="form-label" style={{ marginBottom: '0.25rem', fontSize: '0.8rem' }}>Estado da descarga</label>
-                    <select className="form-input" value={filtroEstado} onChange={(e) => setFiltroEstado(e.target.value)} style={{ padding: '0.4rem' }}>
-                      <option value="all">-- Todos os Estados --</option>
-                      <option value="SOLICITADA">Solicitada</option>
-                      <option value="AUTORIZADA">Autorizada</option>
-                      <option value="REJEITADA">Rejeitada</option>
-                      <option value="AGENDADA">Agendada</option>
-                      <option value="RECEBIDA">Recebida</option>
-                      <option value="CONCLUIDA">Concluída</option>
-                    </select>
-                  </div>
-                </div>
+                          <div style={{ flex: 1, minWidth: '110px' }}>
+                            <label className="form-label" style={{ marginBottom: '0.25rem', fontSize: '0.8rem' }}>Ano</label>
+                            <select className="form-input" value={filtroAnoRelatorios} onChange={(e) => setFiltroAnoRelatorios(e.target.value)} style={{ padding: '0.4rem' }}>
+                              <option value="all">-- Todos --</option>
+                              <option value="2025">2025</option>
+                              <option value="2026">2026</option>
+                              <option value="2027">2027</option>
+                            </select>
+                          </div>
 
-                {loading ? (
-                  <p>A carregar relatórios...</p>
-                ) : relatoriosData.length === 0 ? (
-                  <div className="card" style={{ textAlign: 'center', padding: '2rem' }}>
-                    <p style={{ color: 'var(--text-secondary)' }}>Não existem descargas registadas para os filtros selecionados.</p>
-                  </div>
-                ) : (
-                  <div className="table-container">
-                    <table className="data-table">
-                      <thead>
-                        <tr>
-                          <th>Ref/Data Pedido</th>
-                          <th>Cliente</th>
-                          <th>ETAR</th>
-                          <th>Estado Descarga</th>
-                          <th>Qtd. Real (Solicitada)</th>
-                          <th>Amostra</th>
-                          <th>Resultados Analíticos</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {relatoriosData.map((r) => {
-                          const hasAmostra = !!r.id_amostra;
-                          const hasResultados = Array.isArray(r.resultados) && r.resultados.length > 0;
-                          return (
-                            <tr key={r.id_descarga}>
-                              <td>
-                                <strong>#{r.id_descarga}</strong>
-                                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-                                  {new Date(r.data_pedido).toLocaleDateString()}
-                                </div>
-                              </td>
-                              <td><strong>{r.cliente_nome}</strong></td>
-                              <td>{r.etar_nome || `ETAR ${r.id_etar}`}</td>
-                              <td>
-                                <span className={`badge badge-${r.estado_descarga.toLowerCase()}`} style={{ fontSize: '0.7rem' }}>
-                                  {r.estado_descarga}
-                                </span>
-                                {/* Quem autorizou/rejeitou */}
-                                {r.decisao_por_nome && ['AUTORIZADA', 'REJEITADA'].includes(r.estado_descarga) && (
-                                  <div style={{
-                                    fontSize: '0.68rem',
-                                    color: 'var(--text-secondary)',
-                                    marginTop: '0.2rem',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '3px'
-                                  }}>
-                                    <span style={{ opacity: 0.6 }}>👤</span>
-                                    <span style={{ fontStyle: 'italic' }}>por {r.decisao_por_nome}</span>
-                                  </div>
-                                )}
-                                {/* Quem recebeu */}
-                                {r.rececao_por_nome && ['RECEBIDA', 'CONCLUIDA'].includes(r.estado_descarga) && (
-                                  <div style={{
-                                    fontSize: '0.68rem',
-                                    color: 'var(--text-secondary)',
-                                    marginTop: '0.2rem',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '3px'
-                                  }}>
-                                    <span style={{ opacity: 0.6 }}>👤</span>
-                                    <span style={{ fontStyle: 'italic' }}>recebido por {r.rececao_por_nome}</span>
-                                  </div>
-                                )}
-                                {/* Quem autorizou (em estados mais avançados que AUTORIZADA) */}
-                                {r.decisao_por_nome && ['AGENDADA', 'RECEBIDA', 'CONCLUIDA'].includes(r.estado_descarga) && (
-                                  <div style={{
-                                    fontSize: '0.65rem',
-                                    color: 'var(--text-secondary)',
-                                    marginTop: '0.1rem',
-                                    opacity: 0.75
-                                  }}>
-                                    ✓ aut. por {r.decisao_por_nome}
-                                  </div>
-                                )}
-                                {r.observacoes && r.observacoes.includes('ALERTA OPERACIONAL') && (
-                                  <div style={{
-                                    fontSize: '0.65rem',
-                                    color: 'var(--danger)',
-                                    backgroundColor: 'var(--danger-light)',
-                                    padding: '2px 4px',
-                                    borderRadius: '4px',
-                                    border: '1px solid var(--danger)',
-                                    marginTop: '0.2rem',
-                                    whiteSpace: 'normal',
-                                    lineHeight: '1.1'
-                                  }}>
-                                    ⚠️ Contacto Urgente
-                                  </div>
-                                )}
-                                {r.observacoes && r.observacoes.includes('Revertido') && (
-                                  <div style={{
-                                    fontSize: '0.65rem',
-                                    color: 'var(--danger)',
-                                    backgroundColor: 'var(--danger-light)',
-                                    padding: '2px 4px',
-                                    borderRadius: '4px',
-                                    border: '1px solid var(--danger)',
-                                    marginTop: '0.2rem',
-                                    whiteSpace: 'normal',
-                                    lineHeight: '1.1'
-                                  }}>
-                                    ⚠️ Autorização Revertida
-                                  </div>
-                                )}
-                              </td>
-                              <td>
-                                <strong>{r.quantidade_real ? `${r.quantidade_real} L` : 'N/A'}</strong>
-                                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-                                  ({r.quantidade} L)
-                                </div>
-                              </td>
-                              <td>
-                                {hasAmostra ? (
-                                  <div>
-                                    <span className={`badge badge-${r.estado_amostra.toLowerCase()}`} style={{ fontSize: '0.7rem' }}>
-                                      {r.estado_amostra}
-                                    </span>
-                                    <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.2rem' }}>
-                                      Ref: {r.qr_code_token || 'N/A'}
-                                    </div>
-                                  </div>
-                                ) : (
-                                  <span style={{ color: 'var(--text-secondary)', fontSize: '0.8rem' }}>Sem recolha</span>
-                                )}
-                              </td>
-                              <td style={{ maxWidth: '300px' }}>
-                                {hasResultados ? (
-                                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.3rem', fontSize: '0.75rem' }}>
-                                    {r.resultados.map((res, idx) => (
-                                      <span
-                                        key={idx}
-                                        style={{
-                                          backgroundColor: 'var(--bg-base)',
-                                          border: '1px solid var(--border)',
-                                          borderRadius: '4px',
-                                          padding: '2px 6px',
-                                          whiteSpace: 'nowrap'
-                                        }}
-                                      >
-                                        <strong>{res.parametro}:</strong> {res.valor} {res.unidade || ''}
-                                      </span>
-                                    ))}
-                                  </div>
-                                ) : hasAmostra ? (
-                                  <span style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', fontStyle: 'italic' }}>
-                                    Aguardando análise
-                                  </span>
-                                ) : (
-                                  <span style={{ color: 'var(--text-secondary)', fontSize: '0.8rem' }}>-</span>
-                                )}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-            )}
+                          <div style={{ flex: 1, minWidth: '130px' }}>
+                            <label className="form-label" style={{ marginBottom: '0.25rem', fontSize: '0.8rem' }}>Estado da descarga</label>
+                            <select className="form-input" value={filtroEstado} onChange={(e) => setFiltroEstado(e.target.value)} style={{ padding: '0.4rem' }}>
+                              <option value="all">-- Todos os Estados --</option>
+                              <option value="SOLICITADA">Solicitada</option>
+                              <option value="AUTORIZADA">Autorizada</option>
+                              <option value="REJEITADA">Rejeitada</option>
+                              <option value="AGENDADA">Agendada</option>
+                              <option value="RECEBIDA">Recebida</option>
+                              <option value="CONCLUIDA">Concluída</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        {loading ? (
+                          <p>A carregar relatórios...</p>
+                        ) : relatoriosData.length === 0 ? (
+                          <div className="card" style={{ textAlign: 'center', padding: '2rem' }}>
+                            <p style={{ color: 'var(--text-secondary)' }}>Não existem descargas registadas para os filtros selecionados.</p>
+                          </div>
+                        ) : (
+                          <div className="table-container">
+                            <table className="data-table">
+                              <thead>
+                                <tr>
+                                  <th>Ref/Data Recolha</th>
+                                  <th>Cliente</th>
+                                  <th>ETAR</th>
+                                  <th>Estado Descarga</th>
+                                  <th>Qtd. Real (Solicitada)</th>
+                                  <th>Amostra</th>
+                                  <th>Resultados Analíticos</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {relatoriosData.map((r) => {
+                                  const hasAmostra = !!r.id_amostra;
+                                  const hasResultados = Array.isArray(r.resultados) && r.resultados.length > 0;
+                                  return (
+                                    <tr key={r.id_descarga}>
+                                      <td>
+                                        <strong>#{r.id_descarga}</strong>
+                                        <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                                          {r.data_rececao ? new Date(r.data_rececao).toLocaleDateString() : 'N/A'}
+                                        </div>
+                                      </td>
+                                      <td><strong>{r.cliente_nome}</strong></td>
+                                      <td>{r.etar_nome || `ETAR ${r.id_etar}`}</td>
+                                      <td>
+                                        <span className={`badge badge-${r.estado_descarga.toLowerCase()}`} style={{ fontSize: '0.7rem' }}>
+                                          {r.estado_descarga}
+                                        </span>
+                                        {/* Quem autorizou/rejeitou */}
+                                        {r.decisao_por_nome && ['AUTORIZADA', 'REJEITADA'].includes(r.estado_descarga) && (
+                                          <div style={{
+                                            fontSize: '0.68rem',
+                                            color: 'var(--text-secondary)',
+                                            marginTop: '0.2rem',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '3px'
+                                          }}>
+                                            <span style={{ opacity: 0.6 }}>👤</span>
+                                            <span style={{ fontStyle: 'italic' }}>por {r.decisao_por_nome}</span>
+                                          </div>
+                                        )}
+                                        {/* Quem recebeu */}
+                                        {r.rececao_por_nome && ['RECEBIDA', 'CONCLUIDA'].includes(r.estado_descarga) && (
+                                          <div style={{
+                                            fontSize: '0.68rem',
+                                            color: 'var(--text-secondary)',
+                                            marginTop: '0.2rem',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '3px'
+                                          }}>
+                                            <span style={{ opacity: 0.6 }}>👤</span>
+                                            <span style={{ fontStyle: 'italic' }}>recebido por {r.rececao_por_nome}</span>
+                                          </div>
+                                        )}
+                                        {/* Quem autorizou (em estados mais avançados que AUTORIZADA) */}
+                                        {r.decisao_por_nome && ['AGENDADA', 'RECEBIDA', 'CONCLUIDA'].includes(r.estado_descarga) && (
+                                          <div style={{
+                                            fontSize: '0.65rem',
+                                            color: 'var(--text-secondary)',
+                                            marginTop: '0.1rem',
+                                            opacity: 0.75
+                                          }}>
+                                            ✓ aut. por {r.decisao_por_nome}
+                                          </div>
+                                        )}
+                                        {r.observacoes && r.observacoes.includes('ALERTA OPERACIONAL') && (
+                                          <div style={{
+                                            fontSize: '0.65rem',
+                                            color: 'var(--danger)',
+                                            backgroundColor: 'var(--danger-light)',
+                                            padding: '2px 4px',
+                                            borderRadius: '4px',
+                                            border: '1px solid var(--danger)',
+                                            marginTop: '0.2rem',
+                                            whiteSpace: 'normal',
+                                            lineHeight: '1.1'
+                                          }}>
+                                            ⚠️ Contacto Urgente
+                                          </div>
+                                        )}
+                                        {r.observacoes && r.observacoes.includes('Revertido') && (
+                                          <div style={{
+                                            fontSize: '0.65rem',
+                                            color: 'var(--danger)',
+                                            backgroundColor: 'var(--danger-light)',
+                                            padding: '2px 4px',
+                                            borderRadius: '4px',
+                                            border: '1px solid var(--danger)',
+                                            marginTop: '0.2rem',
+                                            whiteSpace: 'normal',
+                                            lineHeight: '1.1'
+                                          }}>
+                                            ⚠️ Autorização Revertida
+                                          </div>
+                                        )}
+                                      </td>
+                                      <td>
+                                        <strong>{r.quantidade_real ? `${r.quantidade_real} L` : 'N/A'}</strong>
+                                        <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                                          ({r.quantidade} L)
+                                        </div>
+                                      </td>
+                                      <td>
+                                        {hasAmostra ? (
+                                          <div>
+                                            <span className={`badge badge-${r.estado_amostra.toLowerCase()}`} style={{ fontSize: '0.7rem' }}>
+                                              {r.estado_amostra}
+                                            </span>
+                                            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.2rem' }}>
+                                              Ref: {r.qr_code_token || 'N/A'}
+                                            </div>
+                                          </div>
+                                        ) : (
+                                          <span style={{ color: 'var(--text-secondary)', fontSize: '0.8rem' }}>Sem recolha</span>
+                                        )}
+                                      </td>
+                                      <td style={{ maxWidth: '300px' }}>
+                                        {hasResultados ? (
+                                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.3rem', fontSize: '0.75rem' }}>
+                                            {r.resultados.map((res, idx) => (
+                                              <span
+                                                key={idx}
+                                                style={{
+                                                  backgroundColor: 'var(--bg-base)',
+                                                  border: '1px solid var(--border)',
+                                                  borderRadius: '4px',
+                                                  padding: '2px 6px',
+                                                  whiteSpace: 'nowrap'
+                                                }}
+                                              >
+                                                <strong>{res.parametro}:</strong> {res.valor} {res.unidade || ''}
+                                              </span>
+                                            ))}
+                                          </div>
+                                        ) : hasAmostra ? (
+                                          <span style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', fontStyle: 'italic' }}>
+                                            Aguardando análise
+                                          </span>
+                                        ) : (
+                                          <span style={{ color: 'var(--text-secondary)', fontSize: '0.8rem' }}>-</span>
+                                        )}
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </div>
+                    )}
 
             {/* TAB: GESTÃO DE UTILIZADORES INTERNOS */}
             {activeTab === 'utilizadores' && user.perfil === 'GESTOR_ADMIN' && (
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-                  <h3>Gestão de Utilizadores Internos</h3>
-                  <div style={{ display: 'flex', gap: '0.75rem' }}>
-                    <button
-                      className="btn btn-secondary"
-                      style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
-                      onClick={() => {
-                        setEditingPerfilId(null);
-                        setNewPerfilData({ nome: '' });
-                        setShowPerfisModal(true);
-                      }}
-                    >
-                      Gerir Perfis
-                    </button>
-                    <button
-                      className="btn btn-primary"
-                      style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
-                      onClick={() => {
-                        setEditingUtilizadorId(null);
-                        setNewUtilizadorData({
-                          nome: '',
-                          email: '',
-                          id_perfil: '2',
-                          id_etar: '',
-                          password: '',
-                          ativo: true
-                        });
-                        setShowAddUtilizador(true);
-                      }}
-                    >
-                      <PlusCircle size={18} /> Adicionar Utilizador
-                    </button>
-                  </div>
-                </div>
+                      <div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                          <h3>Gestão de Utilizadores Internos</h3>
+                          <div style={{ display: 'flex', gap: '0.75rem' }}>
+                            <button
+                              className="btn btn-secondary"
+                              style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+                              onClick={() => {
+                                setEditingPerfilId(null);
+                                setNewPerfilData({ nome: '' });
+                                setShowPerfisModal(true);
+                              }}
+                            >
+                              Gerir Perfis
+                            </button>
+                            <button
+                              className="btn btn-primary"
+                              style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+                              onClick={() => {
+                                setEditingUtilizadorId(null);
+                                setNewUtilizadorData({
+                                  nome: '',
+                                  email: '',
+                                  id_perfil: '2',
+                                  id_etar: '',
+                                  password: '',
+                                  ativo: true
+                                });
+                                setShowAddUtilizador(true);
+                              }}
+                            >
+                              <PlusCircle size={18} /> Adicionar Utilizador
+                            </button>
+                          </div>
+                        </div>
 
-                {loading ? (
-                  <p>A ler utilizadores...</p>
-                ) : utilizadoresList.length === 0 ? (
-                  <div className="card" style={{ textAlign: 'center', padding: '2rem' }}>
-                    <p style={{ color: 'var(--text-secondary)' }}>Nenhum utilizador interno registado no sistema.</p>
-                  </div>
-                ) : (
-                  <div className="table-container">
-                    <table className="data-table">
-                      <thead>
-                        <tr>
-                          <th>Nome</th>
-                          <th>Perfil / Cargo</th>
-                          <th>Email</th>
-                          <th>ETAR Associada</th>
-                          <th>Estado</th>
-                          <th>Ações</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {utilizadoresList.map((u) => (
-                          <tr key={u.id_utilizador}>
-                            <td><strong>{u.nome}</strong></td>
-                            <td>
-                              <span className="badge badge-info" style={{ fontSize: '0.75rem', textTransform: 'capitalize' }}>
-                                {u.perfil_nome ? u.perfil_nome.replace('_', ' ').toLowerCase() : 'N/A'}
-                              </span>
-                            </td>
-                            <td>{u.email}</td>
-                            <td>
-                              {u.id_etar ? (
-                                <span>{u.etar_nome || `ETAR #${u.id_etar}`}</span>
-                              ) : (
-                                <span style={{ color: 'var(--text-secondary)' }}>-</span>
-                              )}
-                            </td>
-                            <td>
-                              <span className={`badge badge-${u.ativo ? 'success' : 'danger'}`} style={{ fontSize: '0.75rem' }}>
-                                {u.ativo ? 'Ativo' : 'Suspenso'}
-                              </span>
-                            </td>
-                            <td>
-                              <button
-                                className="btn btn-primary"
-                                style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem' }}
-                                onClick={() => {
-                                  setEditingUtilizadorId(u.id_utilizador);
-                                  setNewUtilizadorData({
-                                    nome: u.nome,
-                                    email: u.email,
-                                    id_perfil: String(u.id_perfil),
-                                    id_etar: u.id_etar ? String(u.id_etar) : '',
-                                    password: '',
-                                    ativo: !!u.ativo
-                                  });
-                                  setShowAddUtilizador(true);
-                                }}
-                              >
-                                Editar
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-            )}
+                        {loading ? (
+                          <p>A ler utilizadores...</p>
+                        ) : utilizadoresList.length === 0 ? (
+                          <div className="card" style={{ textAlign: 'center', padding: '2rem' }}>
+                            <p style={{ color: 'var(--text-secondary)' }}>Nenhum utilizador interno registado no sistema.</p>
+                          </div>
+                        ) : (
+                          <div className="table-container">
+                            <table className="data-table">
+                              <thead>
+                                <tr>
+                                  <th>Nome</th>
+                                  <th>Perfil / Cargo</th>
+                                  <th>Email</th>
+                                  <th>ETAR Associada</th>
+                                  <th>Estado</th>
+                                  <th>Ações</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {utilizadoresList.map((u) => (
+                                  <tr key={u.id_utilizador}>
+                                    <td><strong>{u.nome}</strong></td>
+                                    <td>
+                                      <span className="badge badge-info" style={{ fontSize: '0.75rem', textTransform: 'capitalize' }}>
+                                        {u.perfil_nome ? u.perfil_nome.replace('_', ' ').toLowerCase() : 'N/A'}
+                                      </span>
+                                    </td>
+                                    <td>{u.email}</td>
+                                    <td>
+                                      {u.id_etar ? (
+                                        <span>{u.etar_nome || `ETAR #${u.id_etar}`}</span>
+                                      ) : (
+                                        <span style={{ color: 'var(--text-secondary)' }}>-</span>
+                                      )}
+                                    </td>
+                                    <td>
+                                      <span className={`badge badge-${u.ativo ? 'success' : 'danger'}`} style={{ fontSize: '0.75rem' }}>
+                                        {u.ativo ? 'Ativo' : 'Suspenso'}
+                                      </span>
+                                    </td>
+                                    <td>
+                                      <button
+                                        className="btn btn-primary"
+                                        style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem' }}
+                                        onClick={() => {
+                                          setEditingUtilizadorId(u.id_utilizador);
+                                          setNewUtilizadorData({
+                                            nome: u.nome,
+                                            email: u.email,
+                                            id_perfil: String(u.id_perfil),
+                                            id_etar: u.id_etar ? String(u.id_etar) : '',
+                                            password: '',
+                                            ativo: !!u.ativo
+                                          });
+                                          setShowAddUtilizador(true);
+                                        }}
+                                      >
+                                        Editar
+                                      </button>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </div>
+                    )}
 
             {/* TAB: AUDITORIA DO SISTEMA */}
             {activeTab === 'auditoria' && user.perfil === 'GESTOR_ADMIN' && (
-              <div>
-                <h3 style={{ marginBottom: '1.5rem' }}>Auditoria do Sistema (Logs de Rastreabilidade)</h3>
+                      <div>
+                        <h3 style={{ marginBottom: '1.5rem' }}>Auditoria do Sistema (Logs de Rastreabilidade)</h3>
 
-                {/* Filtros de Pesquisa */}
-                <div className="card" style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', padding: '1rem', marginBottom: '1.5rem', alignItems: 'center' }}>
-                  <div style={{ flex: 1, minWidth: '150px' }}>
-                    <label className="form-label" style={{ marginBottom: '0.25rem', fontSize: '0.8rem' }}>Filtrar por Entidade</label>
-                    <select className="form-input" value={filtroAuditEntidade} onChange={(e) => setFiltroAuditEntidade(e.target.value)} style={{ padding: '0.4rem' }}>
-                      <option value="all">-- Todas as Entidades --</option>
-                      <option value="DESCARGA">Descargas</option>
-                      <option value="AMOSTRA">Amostras</option>
-                      <option value="CLIENTE">Clientes</option>
-                      <option value="UTILIZADOR">Utilizadores</option>
-                      <option value="AUTORIZACAO">Whitelists / Autorizações</option>
-                      <option value="ETAR">ETARs</option>
-                      <option value="PARAMETRO">Parâmetros</option>
-                      <option value="PERFIL">Perfis</option>
-                      <option value="SISTEMA">Sistema</option>
-                    </select>
-                  </div>
+                        {/* Filtros de Pesquisa */}
+                        <div className="card" style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', padding: '1rem', marginBottom: '1.5rem', alignItems: 'center' }}>
+                          <div style={{ flex: 1, minWidth: '150px' }}>
+                            <label className="form-label" style={{ marginBottom: '0.25rem', fontSize: '0.8rem' }}>Filtrar por Entidade</label>
+                            <select className="form-input" value={filtroAuditEntidade} onChange={(e) => setFiltroAuditEntidade(e.target.value)} style={{ padding: '0.4rem' }}>
+                              <option value="all">-- Todas as Entidades --</option>
+                              <option value="DESCARGA">Descargas</option>
+                              <option value="AMOSTRA">Amostras</option>
+                              <option value="CLIENTE">Clientes</option>
+                              <option value="UTILIZADOR">Utilizadores</option>
+                              <option value="AUTORIZACAO">Whitelists / Autorizações</option>
+                              <option value="ETAR">ETARs</option>
+                              <option value="PARAMETRO">Parâmetros</option>
+                              <option value="PERFIL">Perfis</option>
+                              <option value="SISTEMA">Sistema</option>
+                            </select>
+                          </div>
 
-                  <div style={{ flex: 1, minWidth: '150px' }}>
-                    <label className="form-label" style={{ marginBottom: '0.25rem', fontSize: '0.8rem' }}>Filtrar por Ação</label>
-                    <select className="form-input" value={filtroAuditAcao} onChange={(e) => setFiltroAuditAcao(e.target.value)} style={{ padding: '0.4rem' }}>
-                      <option value="all">-- Todas as Ações --</option>
-                      <option value="PEDIDO">Pedidos de Descarga</option>
-                      <option value="AUTORIZACAO">Autorizações</option>
-                      <option value="REJEICAO">Rejeições</option>
-                      <option value="PEDIDO_ELEMENTOS">Pedido de Elementos</option>
-                      <option value="AGENDAMENTO">Agendamentos</option>
-                      <option value="RECECAO">Receções</option>
-                      <option value="VALIDACAO">Validações de Boletins</option>
-                      <option value="DISPONIBILIZACAO">Disponibilizações</option>
-                      <option value="CANCELAMENTO">Cancelamentos</option>
-                      <option value="EDICAO">Edições</option>
-                      <option value="CRIACAO">Criações</option>
-                      <option value="ALTERACAO_STATUS">Alterações de Estado</option>
-                    </select>
-                  </div>
+                          <div style={{ flex: 1, minWidth: '150px' }}>
+                            <label className="form-label" style={{ marginBottom: '0.25rem', fontSize: '0.8rem' }}>Filtrar por Ação</label>
+                            <select className="form-input" value={filtroAuditAcao} onChange={(e) => setFiltroAuditAcao(e.target.value)} style={{ padding: '0.4rem' }}>
+                              <option value="all">-- Todas as Ações --</option>
+                              <option value="PEDIDO">Pedidos de Descarga</option>
+                              <option value="AUTORIZACAO">Autorizações</option>
+                              <option value="REJEICAO">Rejeições</option>
+                              <option value="PEDIDO_ELEMENTOS">Pedido de Elementos</option>
+                              <option value="AGENDAMENTO">Agendamentos</option>
+                              <option value="RECECAO">Receções</option>
+                              <option value="VALIDACAO">Validações de Boletins</option>
+                              <option value="DISPONIBILIZACAO">Disponibilizações</option>
+                              <option value="CANCELAMENTO">Cancelamentos</option>
+                              <option value="EDICAO">Edições</option>
+                              <option value="CRIACAO">Criações</option>
+                              <option value="ALTERACAO_STATUS">Alterações de Estado</option>
+                            </select>
+                          </div>
 
-                  <div style={{ flex: 2, minWidth: '250px' }}>
-                    <label className="form-label" style={{ marginBottom: '0.25rem', fontSize: '0.8rem' }}>Pesquisa por utilizador ou descrição</label>
-                    <input
-                      type="text"
-                      className="form-input"
-                      placeholder="Pesquise por nome, email ou detalhes do log..."
-                      value={pesquisaAudit}
-                      onChange={(e) => setPesquisaAudit(e.target.value)}
-                      style={{ padding: '0.4rem' }}
-                    />
-                  </div>
-                </div>
+                          <div style={{ flex: 2, minWidth: '250px' }}>
+                            <label className="form-label" style={{ marginBottom: '0.25rem', fontSize: '0.8rem' }}>Pesquisa por utilizador ou descrição</label>
+                            <input
+                              type="text"
+                              className="form-input"
+                              placeholder="Pesquise por nome, email ou detalhes do log..."
+                              value={pesquisaAudit}
+                              onChange={(e) => setPesquisaAudit(e.target.value)}
+                              style={{ padding: '0.4rem' }}
+                            />
+                          </div>
+                        </div>
 
-                {loading ? (
-                  <p>A ler logs de auditoria...</p>
-                ) : auditoriaList.length === 0 ? (
-                  <div className="card" style={{ textAlign: 'center', padding: '2.5rem' }}>
-                    <p style={{ color: 'var(--text-secondary)' }}>Nenhum log de auditoria encontrado para os filtros selecionados.</p>
-                  </div>
-                ) : (
-                  <div className="table-container">
-                    <table className="data-table">
-                      <thead>
-                        <tr>
-                          <th>Ref</th>
-                          <th>Data / Hora</th>
-                          <th>Utilizador</th>
-                          <th>Entidade</th>
-                          <th>Ação</th>
-                          <th>Descrição / Detalhes</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {auditoriaList.map((log) => {
-                          // Definir cores das entidades
-                          let entityColor = 'var(--text-secondary)';
-                          let entityBg = 'var(--bg-base)';
-                          if (log.entidade === 'DESCARGA') {
-                            entityColor = '#2563eb';
-                            entityBg = '#dbeafe';
-                          } else if (log.entidade === 'AMOSTRA') {
-                            entityColor = '#7c3aed';
-                            entityBg = '#f3e8ff';
-                          } else if (log.entidade === 'CLIENTE') {
-                            entityColor = '#059669';
-                            entityBg = '#d1fae5';
-                          } else if (log.entidade === 'UTILIZADOR') {
-                            entityColor = '#db2777';
-                            entityBg = '#fce7f3';
-                          } else if (log.entidade === 'AUTORIZACAO') {
-                            entityColor = '#d97706';
-                            entityBg = '#fef3c7';
-                          } else if (log.entidade === 'ETAR') {
-                            entityColor = '#0d9488';
-                            entityBg = '#ccfbf1';
-                          } else if (log.entidade === 'PARAMETRO') {
-                            entityColor = '#0891b2';
-                            entityBg = '#ecfeff';
-                          } else if (log.entidade === 'PERFIL') {
-                            entityColor = '#4b5563';
-                            entityBg = '#f3f4f6';
-                          } else if (log.entidade === 'SISTEMA') {
-                            entityColor = '#ea580c';
-                            entityBg = '#ffedd5';
-                          }
+                        {loading ? (
+                          <p>A ler logs de auditoria...</p>
+                        ) : auditoriaList.length === 0 ? (
+                          <div className="card" style={{ textAlign: 'center', padding: '2.5rem' }}>
+                            <p style={{ color: 'var(--text-secondary)' }}>Nenhum log de auditoria encontrado para os filtros selecionados.</p>
+                          </div>
+                        ) : (
+                          <div className="table-container">
+                            <table className="data-table">
+                              <thead>
+                                <tr>
+                                  <th>Ref</th>
+                                  <th>Data / Hora</th>
+                                  <th>Utilizador</th>
+                                  <th>Entidade</th>
+                                  <th>Ação</th>
+                                  <th>Descrição / Detalhes</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {auditoriaList.map((log) => {
+                                  // Definir cores das entidades
+                                  let entityColor = 'var(--text-secondary)';
+                                  let entityBg = 'var(--bg-base)';
+                                  if (log.entidade === 'DESCARGA') {
+                                    entityColor = '#2563eb';
+                                    entityBg = '#dbeafe';
+                                  } else if (log.entidade === 'AMOSTRA') {
+                                    entityColor = '#7c3aed';
+                                    entityBg = '#f3e8ff';
+                                  } else if (log.entidade === 'CLIENTE') {
+                                    entityColor = '#059669';
+                                    entityBg = '#d1fae5';
+                                  } else if (log.entidade === 'UTILIZADOR') {
+                                    entityColor = '#db2777';
+                                    entityBg = '#fce7f3';
+                                  } else if (log.entidade === 'AUTORIZACAO') {
+                                    entityColor = '#d97706';
+                                    entityBg = '#fef3c7';
+                                  } else if (log.entidade === 'ETAR') {
+                                    entityColor = '#0d9488';
+                                    entityBg = '#ccfbf1';
+                                  } else if (log.entidade === 'PARAMETRO') {
+                                    entityColor = '#0891b2';
+                                    entityBg = '#ecfeff';
+                                  } else if (log.entidade === 'PERFIL') {
+                                    entityColor = '#4b5563';
+                                    entityBg = '#f3f4f6';
+                                  } else if (log.entidade === 'SISTEMA') {
+                                    entityColor = '#ea580c';
+                                    entityBg = '#ffedd5';
+                                  }
 
-                          // Definir cores das ações
-                          let actionClass = 'badge-info';
-                          if (log.acao.includes('AUTORIZACAO') || log.acao.includes('VALIDACAO') || log.acao.includes('CRIACAO')) {
-                            actionClass = 'badge-autorizada';
-                          } else if (log.acao.includes('REJEICAO') || log.acao.includes('CANCELAMENTO') || log.acao.includes('SUSPENSAO')) {
-                            actionClass = 'badge-rejeitada';
-                          } else if (log.acao.includes('EDICAO') || log.acao.includes('ALTERACAO')) {
-                            actionClass = 'badge-solicitada';
-                          }
+                                  // Definir cores das ações
+                                  let actionClass = 'badge-info';
+                                  if (log.acao.includes('AUTORIZACAO') || log.acao.includes('VALIDACAO') || log.acao.includes('CRIACAO')) {
+                                    actionClass = 'badge-autorizada';
+                                  } else if (log.acao.includes('REJEICAO') || log.acao.includes('CANCELAMENTO') || log.acao.includes('SUSPENSAO')) {
+                                    actionClass = 'badge-rejeitada';
+                                  } else if (log.acao.includes('EDICAO') || log.acao.includes('ALTERACAO')) {
+                                    actionClass = 'badge-solicitada';
+                                  }
 
-                          return (
-                            <tr key={log.id_historico}>
-                              <td><strong>#{log.id_historico}</strong></td>
-                              <td style={{ fontSize: '0.85rem', whiteSpace: 'nowrap' }}>
-                                {new Date(log.data).toLocaleString()}
-                              </td>
-                              <td>
-                                <div><strong>{log.utilizador_nome}</strong></div>
-                                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{log.utilizador_email}</div>
-                                <span className="badge" style={{ fontSize: '0.65rem', marginTop: '0.15rem', padding: '1px 4px', backgroundColor: 'var(--bg-base)', border: '1px solid var(--border)' }}>
-                                  {log.utilizador_perfil.replace('_', ' ').toLowerCase()}
-                                </span>
-                              </td>
-                              <td>
-                                <span className="badge" style={{
-                                  color: entityColor,
-                                  backgroundColor: entityBg,
-                                  border: `1px solid ${entityColor}`,
-                                  fontSize: '0.75rem',
-                                  textTransform: 'capitalize'
-                                }}>
-                                  {log.entidade.toLowerCase()} #{log.id_entidade}
-                                </span>
-                              </td>
-                              <td>
-                                <span className={`badge ${actionClass}`} style={{ fontSize: '0.75rem' }}>
-                                  {log.acao.replace('_', ' ')}
-                                </span>
-                              </td>
-                              <td style={{ fontSize: '0.85rem', maxWidth: '350px', wordBreak: 'break-word' }}>
-                                {log.descricao}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-            )}
+                                  return (
+                                    <tr key={log.id_historico}>
+                                      <td><strong>#{log.id_historico}</strong></td>
+                                      <td style={{ fontSize: '0.85rem', whiteSpace: 'nowrap' }}>
+                                        {new Date(log.data).toLocaleString()}
+                                      </td>
+                                      <td>
+                                        <div><strong>{log.utilizador_nome}</strong></div>
+                                        <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{log.utilizador_email}</div>
+                                        <span className="badge" style={{ fontSize: '0.65rem', marginTop: '0.15rem', padding: '1px 4px', backgroundColor: 'var(--bg-base)', border: '1px solid var(--border)' }}>
+                                          {log.utilizador_perfil.replace('_', ' ').toLowerCase()}
+                                        </span>
+                                      </td>
+                                      <td>
+                                        <span className="badge" style={{
+                                          color: entityColor,
+                                          backgroundColor: entityBg,
+                                          border: `1px solid ${entityColor}`,
+                                          fontSize: '0.75rem',
+                                          textTransform: 'capitalize'
+                                        }}>
+                                          {log.entidade.toLowerCase()} #{log.id_entidade}
+                                        </span>
+                                      </td>
+                                      <td>
+                                        <span className={`badge ${actionClass}`} style={{ fontSize: '0.75rem' }}>
+                                          {log.acao.replace('_', ' ')}
+                                        </span>
+                                      </td>
+                                      <td style={{ fontSize: '0.85rem', maxWidth: '350px', wordBreak: 'break-word' }}>
+                                        {log.descricao}
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </div>
+                    )}
           </div>
         )}
 
         {/* 2. SE FOR RESPONSÁVEL DE LAB / ETAR */}
-        {(user.perfil === 'RESPONSAVEL_LAB' || user.perfil === 'RESPONSAVEL_ETAR') && (
-          <div>
-            <div className="tabs-nav">
-              <button className={`tab-btn ${activeTab === 'validacoes' ? 'active' : ''}`} onClick={() => { setActiveTab('validacoes'); setError(''); setSuccess(''); }}>
-                Amostras Analisadas ({analisadas.length})
-              </button>
-              <button className={`tab-btn ${activeTab === 'concluidas' ? 'active' : ''}`} onClick={() => { setActiveTab('concluidas'); setError(''); setSuccess(''); }}>
-                Boletins Concluídos
-              </button>
-              {user.perfil === 'RESPONSAVEL_LAB' && (
-                <button className={`tab-btn ${activeTab === 'catalogo' ? 'active' : ''}`} onClick={() => { setActiveTab('catalogo'); setError(''); setSuccess(''); }}>
-                  Catálogo de Parâmetros
-                </button>
-              )}
-            </div>
-
-            {loading ? (
-              <p>A carregar registos...</p>
-            ) : activeTab === 'catalogo' && user.perfil === 'RESPONSAVEL_LAB' ? (
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                {(user.perfil === 'RESPONSAVEL_LAB' || user.perfil === 'RESPONSAVEL_ETAR') && (
                   <div>
-                    <h3 style={{ marginBottom: '0.25rem' }}>Catálogo de Parâmetros Analíticos</h3>
-                    <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
-                      Consulte e edite a metodologia padrão e incerteza base de cada parâmetro. Estas configurações são aplicadas automaticamente quando o técnico de laboratório regista os ensaios.
-                    </p>
-                  </div>
-                </div>
-                <div className="table-container">
-                  <table className="data-table">
-                    <thead>
-                      <tr>
-                        <th>Parâmetro</th>
-                        <th>Tipo</th>
-                        <th>Unidade</th>
-                        <th>Código do Método</th>
-                        <th>Nome do Método</th>
-                        <th style={{ textAlign: 'center' }}>Incerteza Padrão (%)</th>
-                        <th style={{ textAlign: 'center' }}>Ação</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {Array.isArray(parametrosList) && parametrosList.map((p) => (
-                        <tr key={p.id_parametro}>
-                          <td><strong>{p.nome}</strong>{p.obrigatorio && <span className="badge badge-info" style={{ marginLeft: '6px', fontSize: '0.7rem' }}>Obrig.</span>}</td>
-                          <td><span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{p.tipo_parametro}</span></td>
-                          <td>{p.unidade_default || '-'}</td>
-                          <td style={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>{p.metodo_default_cod || <span style={{ color: 'var(--text-secondary)' }}>-</span>}</td>
-                          <td style={{ fontSize: '0.85rem' }}>{p.metodo_default_nome || <span style={{ color: 'var(--text-secondary)' }}>-</span>}</td>
-                          <td style={{ textAlign: 'center' }}>
-                            {p.incerteza_default !== null && p.incerteza_default !== undefined
-                              ? <strong>{(parseFloat(p.incerteza_default) * 100).toFixed(1)}%</strong>
-                              : <span style={{ color: 'var(--text-secondary)' }}>-</span>
-                            }
-                          </td>
-                          <td style={{ textAlign: 'center' }}>
-                            <button
-                              className="btn btn-primary"
-                              style={{ padding: '0.25rem 0.6rem', fontSize: '0.78rem' }}
-                              onClick={() => {
-                                setEditingParamCatalogData({
-                                  id_parametro: p.id_parametro,
-                                  nome: p.nome,
-                                  metodo_default_cod: p.metodo_default_cod || '',
-                                  metodo_default_nome: p.metodo_default_nome || '',
-                                  incerteza_default: p.incerteza_default !== null && p.incerteza_default !== undefined
-                                    ? String(parseFloat(p.incerteza_default))
-                                    : ''
-                                });
-                                setShowEditParamCatalog(true);
-                                setError('');
-                                setSuccess('');
-                              }}
-                            >
-                              Editar
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            ) : activeTab === 'validacoes' ? (
-              analisadas.length === 0 ? (
-                <div className="card" style={{ textAlign: 'center', padding: '3.5rem' }}>
-                  <ShieldCheck size={48} style={{ color: 'var(--success)', marginBottom: '1rem' }} />
-                  <h3>Sem análises pendentes</h3>
-                  <p style={{ color: 'var(--text-secondary)' }}>Todos os ensaios de bancada foram validados e finalizados.</p>
-                </div>
-              ) : (
-                <div className="table-container">
-                  <table className="data-table">
-                    <thead>
-                      <tr>
-                        <th>Ref. Amostra</th>
-                        <th>Cliente</th>
-                        <th>ETAR Origem</th>
-                        <th>Data Conclusão Ensaios</th>
-                        <th>Ações</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {analisadas.map((am) => (
-                        <tr key={am.id_amostra}>
-                          <td><strong>{am.qr_code_token}</strong></td>
-                          <td>{am.cliente_nome}</td>
-                          <td>{am.etar_nome}</td>
-                          <td>{new Date(am.data_fim_analise).toLocaleString()}</td>
-                          <td style={{ display: 'flex', gap: '0.5rem' }}>
-                            <button className="btn btn-secondary" style={{ padding: '0.35rem 0.7rem', fontSize: '0.8rem' }} onClick={() => handleOpenValidacao(am, true)}>
-                              Visualizar
-                            </button>
-                            <button className="btn btn-primary" style={{ padding: '0.35rem 0.7rem', fontSize: '0.8rem' }} onClick={() => handleOpenValidacao(am, false)}>
-                              Validar
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )
-            ) : concluidas.length === 0 ? (
-              <div className="card" style={{ textAlign: 'center', padding: '2rem' }}>
-                <p style={{ color: 'var(--text-secondary)' }}>Sem boletins concluídos em arquivo.</p>
-              </div>
-            ) : (
-              <div className="table-container">
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>Ref. Amostra</th>
-                      <th>Cliente</th>
-                      <th>ETAR</th>
-                      <th>Data Conclusão</th>
-                      <th>Ações</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {concluidas.map((am) => (
-                      <tr key={am.id_amostra}>
-                        <td><strong>{am.qr_code_token}</strong></td>
-                        <td>{am.cliente_nome}</td>
-                        <td>{am.etar_nome}</td>
-                        <td>{new Date(am.data_validacao).toLocaleDateString()}</td>
-                        <td>
-                          <div style={{ display: 'flex', gap: '0.5rem' }}>
-                            <button className="btn btn-primary" style={{ padding: '0.35rem 0.7rem', fontSize: '0.8rem', backgroundColor: 'var(--success)' }} onClick={() => handleDownloadBoletim(am)}>
-                              <Download size={14} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '4px' }} /> Boletim PDF
-                            </button>
-                            <button className="btn btn-secondary" style={{ padding: '0.35rem 0.7rem', fontSize: '0.8rem' }} onClick={() => handleOpenValidacao(am, true)}>
-                              Visualizar
-                            </button>
+                    <div className="tabs-nav">
+                      <button className={`tab-btn ${activeTab === 'validacoes' ? 'active' : ''}`} onClick={() => { setActiveTab('validacoes'); setError(''); setSuccess(''); }}>
+                        Amostras Analisadas ({analisadas.length})
+                      </button>
+                      <button className={`tab-btn ${activeTab === 'concluidas' ? 'active' : ''}`} onClick={() => { setActiveTab('concluidas'); setError(''); setSuccess(''); }}>
+                        Boletins Concluídos
+                      </button>
+                      {user.perfil === 'RESPONSAVEL_LAB' && (
+                        <button className={`tab-btn ${activeTab === 'catalogo' ? 'active' : ''}`} onClick={() => { setActiveTab('catalogo'); setError(''); setSuccess(''); }}>
+                          Catálogo de Parâmetros
+                        </button>
+                      )}
+                    </div>
+
+                    {loading ? (
+                      <p>A carregar registos...</p>
+                    ) : activeTab === 'catalogo' && user.perfil === 'RESPONSAVEL_LAB' ? (
+                      <div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                          <div>
+                            <h3 style={{ marginBottom: '0.25rem' }}>Catálogo de Parâmetros Analíticos</h3>
+                            <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
+                              Consulte e edite a metodologia padrão e incerteza base de cada parâmetro. Estas configurações são aplicadas automaticamente quando o técnico de laboratório regista os ensaios.
+                            </p>
                           </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Modal: Editar Parâmetro no Catálogo Analítico (Responsável Lab) */}
-        {showEditParamCatalog && (
-          <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: '1rem' }}>
-            <div className="card animate-fade-in" style={{ width: '100%', maxWidth: '500px', marginBottom: 0 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-                <div>
-                  <h3 style={{ marginBottom: '0.25rem' }}>Editar Parâmetro: {editingParamCatalogData.nome}</h3>
-                  <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem' }}>
-                    As alterações aplicam-se apenas a futuros registos. Os boletins já validados não são afetados.
-                  </p>
-                </div>
-                <button style={{ background: 'none', border: 'none', cursor: 'pointer' }} onClick={() => setShowEditParamCatalog(false)}><X size={20} /></button>
-              </div>
-              <form onSubmit={handleSaveParamCatalog}>
-                <div className="form-group">
-                  <label className="form-label">Código do Método (ex: SMEWW 4500-H+)</label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    placeholder="Ex: SMEWW 5220 B"
-                    value={editingParamCatalogData.metodo_default_cod}
-                    onChange={e => setEditingParamCatalogData({ ...editingParamCatalogData, metodo_default_cod: e.target.value })}
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Nome do Método (ex: Refluxo Fechado / Titulometria)</label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    placeholder="Ex: Eletrometria"
-                    value={editingParamCatalogData.metodo_default_nome}
-                    onChange={e => setEditingParamCatalogData({ ...editingParamCatalogData, metodo_default_nome: e.target.value })}
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Incerteza Padrão (em decimal — ex: 0.05 para 5%)</label>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <input
-                      type="number"
-                      className="form-input"
-                      placeholder="Ex: 0.05"
-                      step="0.001"
-                      min="0"
-                      max="1"
-                      value={editingParamCatalogData.incerteza_default}
-                      onChange={e => setEditingParamCatalogData({ ...editingParamCatalogData, incerteza_default: e.target.value })}
-                      style={{ flex: 1 }}
-                    />
-                    <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
-                      {editingParamCatalogData.incerteza_default !== '' && editingParamCatalogData.incerteza_default !== null && !isNaN(parseFloat(editingParamCatalogData.incerteza_default))
-                        ? `= ${(parseFloat(editingParamCatalogData.incerteza_default) * 100).toFixed(1)}%`
-                        : ''}
-                    </span>
-                  </div>
-                  <small style={{ color: 'var(--text-secondary)', fontSize: '0.78rem' }}>
-                    A incerteza absoluta é calculada automaticamente como: valor × percentagem (ex: CQO 100 mg/L × 5% = ±5 mg/L)
-                  </small>
-                </div>
-                <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem' }}>
-                  <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>Gravar Alterações</button>
-                  <button type="button" className="btn btn-secondary" onClick={() => setShowEditParamCatalog(false)}>Cancelar</button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
-
-
-        {selectedDescarga && (
-          <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }}>
-            <div className="card" style={{ width: '100%', maxWidth: '480px', marginBottom: 0 }}>
-              <h3>Decidir Pedido de Descarga</h3>
-              <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', margin: '0.5rem 0 1.5rem 0' }}>
-                Aprove ou rejeite o pedido da <strong>{selectedDescarga.cliente_nome}</strong> para a <strong>{selectedDescarga.etar_nome}</strong> (Qtd: {selectedDescarga.quantidade} Litros).
-              </p>
-
-              {selectedDescarga.observacoes && (
-                <div className="card" style={{
-                  backgroundColor: selectedDescarga.observacoes.includes('Revertido') ? 'var(--danger-light)' : 'var(--warning-light)',
-                  color: selectedDescarga.observacoes.includes('Revertido') ? 'var(--danger)' : 'var(--warning)',
-                  padding: '0.75rem',
-                  marginBottom: '1rem',
-                  borderLeft: selectedDescarga.observacoes.includes('Revertido') ? '4px solid var(--danger)' : '4px solid var(--warning)',
-                  fontSize: '0.85rem',
-                  borderRadius: 'var(--radius-sm)'
-                }}>
-                  <strong>{selectedDescarga.observacoes.includes('Revertido') ? 'Alerta de Reversão de Urgência:' : 'Elementos Solicitados Anteriormente:'}</strong>
-                  <div style={{ marginTop: '0.25rem', fontStyle: 'italic', wordBreak: 'break-word' }}>
-                    "{selectedDescarga.observacoes}"
-                  </div>
-                </div>
-              )}
-
-              <div className="form-group">
-                <label className="form-label">Justificação / Observações (Opcional)</label>
-                <textarea className="form-input" style={{ minHeight: '80px', resize: 'vertical' }} placeholder="Indique o motivo da decisão..." value={decisaoObs} onChange={(e) => setDecisaoObs(e.target.value)}></textarea>
-              </div>
-
-              <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.5rem', flexWrap: 'wrap' }}>
-                <button className="btn btn-primary" style={{ flex: 1, minWidth: '100px', backgroundColor: 'var(--success)' }} onClick={() => handleDecisao('AUTORIZADA')}>
-                  <CheckSquare size={16} /> Autorizar
-                </button>
-                <button className="btn btn-primary" style={{ flex: 1, minWidth: '100px', backgroundColor: 'var(--danger)' }} onClick={() => handleDecisao('REJEITADA')}>
-                  <XSquare size={16} /> Rejeitar
-                </button>
-                <button className="btn btn-primary" style={{ flex: 1, minWidth: '130px', backgroundColor: 'var(--warning)' }} onClick={() => handleDecisao('SOLICITAR_ELEMENTOS')}>
-                  <HelpCircle size={16} /> Pedir mais elementos
-                </button>
-                <button className="btn btn-secondary" style={{ flex: 1, minWidth: '80px' }} onClick={() => setSelectedDescarga(null)}>
-                  Fechar
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Modal de Validação (Responsável Laboratório) */}
-        {selectedAmostra && selectedAmostra.amostra && (
-          <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: '1rem' }}>
-            <div className="card" style={{ width: '100%', maxWidth: isViewOnly ? '560px' : '820px', marginBottom: 0, overflowY: 'auto', maxHeight: '90vh', transition: 'max-width 0.3s ease-in-out' }}>
-              <h3>{isViewOnly ? 'Visualizar Resultados Analíticos' : 'Validar Boletim Analítico'}</h3>
-              <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '1rem' }}>
-                {isViewOnly
-                  ? `Resultados laboratoriais concluídos para a amostra ${selectedAmostra.amostra.qr_code_token}.`
-                  : `Revise os resultados laboratoriais registados para a amostra ${selectedAmostra.amostra.qr_code_token}.`
-                }
-              </p>
-
-              <div style={{ backgroundColor: 'var(--bg-base)', padding: '0.75rem', borderRadius: 'var(--radius-sm)', fontSize: '0.85rem', marginBottom: '1rem', border: '1px solid var(--border)', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
-                <div>
-                  <strong>Detalhes:</strong>
-                  <div>Cliente: {selectedAmostra.amostra.cliente_nome}</div>
-                  <div>Volume Real: {selectedAmostra.amostra.quantidade_real} Litros</div>
-                </div>
-                <div style={{ textAlign: 'right' }}>
-                  <div>Data de Recolha: {new Date(selectedAmostra.amostra.data_recolha).toLocaleDateString()}</div>
-                  {selectedAmostra.amostra.data_validacao && (
-                    <div>Validado em: {new Date(selectedAmostra.amostra.data_validacao).toLocaleDateString()}</div>
-                  )}
-                </div>
-              </div>
-
-              <div className="table-container" style={{ maxHeight: '350px', overflowY: 'auto' }}>
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>Parâmetro</th>
-                      <th>Valor Medido</th>
-                      <th>Metodologia</th>
-                      <th>Incerteza</th>
-                      {!isViewOnly && <th style={{ textAlign: 'center' }}>Ação</th>}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {editResultados.map((r) => {
-                      const isEditing = editingParamId === r.id_parametro;
-                      return (
-                        <tr key={r.id_resultado || r.id_parametro}>
-                          <td style={{ verticalAlign: 'middle', fontWeight: '500' }}>{r.parametro_nome}</td>
-                          <td style={{ verticalAlign: 'middle' }}>
-                            {isEditing ? (
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                <input
-                                  type="number"
-                                  step="any"
-                                  className="form-input"
-                                  style={{ width: '85px', padding: '0.3rem', margin: 0 }}
-                                  value={r.valor}
-                                  onChange={(e) => {
-                                    const val = e.target.value;
-                                    setEditResultados(prev => prev.map(item => item.id_parametro === r.id_parametro ? { ...item, valor: val } : item));
-                                  }}
-                                />
-                                <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{r.unidade}</span>
-                              </div>
-                            ) : (
-                              <div>
-                                <strong>{Number(r.valor).toFixed(2)}</strong> <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{r.unidade}</span>
-                              </div>
-                            )}
-                          </td>
-                          <td style={{ verticalAlign: 'middle' }}>
-                            {isEditing ? (
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                <input
-                                  type="text"
-                                  className="form-input"
-                                  style={{ width: '130px', padding: '0.3rem', margin: 0 }}
-                                  placeholder="ex: SMEWW"
-                                  value={r.metodo}
-                                  onChange={(e) => {
-                                    const m = e.target.value;
-                                    setEditResultados(prev => prev.map(item => item.id_parametro === r.id_parametro ? { ...item, metodo: m } : item));
-                                  }}
-                                />
-                                <button
-                                  type="button"
-                                  className="btn btn-secondary"
-                                  style={{ padding: '0.3rem', minWidth: 'auto', display: 'flex', alignItems: 'center' }}
-                                  title="Definir esta metodologia como padrão para o catálogo"
-                                  onClick={() => handleDefinirMetodoPadrao(r.id_parametro, r.metodo)}
-                                >
-                                  <Settings size={14} />
-                                </button>
-                              </div>
-                            ) : (
-                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', fontSize: '0.85rem' }}>
-                                <span>{r.metodo || <span style={{ color: 'var(--text-secondary)' }}>-</span>}</span>
-                                {r.metodo && !isViewOnly && (
-                                  <button
-                                    type="button"
-                                    className="btn btn-secondary"
-                                    style={{ padding: '0.2rem 0.4rem', fontSize: '0.7rem', minWidth: 'auto', display: 'flex', alignItems: 'center', gap: '2px' }}
-                                    title="Definir esta metodologia como padrão para o catálogo"
-                                    onClick={() => handleDefinirMetodoPadrao(r.id_parametro, r.metodo)}
-                                  >
-                                    <Settings size={12} /> Usar como Padrão
-                                  </button>
-                                )}
-                              </div>
-                            )}
-                          </td>
-                          <td style={{ verticalAlign: 'middle' }}>
-                            {isEditing ? (
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                <input
-                                  type="number"
-                                  step="any"
-                                  className="form-input"
-                                  style={{ width: '80px', padding: '0.3rem', margin: 0 }}
-                                  placeholder="Incerteza"
-                                  value={r.incerteza}
-                                  onChange={(e) => {
-                                    const inc = e.target.value;
-                                    setEditResultados(prev => prev.map(item => item.id_parametro === r.id_parametro ? { ...item, incerteza: inc } : item));
-                                  }}
-                                />
-                              </div>
-                            ) : (
-                              <div style={{ fontSize: '0.85rem' }}>
-                                {r.incerteza !== '' && r.incerteza !== null && r.incerteza !== undefined ? (
-                                  Number(r.incerteza) < 1
-                                    ? `±${Math.round(Number(r.incerteza) * 100)}%`
-                                    : `±${Math.round(Number(r.incerteza))}%`
-                                ) : (
-                                  <span style={{ color: 'var(--text-secondary)' }}>-</span>
-                                )}
-                              </div>
-                            )}
-                          </td>
-                          {!isViewOnly && (
-                            <td style={{ verticalAlign: 'middle', textAlign: 'center' }}>
-                              {isEditing ? (
-                                <div style={{ display: 'flex', gap: '4px', justifyContent: 'center' }}>
-                                  <button
-                                    type="button"
-                                    className="btn btn-primary"
-                                    style={{ padding: '0.25rem 0.4rem', backgroundColor: 'var(--success)', minWidth: 'auto' }}
-                                    onClick={() => setEditingParamId(null)}
-                                    title="Confirmar"
-                                  >
-                                    <Check size={14} />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className="btn btn-secondary"
-                                    style={{ padding: '0.25rem 0.4rem', minWidth: 'auto' }}
-                                    onClick={() => {
-                                      const orig = selectedAmostra.resultados.find(orig => orig.id_parametro === r.id_parametro);
-                                      setEditResultados(prev => prev.map(item => item.id_parametro === r.id_parametro ? {
-                                        ...item,
-                                        valor: orig.valor,
-                                        metodo: orig.metodo || '',
-                                        incerteza: orig.incerteza || ''
-                                      } : item));
-                                      setEditingParamId(null);
-                                    }}
-                                    title="Cancelar"
-                                  >
-                                    <X size={14} />
-                                  </button>
-                                </div>
-                              ) : (
-                                <button
-                                  type="button"
-                                  className="btn btn-secondary"
-                                  style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', minWidth: 'auto' }}
-                                  onClick={() => setEditingParamId(r.id_parametro)}
-                                >
-                                  Editar
-                                </button>
-                              )}
-                            </td>
-                          )}
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-
-              <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.5rem', flexWrap: 'wrap' }}>
-                {!isViewOnly ? (
-                  <>
-                    <button className="btn btn-primary" style={{ flex: 1, minWidth: '150px' }} onClick={() => handleSaveEdits(false)}>
-                      Gravar Alterações
-                    </button>
-                    <button className="btn btn-primary" style={{ flex: 1, minWidth: '220px', backgroundColor: 'var(--success)' }} onClick={() => handleSaveEdits(true)}>
-                      <ShieldCheck size={16} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '4px' }} /> Validar e Assinar Boletim
-                    </button>
-                  </>
-                ) : null}
-                <button className="btn btn-secondary" style={{ flex: isViewOnly ? 1 : 'none', minWidth: '80px' }} onClick={() => setSelectedAmostra(null)}>
-                  {isViewOnly ? 'Fechar' : 'Cancelar'}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Modal: Adicionar/Editar Cliente */}
-        {showAddCliente && (
-          <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: '1rem' }}>
-            <div className="card" style={{ width: '100%', maxWidth: '500px', marginBottom: 0, maxHeight: '90vh', overflowY: 'auto' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-                <h3>{editingClienteId ? 'Editar Cliente Contratado' : 'Registar Novo Cliente Contratado'}</h3>
-                <button style={{ background: 'none', border: 'none', cursor: 'pointer' }} onClick={() => { setShowAddCliente(false); setEditingClienteId(null); setNewClienteData({ nome: '', morada: '', contacto: '', telefone: '', email: '', password: '', periodicidade_analise: 'POR_DESCARGA' }); }}><X size={20} /></button>
-              </div>
-              <form onSubmit={handleSaveCliente}>
-                <div className="form-group">
-                  <label className="form-label">Nome da Empresa / Cliente *</label>
-                  <input type="text" className="form-input" placeholder="Ex: Lavandarias Reunidas SA" required value={newClienteData.nome} onChange={e => setNewClienteData({ ...newClienteData, nome: e.target.value })} />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Email Principal (Acesso) *</label>
-                  <input type="email" className="form-input" placeholder="geral@empresa.com" required value={newClienteData.email} onChange={e => setNewClienteData({ ...newClienteData, email: e.target.value })} />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">
-                    {editingClienteId
-                      ? 'Alterar Palavra-passe do Cliente (Opcional - deixar em branco para manter)'
-                      : 'Palavra-passe (Opcional - por omissão: Descargas123!)'}
-                  </label>
-                  <input
-                    type="password"
-                    className="form-input"
-                    placeholder={editingClienteId ? "Deixe em branco para manter" : "Introduza a password"}
-                    value={newClienteData.password || ''}
-                    onChange={e => setNewClienteData({ ...newClienteData, password: e.target.value })}
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Periodicidade de Análises Contratada</label>
-                  <select className="form-input" value={newClienteData.periodicidade_analise} onChange={e => setNewClienteData({ ...newClienteData, periodicidade_analise: e.target.value })}>
-                    <option value="POR_DESCARGA">Por Descarga (Sempre)</option>
-                    <option value="SEMANAL">Semanal (Uma por semana civil)</option>
-                    <option value="QUINZENAL">Quinzenal (Mínimo a cada 15 dias)</option>
-                    <option value="MENSAL">Mensal (Uma por mês civil)</option>
-                    <option value="TRIMESTRAL">Trimestral (Uma por trimestre)</option>
-                    <option value="SEMESTRAL">Semestral (Uma por semestre)</option>
-                    <option value="ANUAL">Anual (Uma por ano civil)</option>
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Morada da Sede / Instalações</label>
-                  <input type="text" className="form-input" placeholder="Morada..." value={newClienteData.morada} onChange={e => setNewClienteData({ ...newClienteData, morada: e.target.value })} />
-                </div>
-                <div className="form-group" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
-                  <div>
-                    <label className="form-label">Nome de Contacto</label>
-                    <input type="text" className="form-input" placeholder="Pessoa de contacto" value={newClienteData.contacto} onChange={e => setNewClienteData({ ...newClienteData, contacto: e.target.value })} />
-                  </div>
-                  <div>
-                    <label className="form-label">Telefone</label>
-                    <input type="text" className="form-input" placeholder="Telefone..." value={newClienteData.telefone} onChange={e => setNewClienteData({ ...newClienteData, telefone: e.target.value })} />
-                  </div>
-                </div>
-                <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem' }}>
-                  <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>{editingClienteId ? 'Gravar Alterações' : 'Confirmar Contrato'}</button>
-                  <button type="button" className="btn btn-secondary" onClick={() => { setShowAddCliente(false); setEditingClienteId(null); setNewClienteData({ nome: '', morada: '', contacto: '', telefone: '', email: '', password: '', periodicidade_analise: 'POR_DESCARGA' }); }}>Cancelar</button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
-
-        {/* Modal: Adicionar/Editar Autorização Whitelist */}
-        {showAddAutorizacao && (
-          <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: '1rem' }}>
-            <div className="card" style={{ width: '100%', maxWidth: '450px', marginBottom: 0 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-                <h3>{editingAutorizacaoId ? 'Editar Whitelist / Limites' : 'Configurar Whitelist / Limites'}</h3>
-                <button style={{ background: 'none', border: 'none', cursor: 'pointer' }} onClick={() => setShowAddAutorizacao(false)}><X size={20} /></button>
-              </div>
-              <form onSubmit={handleSaveAutorizacao}>
-                <div className="form-group">
-                  <label className="form-label">Selecionar Cliente contratado *</label>
-                  <select className="form-input" required disabled={!!editingAutorizacaoId} value={newAutorizacaoData.id_cliente} onChange={e => setNewAutorizacaoData({ ...newAutorizacaoData, id_cliente: e.target.value })}>
-                    <option value="">-- Escolha um cliente --</option>
-                    {clientesList.map(c => (
-                      <option key={c.id_cliente} value={c.id_cliente}>{c.nome}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Selecionar ETAR autorizada *</label>
-                  <select className="form-input" required disabled={!!editingAutorizacaoId} value={newAutorizacaoData.id_etar} onChange={e => setNewAutorizacaoData({ ...newAutorizacaoData, id_etar: e.target.value })}>
-                    <option value="">-- Escolha uma ETAR --</option>
-                    {etarsList.map(e => (
-                      <option key={e.id_etar} value={e.id_etar}>{e.nome}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Quota Diária de Descargas (Deixe em branco para 'Sem limite')</label>
-                  <input type="number" className="form-input" min="1" value={newAutorizacaoData.quota} onChange={e => setNewAutorizacaoData({ ...newAutorizacaoData, quota: e.target.value })} />
-                </div>
-                <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', margin: '1rem 0' }}>
-                  <input
-                    type="checkbox"
-                    id="auto-aprovacao-check"
-                    style={{ width: '20px', height: '20px', cursor: 'pointer' }}
-                    checked={newAutorizacaoData.auto_aprovacao}
-                    onChange={e => setNewAutorizacaoData({ ...newAutorizacaoData, auto_aprovacao: e.target.checked })}
-                  />
-                  <label htmlFor="auto-aprovacao-check" style={{ fontSize: '0.85rem', cursor: 'pointer' }}>
-                    <strong>Ativar Auto-Aprovação</strong> (Ignora triagem manual)
-                  </label>
-                </div>
-                <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem' }}>
-                  <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>{editingAutorizacaoId ? 'Gravar Alterações' : 'Gravar Regra'}</button>
-                  <button type="button" className="btn btn-secondary" onClick={() => setShowAddAutorizacao(false)}>Cancelar</button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
-
-        {/* Modal: Adicionar/Editar Utilizador Interno */}
-        {showAddUtilizador && (
-          <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: '1rem' }}>
-            <div className="card" style={{ width: '100%', maxWidth: '480px', marginBottom: 0, maxHeight: '90vh', overflowY: 'auto' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-                <h3>{editingUtilizadorId ? 'Editar Utilizador Interno' : 'Registar Novo Utilizador Interno'}</h3>
-                <button
-                  style={{ background: 'none', border: 'none', cursor: 'pointer' }}
-                  onClick={() => setShowAddUtilizador(false)}
-                >
-                  <X size={20} />
-                </button>
-              </div>
-
-              <form onSubmit={handleSaveUtilizador}>
-                <div className="form-group">
-                  <label className="form-label">Nome Completo *</label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    placeholder="Ex: Carlos Silva"
-                    required
-                    disabled={!!editingUtilizadorId}
-                    value={newUtilizadorData.nome}
-                    onChange={e => setNewUtilizadorData({ ...newUtilizadorData, nome: e.target.value })}
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">Endereço de Email (Acesso) *</label>
-                  <input
-                    type="email"
-                    className="form-input"
-                    placeholder="carlos.silva@etar.pt"
-                    required
-                    value={newUtilizadorData.email}
-                    onChange={e => setNewUtilizadorData({ ...newUtilizadorData, email: e.target.value })}
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">Perfil / Permissões de Acesso *</label>
-                  <select
-                    className="form-input"
-                    required
-                    value={newUtilizadorData.id_perfil}
-                    onChange={e => setNewUtilizadorData({ ...newUtilizadorData, id_perfil: e.target.value, id_etar: (e.target.value !== '2' && e.target.value !== '3') ? '' : newUtilizadorData.id_etar })}
-                  >
-                    {perfisList.length > 0 ? (
-                      perfisList
-                        .filter(p => Number(p.id_perfil) !== 1)
-                        .map(p => (
-                          <option key={p.id_perfil} value={String(p.id_perfil)}>
-                            {p.nome.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, c => c.toUpperCase())}
-                          </option>
-                        ))
+                        </div>
+                        <div className="table-container">
+                          <table className="data-table">
+                            <thead>
+                              <tr>
+                                <th>Parâmetro</th>
+                                <th>Tipo</th>
+                                <th>Unidade</th>
+                                <th>Código do Método</th>
+                                <th>Nome do Método</th>
+                                <th style={{ textAlign: 'center' }}>Incerteza Padrão (%)</th>
+                                <th style={{ textAlign: 'center' }}>Ação</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {Array.isArray(parametrosList) && parametrosList.map((p) => (
+                                <tr key={p.id_parametro}>
+                                  <td><strong>{p.nome}</strong>{p.obrigatorio && <span className="badge badge-info" style={{ marginLeft: '6px', fontSize: '0.7rem' }}>Obrig.</span>}</td>
+                                  <td><span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{p.tipo_parametro}</span></td>
+                                  <td>{p.unidade_default || '-'}</td>
+                                  <td style={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>{p.metodo_default_cod || <span style={{ color: 'var(--text-secondary)' }}>-</span>}</td>
+                                  <td style={{ fontSize: '0.85rem' }}>{p.metodo_default_nome || <span style={{ color: 'var(--text-secondary)' }}>-</span>}</td>
+                                  <td style={{ textAlign: 'center' }}>
+                                    {p.incerteza_default !== null && p.incerteza_default !== undefined
+                                      ? <strong>{(parseFloat(p.incerteza_default) * 100).toFixed(1)}%</strong>
+                                      : <span style={{ color: 'var(--text-secondary)' }}>-</span>
+                                    }
+                                  </td>
+                                  <td style={{ textAlign: 'center' }}>
+                                    <button
+                                      className="btn btn-primary"
+                                      style={{ padding: '0.25rem 0.6rem', fontSize: '0.78rem' }}
+                                      onClick={() => {
+                                        setEditingParamCatalogData({
+                                          id_parametro: p.id_parametro,
+                                          nome: p.nome,
+                                          metodo_default_cod: p.metodo_default_cod || '',
+                                          metodo_default_nome: p.metodo_default_nome || '',
+                                          incerteza_default: p.incerteza_default !== null && p.incerteza_default !== undefined
+                                            ? String(parseFloat(p.incerteza_default))
+                                            : ''
+                                        });
+                                        setShowEditParamCatalog(true);
+                                        setError('');
+                                        setSuccess('');
+                                      }}
+                                    >
+                                      Editar
+                                    </button>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    ) : activeTab === 'validacoes' ? (
+                      analisadas.length === 0 ? (
+                        <div className="card" style={{ textAlign: 'center', padding: '3.5rem' }}>
+                          <ShieldCheck size={48} style={{ color: 'var(--success)', marginBottom: '1rem' }} />
+                          <h3>Sem análises pendentes</h3>
+                          <p style={{ color: 'var(--text-secondary)' }}>Todos os ensaios de bancada foram validados e finalizados.</p>
+                        </div>
+                      ) : (
+                        <div className="table-container">
+                          <table className="data-table">
+                            <thead>
+                              <tr>
+                                <th>Ref. Amostra</th>
+                                <th>Cliente</th>
+                                <th>ETAR Origem</th>
+                                <th>Data Conclusão Ensaios</th>
+                                <th>Ações</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {analisadas.map((am) => (
+                                <tr key={am.id_amostra}>
+                                  <td><strong>{am.qr_code_token}</strong></td>
+                                  <td>{am.cliente_nome}</td>
+                                  <td>{am.etar_nome}</td>
+                                  <td>{new Date(am.data_fim_analise).toLocaleString()}</td>
+                                  <td style={{ display: 'flex', gap: '0.5rem' }}>
+                                    <button className="btn btn-secondary" style={{ padding: '0.35rem 0.7rem', fontSize: '0.8rem' }} onClick={() => handleOpenValidacao(am, true)}>
+                                      Visualizar
+                                    </button>
+                                    <button className="btn btn-primary" style={{ padding: '0.35rem 0.7rem', fontSize: '0.8rem' }} onClick={() => handleOpenValidacao(am, false)}>
+                                      Validar
+                                    </button>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )
                     ) : (
                       <>
-                        <option value="2">Operador de ETAR</option>
-                        <option value="3">Responsável de ETAR</option>
-                        <option value="4">Técnico de Laboratório</option>
-                        <option value="5">Responsável de Laboratório</option>
-                        <option value="6">Gestor de Clientes</option>
-                        <option value="7">Gestor Admin</option>
+                        <div className="card" style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', marginBottom: '1rem', padding: '0.75rem', flexWrap: 'wrap' }}>
+                          <div>
+                            <label className="form-label" style={{ fontSize: '0.75rem' }}>Mês</label>
+                            <select className="form-input" value={filtroMesConcluidasLab} onChange={(e) => setFiltroMesConcluidasLab(e.target.value)} style={{ padding: '0.35rem', minWidth: '120px' }}>
+                              <option value="all">-- Todos --</option>
+                              <option value="1">Janeiro</option>
+                              <option value="2">Fevereiro</option>
+                              <option value="3">Março</option>
+                              <option value="4">Abril</option>
+                              <option value="5">Maio</option>
+                              <option value="6">Junho</option>
+                              <option value="7">Julho</option>
+                              <option value="8">Agosto</option>
+                              <option value="9">Setembro</option>
+                              <option value="10">Outubro</option>
+                              <option value="11">Novembro</option>
+                              <option value="12">Dezembro</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="form-label" style={{ fontSize: '0.75rem' }}>Ano</label>
+                            <select className="form-input" value={filtroAnoConcluidasLab} onChange={(e) => setFiltroAnoConcluidasLab(e.target.value)} style={{ padding: '0.35rem', minWidth: '100px' }}>
+                              <option value="all">-- Todos --</option>
+                              <option value="2024">2024</option>
+                              <option value="2025">2025</option>
+                              <option value="2026">2026</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="form-label" style={{ fontSize: '0.75rem' }}>Período Início</label>
+                            <input type="date" className="form-input" value={periodoInicioConcluidasLab} onChange={(e) => setPeriodoInicioConcluidasLab(e.target.value)} style={{ padding: '0.35rem' }} />
+                          </div>
+                          <div>
+                            <label className="form-label" style={{ fontSize: '0.75rem' }}>Período Fim</label>
+                            <input type="date" className="form-input" value={periodoFimConcluidasLab} onChange={(e) => setPeriodoFimConcluidasLab(e.target.value)} style={{ padding: '0.35rem' }} />
+                          </div>
+                          <div style={{ flex: 1, minWidth: '180px' }}>
+                            <label className="form-label" style={{ fontSize: '0.75rem' }}>Pesquisar amostra</label>
+                            <input
+                              type="text"
+                              className="form-input"
+                              placeholder="Ref., ID, cliente ou ETAR..."
+                              value={pesquisaConcluidasLab}
+                              onChange={(e) => setPesquisaConcluidasLab(e.target.value)}
+                              style={{ padding: '0.35rem' }}
+                            />
+                          </div>
+                          <div style={{ display: 'flex', gap: '0.5rem', marginLeft: 'auto' }}>
+                            <button
+                              className="btn btn-secondary"
+                              onClick={() => {
+                                setFiltroMesConcluidasLab('all');
+                                setFiltroAnoConcluidasLab('all');
+                                setPeriodoInicioConcluidasLab('');
+                                setPeriodoFimConcluidasLab('');
+                                setPesquisaConcluidasLab('');
+                              }}
+                            >
+                              Limpar
+                            </button>
+                          </div>
+                        </div>
+                        {concluidasFiltradas.length === 0 ? (
+                          <p style={{ color: 'var(--text-secondary)' }}>
+                            {hasFiltroConcluidasLab
+                              ? 'Nenhum boletim encontrado para os filtros selecionados. Ajuste a pesquisa ou clique em Limpar.'
+                              : 'Sem boletins concluídos em arquivo.'}
+                          </p>
+                        ) : (
+                          <div className="table-container">
+                            <table className="data-table">
+                              <thead>
+                                <tr>
+                                  <th>Ref. Amostra</th>
+                                  <th>Cliente</th>
+                                  <th>ETAR</th>
+                                  <th>Data Conclusão</th>
+                                  <th>Ações</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {concluidasFiltradas.map((am) => (
+                                  <tr key={am.id_amostra}>
+                                    <td><strong>{am.qr_code_token}</strong></td>
+                                    <td>{am.cliente_nome}</td>
+                                    <td>{am.etar_nome}</td>
+                                    <td>{am.data_validacao ? new Date(am.data_validacao).toLocaleDateString() : 'N/A'}</td>
+                                    <td>
+                                      <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                        <button className="btn btn-primary" style={{ padding: '0.35rem 0.7rem', fontSize: '0.8rem', backgroundColor: 'var(--success)' }} onClick={() => handleVerBoletim({ id_amostra: am.id_amostra, qr_code_token: am.qr_code_token })}>
+                                          <Eye size={14} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '4px' }} /> Ver Boletim
+                                        </button>
+                                        <button className="btn btn-secondary" style={{ padding: '0.35rem 0.7rem', fontSize: '0.8rem' }} onClick={() => handleDownloadBoletim({ id_amostra: am.id_amostra, qr_code_token: am.qr_code_token })} title="Descarregar PDF">
+                                          <Download size={14} />
+                                        </button>
+                                        <button className="btn btn-secondary" style={{ padding: '0.35rem 0.7rem', fontSize: '0.8rem' }} onClick={() => handleOpenValidacao(am, true)}>
+                                          Visualizar
+                                        </button>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
                       </>
                     )}
-                  </select>
-                </div>
-
-                {(newUtilizadorData.id_perfil === '2' || newUtilizadorData.id_perfil === '3') && (
-                  <div className="form-group">
-                    <label className="form-label">ETAR Associada *</label>
-                    <select
-                      className="form-input"
-                      required
-                      value={newUtilizadorData.id_etar}
-                      onChange={e => setNewUtilizadorData({ ...newUtilizadorData, id_etar: e.target.value })}
-                    >
-                      <option value="">-- Escolha uma ETAR --</option>
-                      {etarsList.map(e => (
-                        <option key={e.id_etar} value={e.id_etar}>{e.nome}</option>
-                      ))}
-                    </select>
                   </div>
                 )}
 
-                <div className="form-group">
-                  <label className="form-label">
-                    {editingUtilizadorId
-                      ? 'Alterar Palavra-passe (Opcional - deixar em branco para manter)'
-                      : 'Palavra-passe (Opcional - por omissão: Descargas123!)'}
-                  </label>
-                  <input
-                    type="password"
-                    className="form-input"
-                    placeholder={editingUtilizadorId ? "Deixe em branco para manter" : "Introduza a palavra-passe"}
-                    value={newUtilizadorData.password || ''}
-                    onChange={e => setNewUtilizadorData({ ...newUtilizadorData, password: e.target.value })}
-                  />
-                </div>
-
-                <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '1.25rem' }}>
-                  <input
-                    type="checkbox"
-                    id="utilizador_ativo"
-                    checked={!!newUtilizadorData.ativo}
-                    onChange={e => setNewUtilizadorData({ ...newUtilizadorData, ativo: e.target.checked })}
-                  />
-                  <label htmlFor="utilizador_ativo" className="form-label" style={{ marginBottom: 0, cursor: 'pointer' }}>
-                    Conta de Utilizador Ativa (Permite login)
-                  </label>
-                </div>
-
-                <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem' }}>
-                  <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>
-                    {editingUtilizadorId ? 'Gravar Alterações' : 'Criar Utilizador'}
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-secondary"
-                    onClick={() => setShowAddUtilizador(false)}
-                  >
-                    Cancelar
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
-
-        {/* Modal: Adicionar Nova ETAR */}
-        {showAddEtar && (
-          <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: '1rem' }}>
-            <div className="card" style={{ width: '100%', maxWidth: '450px', marginBottom: 0 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-                <h3>Registar Nova ETAR</h3>
-                <button style={{ background: 'none', border: 'none', cursor: 'pointer' }} onClick={() => setShowAddEtar(false)}><X size={20} /></button>
-              </div>
-              <form onSubmit={handleSaveEtar}>
-                <div className="form-group">
-                  <label className="form-label">Nome da ETAR *</label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    placeholder="Ex: ETAR Leste"
-                    required
-                    value={newEtarData.nome}
-                    onChange={e => setNewEtarData({ ...newEtarData, nome: e.target.value })}
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Localização (Concelho/Cidade)</label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    placeholder="Ex: Vila Real"
-                    value={newEtarData.localizacao}
-                    onChange={e => setNewEtarData({ ...newEtarData, localizacao: e.target.value })}
-                  />
-                </div>
-                <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', margin: '1rem 0' }}>
-                  <input
-                    type="checkbox"
-                    id="etar-disponivel-check"
-                    style={{ width: '20px', height: '20px', cursor: 'pointer' }}
-                    checked={newEtarData.disponivel}
-                    onChange={e => setNewEtarData({ ...newEtarData, disponivel: e.target.checked })}
-                  />
-                  <label htmlFor="etar-disponivel-check" style={{ fontSize: '0.85rem', cursor: 'pointer' }}>
-                    <strong>Ativa / Disponível para receber descargas</strong>
-                  </label>
-                </div>
-                <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem' }}>
-                  <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>Gravar ETAR</button>
-                  <button type="button" className="btn btn-secondary" onClick={() => setShowAddEtar(false)}>Cancelar</button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
-
-        {/* Modal: Adicionar Novo Parâmetro Analítico */}
-        {showAddParam && (
-          <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: '1rem' }}>
-            <div className="card" style={{ width: '100%', maxWidth: '450px', marginBottom: 0 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-                <h3>{editingGlobalParamId ? 'Editar Parâmetro' : 'Registar Novo Parâmetro'}</h3>
-                <button style={{ background: 'none', border: 'none', cursor: 'pointer' }} onClick={() => { setShowAddParam(false); setEditingGlobalParamId(null); setShowAddTypeInline(false); setNewTypeName(''); }}><X size={20} /></button>
-              </div>
-              <form onSubmit={handleSaveParam}>
-                <div className="form-group">
-                  <label className="form-label">Nome do Parâmetro *</label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    placeholder="Ex: CBO5"
-                    required
-                    value={newParamData.nome}
-                    onChange={e => setNewParamData({ ...newParamData, nome: e.target.value })}
-                  />
-                </div>
-                <div className="form-group">
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                    <label className="form-label" style={{ marginBottom: 0 }}>Tipo de Parâmetro *</label>
-                    <button
-                      type="button"
-                      className="btn-link"
-                      style={{ fontSize: '0.8rem', background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer', padding: 0 }}
-                      onClick={() => setShowAddTypeInline(!showAddTypeInline)}
-                    >
-                      {showAddTypeInline ? 'Cancelar' : '+ Novo Tipo'}
-                    </button>
-                  </div>
-                  {!showAddTypeInline ? (
-                    <select
-                      className="form-input"
-                      required
-                      value={newParamData.tipo_parametro}
-                      onChange={e => setNewParamData({ ...newParamData, tipo_parametro: e.target.value })}
-                    >
-                      {tiposParametrosList.map(type => (
-                        <option key={type} value={type}>
-                          {type.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, c => c.toUpperCase())}
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <div style={{ display: 'flex', gap: '0.5rem' }}>
-                      <input
-                        type="text"
-                        className="form-input"
-                        style={{ margin: 0, flex: 1 }}
-                        placeholder="Ex: Microbiologia"
-                        value={newTypeName}
-                        onChange={e => setNewTypeName(e.target.value)}
-                      />
-                      <button
-                        type="button"
-                        className="btn btn-primary"
-                        style={{ padding: '0.4rem 0.8rem', minWidth: 'auto' }}
-                        onClick={async () => {
-                          if (!newTypeName.trim()) return;
-                          try {
-                            const res = await adminService.criarTipoParametro(newTypeName);
-                            const newType = res.tipo;
-                            // Adicionar à lista local de tipos
-                            setTiposParametrosList(prev => [...prev, newType].sort());
-                            // Selecionar o novo tipo criado
-                            setNewParamData(prev => ({ ...prev, tipo_parametro: newType }));
-                            setNewTypeName('');
-                            setShowAddTypeInline(false);
-                            setSuccess('Novo tipo de parâmetro adicionado com sucesso!');
-                          } catch (err) {
-                            setError(err.message || 'Erro ao criar novo tipo.');
-                          }
-                        }}
-                      >
-                        Adicionar
-                      </button>
-                    </div>
-                  )}
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Unidade Padrão *</label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    placeholder="Ex: mg/L"
-                    required
-                    value={newParamData.unidade_default}
-                    onChange={e => setNewParamData({ ...newParamData, unidade_default: e.target.value })}
-                  />
-                </div>
-                <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', margin: '1rem 0' }}>
-                  <input
-                    type="checkbox"
-                    id="param-obrigatorio-check"
-                    style={{ width: '20px', height: '20px', cursor: 'pointer' }}
-                    checked={newParamData.obrigatorio}
-                    onChange={e => setNewParamData({ ...newParamData, obrigatorio: e.target.checked })}
-                  />
-                  <label htmlFor="param-obrigatorio-check" style={{ fontSize: '0.85rem', cursor: 'pointer' }}>
-                    <strong>Obrigatório em todas as análises</strong>
-                  </label>
-                </div>
-                <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem' }}>
-                  <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>{editingGlobalParamId ? 'Gravar Alterações' : 'Gravar Parâmetro'}</button>
-                  <button type="button" className="btn btn-secondary" onClick={() => { setShowAddParam(false); setEditingGlobalParamId(null); setShowAddTypeInline(false); setNewTypeName(''); }}>Cancelar</button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
-
-        {/* Modal: Enviar Aviso Geral a Todos os Utilizadores */}
-        {showGeneralMsgModal && (
-          <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: '1rem' }}>
-            <div className="card animate-fade-in" style={{ width: '100%', maxWidth: '480px', marginBottom: 0 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-                <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Megaphone size={20} /> Enviar Aviso Geral</h3>
-                <button style={{ background: 'none', border: 'none', cursor: 'pointer' }} onClick={() => setShowGeneralMsgModal(false)}><X size={20} /></button>
-              </div>
-              <form onSubmit={handleSendGeneralMessage}>
-                <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '1.25rem' }}>
-                  Escreva um aviso ou mensagem de sistema. Esta mensagem será enviada em tempo real para o sininho de notificações de **todos** os utilizadores do sistema (clientes, operadores, técnicos, etc.).
-                </p>
-                <div className="form-group">
-                  <label className="form-label">Mensagem *</label>
-                  <textarea
-                    className="form-input"
-                    required
-                    rows={4}
-                    value={generalMsgText}
-                    onChange={e => setGeneralMsgText(e.target.value)}
-                    placeholder="Ex: Informamos que a ETAR Norte estará em manutenção programada amanhã..."
-                    style={{ resize: 'vertical' }}
-                  />
-                </div>
-                <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem' }}>
-                  <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>Enviar Aviso</button>
-                  <button type="button" className="btn btn-secondary" onClick={() => setShowGeneralMsgModal(false)}>Cancelar</button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
-
-        {/* Modal: Gerir Perfis / Cargos */}
-        {showPerfisModal && (
-          <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: '1rem' }}>
-            <div className="card animate-fade-in" style={{ width: '100%', maxWidth: '500px', marginBottom: 0, maxHeight: '90vh', overflowY: 'auto' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-                <h3>Gerir Perfis e Cargos</h3>
-                <button
-                  style={{ background: 'none', border: 'none', cursor: 'pointer' }}
-                  onClick={() => {
-                    setShowPerfisModal(false);
-                    setEditingPerfilId(null);
-                    setNewPerfilData({ nome: '' });
-                  }}
-                >
-                  <X size={20} />
-                </button>
-              </div>
-
-              {/* Form de Criação/Edição */}
-              <form onSubmit={handleSavePerfil} style={{ marginBottom: '2rem', paddingBottom: '1.5rem', borderBottom: '1px solid var(--border)' }}>
-                <h4 style={{ marginBottom: '1rem' }}>
-                  {editingPerfilId ? 'Editar Nome do Perfil' : 'Adicionar Novo Perfil'}
-                </h4>
-                <div className="form-group">
-                  <label className="form-label">Nome do Perfil *</label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    placeholder="Ex: Técnico de Qualidade"
-                    required
-                    value={newPerfilData.nome}
-                    onChange={e => setNewPerfilData({ nome: e.target.value })}
-                  />
-                </div>
-                <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1rem' }}>
-                  <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>
-                    {editingPerfilId ? 'Gravar Alteração' : 'Criar Perfil'}
-                  </button>
-                  {editingPerfilId && (
-                    <button
-                      type="button"
-                      className="btn btn-secondary"
-                      onClick={() => {
-                        setEditingPerfilId(null);
-                        setNewPerfilData({ nome: '' });
-                      }}
-                    >
-                      Cancelar
-                    </button>
-                  )}
-                </div>
-              </form>
-
-              {/* Listagem de Perfis existentes */}
-              <div>
-                <h4 style={{ marginBottom: '1rem' }}>Perfis Disponíveis no Sistema</h4>
-                <div className="table-container" style={{ maxHeight: '300px', overflowY: 'auto' }}>
-                  <table className="data-table" style={{ fontSize: '0.85rem' }}>
-                    <thead>
-                      <tr>
-                        <th>ID</th>
-                        <th>Perfil</th>
-                        <th style={{ textAlign: 'right' }}>Ações</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {perfisList.map(p => (
-                        <tr key={p.id_perfil}>
-                          <td><strong>#{p.id_perfil}</strong></td>
-                          <td>
-                            <span className="badge badge-info" style={{ fontSize: '0.75rem' }}>
-                              {p.nome}
+                {/* Modal: Editar Parâmetro no Catálogo Analítico (Responsável Lab) */}
+                {showEditParamCatalog && (
+                  <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: '1rem' }}>
+                    <div className="card animate-fade-in" style={{ width: '100%', maxWidth: '500px', marginBottom: 0 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                        <div>
+                          <h3 style={{ marginBottom: '0.25rem' }}>Editar Parâmetro: {editingParamCatalogData.nome}</h3>
+                          <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem' }}>
+                            As alterações aplicam-se apenas a futuros registos. Os boletins já validados não são afetados.
+                          </p>
+                        </div>
+                        <button style={{ background: 'none', border: 'none', cursor: 'pointer' }} onClick={() => setShowEditParamCatalog(false)}><X size={20} /></button>
+                      </div>
+                      <form onSubmit={handleSaveParamCatalog}>
+                        <div className="form-group">
+                          <label className="form-label">Código do Método (ex: SMEWW 4500-H+)</label>
+                          <input
+                            type="text"
+                            className="form-input"
+                            placeholder="Ex: SMEWW 5220 B"
+                            value={editingParamCatalogData.metodo_default_cod}
+                            onChange={e => setEditingParamCatalogData({ ...editingParamCatalogData, metodo_default_cod: e.target.value })}
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label className="form-label">Nome do Método (ex: Refluxo Fechado / Titulometria)</label>
+                          <input
+                            type="text"
+                            className="form-input"
+                            placeholder="Ex: Eletrometria"
+                            value={editingParamCatalogData.metodo_default_nome}
+                            onChange={e => setEditingParamCatalogData({ ...editingParamCatalogData, metodo_default_nome: e.target.value })}
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label className="form-label">Incerteza Padrão (em decimal — ex: 0.05 para 5%)</label>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <input
+                              type="number"
+                              className="form-input"
+                              placeholder="Ex: 0.05"
+                              step="0.001"
+                              min="0"
+                              max="1"
+                              value={editingParamCatalogData.incerteza_default}
+                              onChange={e => setEditingParamCatalogData({ ...editingParamCatalogData, incerteza_default: e.target.value })}
+                              style={{ flex: 1 }}
+                            />
+                            <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+                              {editingParamCatalogData.incerteza_default !== '' && editingParamCatalogData.incerteza_default !== null && !isNaN(parseFloat(editingParamCatalogData.incerteza_default))
+                                ? `= ${(parseFloat(editingParamCatalogData.incerteza_default) * 100).toFixed(1)}%`
+                                : ''}
                             </span>
-                          </td>
-                          <td style={{ textAlign: 'right' }}>
-                            {p.id_perfil !== 1 ? (
+                          </div>
+                          <small style={{ color: 'var(--text-secondary)', fontSize: '0.78rem' }}>
+                            A incerteza absoluta é calculada automaticamente como: valor × percentagem (ex: CQO 100 mg/L × 5% = ±5 mg/L)
+                          </small>
+                        </div>
+                        <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem' }}>
+                          <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>Gravar Alterações</button>
+                          <button type="button" className="btn btn-secondary" onClick={() => setShowEditParamCatalog(false)}>Cancelar</button>
+                        </div>
+                      </form>
+                    </div>
+                  </div>
+                )}
+
+
+                {selectedDescarga && (
+                  <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }}>
+                    <div className="card" style={{ width: '100%', maxWidth: '480px', marginBottom: 0 }}>
+                      <h3>Decidir Pedido de Descarga</h3>
+                      <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', margin: '0.5rem 0 1.5rem 0' }}>
+                        Aprove ou rejeite o pedido da <strong>{selectedDescarga.cliente_nome}</strong> para a <strong>{selectedDescarga.etar_nome}</strong> (Qtd: {selectedDescarga.quantidade} Litros).
+                      </p>
+
+                      {selectedDescarga.observacoes && (
+                        <div className="card" style={{
+                          backgroundColor: selectedDescarga.observacoes.includes('Revertido') ? 'var(--danger-light)' : 'var(--warning-light)',
+                          color: selectedDescarga.observacoes.includes('Revertido') ? 'var(--danger)' : 'var(--warning)',
+                          padding: '0.75rem',
+                          marginBottom: '1rem',
+                          borderLeft: selectedDescarga.observacoes.includes('Revertido') ? '4px solid var(--danger)' : '4px solid var(--warning)',
+                          fontSize: '0.85rem',
+                          borderRadius: 'var(--radius-sm)'
+                        }}>
+                          <strong>{selectedDescarga.observacoes.includes('Revertido') ? 'Alerta de Reversão de Urgência:' : 'Elementos Solicitados Anteriormente:'}</strong>
+                          <div style={{ marginTop: '0.25rem', fontStyle: 'italic', wordBreak: 'break-word' }}>
+                            "{selectedDescarga.observacoes}"
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="form-group">
+                        <label className="form-label">Justificação / Observações (Opcional)</label>
+                        <textarea className="form-input" style={{ minHeight: '80px', resize: 'vertical' }} placeholder="Indique o motivo da decisão..." value={decisaoObs} onChange={(e) => setDecisaoObs(e.target.value)}></textarea>
+                      </div>
+
+                      <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.5rem', flexWrap: 'wrap' }}>
+                        <button className="btn btn-primary" style={{ flex: 1, minWidth: '100px', backgroundColor: 'var(--success)' }} onClick={() => handleDecisao('AUTORIZADA')}>
+                          <CheckSquare size={16} /> Autorizar
+                        </button>
+                        <button className="btn btn-primary" style={{ flex: 1, minWidth: '100px', backgroundColor: 'var(--danger)' }} onClick={() => handleDecisao('REJEITADA')}>
+                          <XSquare size={16} /> Rejeitar
+                        </button>
+                        <button className="btn btn-primary" style={{ flex: 1, minWidth: '130px', backgroundColor: 'var(--warning)' }} onClick={() => handleDecisao('SOLICITAR_ELEMENTOS')}>
+                          <HelpCircle size={16} /> Pedir mais elementos
+                        </button>
+                        <button className="btn btn-secondary" style={{ flex: 1, minWidth: '80px' }} onClick={() => setSelectedDescarga(null)}>
+                          Fechar
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Modal de Validação (Responsável Laboratório) */}
+                {selectedAmostra && selectedAmostra.amostra && (
+                  <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: '1rem' }}>
+                    <div className="card" style={{ width: '100%', maxWidth: isViewOnly ? '560px' : '820px', marginBottom: 0, overflowY: 'auto', maxHeight: '90vh', transition: 'max-width 0.3s ease-in-out' }}>
+                      <h3>{isViewOnly ? 'Visualizar Resultados Analíticos' : 'Validar Boletim Analítico'}</h3>
+                      <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '1rem' }}>
+                        {isViewOnly
+                          ? `Resultados laboratoriais concluídos para a amostra ${selectedAmostra.amostra.qr_code_token}.`
+                          : `Revise os resultados laboratoriais registados para a amostra ${selectedAmostra.amostra.qr_code_token}.`
+                        }
+                      </p>
+
+                      <div style={{ backgroundColor: 'var(--bg-base)', padding: '0.75rem', borderRadius: 'var(--radius-sm)', fontSize: '0.85rem', marginBottom: '1rem', border: '1px solid var(--border)', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+                        <div>
+                          <strong>Detalhes:</strong>
+                          <div>Cliente: {selectedAmostra.amostra.cliente_nome}</div>
+                          <div>Volume Real: {selectedAmostra.amostra.quantidade_real} Litros</div>
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                          <div>Data de Recolha: {new Date(selectedAmostra.amostra.data_recolha).toLocaleDateString()}</div>
+                          {selectedAmostra.amostra.data_validacao && (
+                            <div>Validado em: {new Date(selectedAmostra.amostra.data_validacao).toLocaleDateString()}</div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="table-container" style={{ maxHeight: '350px', overflowY: 'auto' }}>
+                        <table className="data-table">
+                          <thead>
+                            <tr>
+                              <th>Parâmetro</th>
+                              <th>Valor Medido</th>
+                              <th>Metodologia</th>
+                              <th>Incerteza</th>
+                              {!isViewOnly && <th style={{ textAlign: 'center' }}>Ação</th>}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {editResultados.map((r) => {
+                              const isEditing = editingParamId === r.id_parametro;
+                              return (
+                                <tr key={r.id_resultado || r.id_parametro}>
+                                  <td style={{ verticalAlign: 'middle', fontWeight: '500' }}>{r.parametro_nome}</td>
+                                  <td style={{ verticalAlign: 'middle' }}>
+                                    {isEditing ? (
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                        <input
+                                          type="number"
+                                          step="any"
+                                          className="form-input"
+                                          style={{ width: '85px', padding: '0.3rem', margin: 0 }}
+                                          value={r.valor}
+                                          onChange={(e) => {
+                                            const val = e.target.value;
+                                            setEditResultados(prev => prev.map(item => item.id_parametro === r.id_parametro ? { ...item, valor: val } : item));
+                                          }}
+                                        />
+                                        <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{r.unidade}</span>
+                                      </div>
+                                    ) : (
+                                      <div>
+                                        <strong>{Number(r.valor).toFixed(2)}</strong> <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{r.unidade}</span>
+                                      </div>
+                                    )}
+                                  </td>
+                                  <td style={{ verticalAlign: 'middle' }}>
+                                    {isEditing ? (
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                        <input
+                                          type="text"
+                                          className="form-input"
+                                          style={{ width: '130px', padding: '0.3rem', margin: 0 }}
+                                          placeholder="ex: SMEWW"
+                                          value={r.metodo}
+                                          onChange={(e) => {
+                                            const m = e.target.value;
+                                            setEditResultados(prev => prev.map(item => item.id_parametro === r.id_parametro ? { ...item, metodo: m } : item));
+                                          }}
+                                        />
+                                        <button
+                                          type="button"
+                                          className="btn btn-secondary"
+                                          style={{ padding: '0.3rem', minWidth: 'auto', display: 'flex', alignItems: 'center' }}
+                                          title="Definir esta metodologia como padrão para o catálogo"
+                                          onClick={() => handleDefinirMetodoPadrao(r.id_parametro, r.metodo)}
+                                        >
+                                          <Settings size={14} />
+                                        </button>
+                                      </div>
+                                    ) : (
+                                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', fontSize: '0.85rem' }}>
+                                        <span>{r.metodo || <span style={{ color: 'var(--text-secondary)' }}>-</span>}</span>
+                                        {r.metodo && !isViewOnly && (
+                                          <button
+                                            type="button"
+                                            className="btn btn-secondary"
+                                            style={{ padding: '0.2rem 0.4rem', fontSize: '0.7rem', minWidth: 'auto', display: 'flex', alignItems: 'center', gap: '2px' }}
+                                            title="Definir esta metodologia como padrão para o catálogo"
+                                            onClick={() => handleDefinirMetodoPadrao(r.id_parametro, r.metodo)}
+                                          >
+                                            <Settings size={12} /> Usar como Padrão
+                                          </button>
+                                        )}
+                                      </div>
+                                    )}
+                                  </td>
+                                  <td style={{ verticalAlign: 'middle' }}>
+                                    {isEditing ? (
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                        <input
+                                          type="number"
+                                          step="any"
+                                          className="form-input"
+                                          style={{ width: '80px', padding: '0.3rem', margin: 0 }}
+                                          placeholder="Incerteza"
+                                          value={r.incerteza}
+                                          onChange={(e) => {
+                                            const inc = e.target.value;
+                                            setEditResultados(prev => prev.map(item => item.id_parametro === r.id_parametro ? { ...item, incerteza: inc } : item));
+                                          }}
+                                        />
+                                      </div>
+                                    ) : (
+                                      <div style={{ fontSize: '0.85rem' }}>
+                                        {r.incerteza !== '' && r.incerteza !== null && r.incerteza !== undefined ? (
+                                          Number(r.incerteza) < 1
+                                            ? `±${Math.round(Number(r.incerteza) * 100)}%`
+                                            : `±${Math.round(Number(r.incerteza))}%`
+                                        ) : (
+                                          <span style={{ color: 'var(--text-secondary)' }}>-</span>
+                                        )}
+                                      </div>
+                                    )}
+                                  </td>
+                                  {!isViewOnly && (
+                                    <td style={{ verticalAlign: 'middle', textAlign: 'center' }}>
+                                      {isEditing ? (
+                                        <div style={{ display: 'flex', gap: '4px', justifyContent: 'center' }}>
+                                          <button
+                                            type="button"
+                                            className="btn btn-primary"
+                                            style={{ padding: '0.25rem 0.4rem', backgroundColor: 'var(--success)', minWidth: 'auto' }}
+                                            onClick={() => setEditingParamId(null)}
+                                            title="Confirmar"
+                                          >
+                                            <Check size={14} />
+                                          </button>
+                                          <button
+                                            type="button"
+                                            className="btn btn-secondary"
+                                            style={{ padding: '0.25rem 0.4rem', minWidth: 'auto' }}
+                                            onClick={() => {
+                                              const orig = selectedAmostra.resultados.find(orig => orig.id_parametro === r.id_parametro);
+                                              setEditResultados(prev => prev.map(item => item.id_parametro === r.id_parametro ? {
+                                                ...item,
+                                                valor: orig.valor,
+                                                metodo: orig.metodo || '',
+                                                incerteza: orig.incerteza || ''
+                                              } : item));
+                                              setEditingParamId(null);
+                                            }}
+                                            title="Cancelar"
+                                          >
+                                            <X size={14} />
+                                          </button>
+                                        </div>
+                                      ) : (
+                                        <button
+                                          type="button"
+                                          className="btn btn-secondary"
+                                          style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', minWidth: 'auto' }}
+                                          onClick={() => setEditingParamId(r.id_parametro)}
+                                        >
+                                          Editar
+                                        </button>
+                                      )}
+                                    </td>
+                                  )}
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.5rem', flexWrap: 'wrap' }}>
+                        {!isViewOnly ? (
+                          <>
+                            <button className="btn btn-primary" style={{ flex: 1, minWidth: '150px' }} onClick={() => handleSaveEdits(false)}>
+                              Gravar Alterações
+                            </button>
+                            <button className="btn btn-primary" style={{ flex: 1, minWidth: '220px', backgroundColor: 'var(--success)' }} onClick={() => handleSaveEdits(true)}>
+                              <ShieldCheck size={16} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '4px' }} /> Validar e Assinar Boletim
+                            </button>
+                          </>
+                        ) : null}
+                        <button className="btn btn-secondary" style={{ flex: isViewOnly ? 1 : 'none', minWidth: '80px' }} onClick={() => setSelectedAmostra(null)}>
+                          {isViewOnly ? 'Fechar' : 'Cancelar'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Modal: Adicionar/Editar Cliente */}
+                {showAddCliente && (
+                  <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: '1rem' }}>
+                    <div className="card" style={{ width: '100%', maxWidth: '500px', marginBottom: 0, maxHeight: '90vh', overflowY: 'auto' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                        <h3>{editingClienteId ? 'Editar Cliente Contratado' : 'Registar Novo Cliente Contratado'}</h3>
+                        <button style={{ background: 'none', border: 'none', cursor: 'pointer' }} onClick={() => { setShowAddCliente(false); setEditingClienteId(null); setNewClienteData({ nome: '', morada: '', contacto: '', telefone: '', email: '', password: '', periodicidade_analise: 'POR_DESCARGA' }); }}><X size={20} /></button>
+                      </div>
+                      <form onSubmit={handleSaveCliente}>
+                        <div className="form-group">
+                          <label className="form-label">Nome da Empresa / Cliente *</label>
+                          <input type="text" className="form-input" placeholder="Ex: Lavandarias Reunidas SA" required value={newClienteData.nome} onChange={e => setNewClienteData({ ...newClienteData, nome: e.target.value })} />
+                        </div>
+                        <div className="form-group">
+                          <label className="form-label">Email Principal (Acesso) *</label>
+                          <input type="email" className="form-input" placeholder="geral@empresa.com" required value={newClienteData.email} onChange={e => setNewClienteData({ ...newClienteData, email: e.target.value })} />
+                        </div>
+                        <div className="form-group">
+                          <label className="form-label">
+                            {editingClienteId
+                              ? 'Alterar Palavra-passe do Cliente (Opcional - deixar em branco para manter)'
+                              : 'Palavra-passe (Opcional - por omissão: Descargas123!)'}
+                          </label>
+                          <input
+                            type="password"
+                            className="form-input"
+                            placeholder={editingClienteId ? "Deixe em branco para manter" : "Introduza a password"}
+                            value={newClienteData.password || ''}
+                            onChange={e => setNewClienteData({ ...newClienteData, password: e.target.value })}
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label className="form-label">Periodicidade de Análises Contratada</label>
+                          <select className="form-input" value={newClienteData.periodicidade_analise} onChange={e => setNewClienteData({ ...newClienteData, periodicidade_analise: e.target.value })}>
+                            <option value="POR_DESCARGA">Por Descarga (Sempre)</option>
+                            <option value="SEMANAL">Semanal (Uma por semana civil)</option>
+                            <option value="QUINZENAL">Quinzenal (Mínimo a cada 15 dias)</option>
+                            <option value="MENSAL">Mensal (Uma por mês civil)</option>
+                            <option value="TRIMESTRAL">Trimestral (Uma por trimestre)</option>
+                            <option value="SEMESTRAL">Semestral (Uma por semestre)</option>
+                            <option value="ANUAL">Anual (Uma por ano civil)</option>
+                          </select>
+                        </div>
+                        <div className="form-group">
+                          <label className="form-label">Morada da Sede / Instalações</label>
+                          <input type="text" className="form-input" placeholder="Morada..." value={newClienteData.morada} onChange={e => setNewClienteData({ ...newClienteData, morada: e.target.value })} />
+                        </div>
+                        <div className="form-group" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                          <div>
+                            <label className="form-label">Nome de Contacto</label>
+                            <input type="text" className="form-input" placeholder="Pessoa de contacto" value={newClienteData.contacto} onChange={e => setNewClienteData({ ...newClienteData, contacto: e.target.value })} />
+                          </div>
+                          <div>
+                            <label className="form-label">Telefone</label>
+                            <input type="text" className="form-input" placeholder="Telefone..." value={newClienteData.telefone} onChange={e => setNewClienteData({ ...newClienteData, telefone: e.target.value })} />
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem' }}>
+                          <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>{editingClienteId ? 'Gravar Alterações' : 'Confirmar Contrato'}</button>
+                          <button type="button" className="btn btn-secondary" onClick={() => { setShowAddCliente(false); setEditingClienteId(null); setNewClienteData({ nome: '', morada: '', contacto: '', telefone: '', email: '', password: '', periodicidade_analise: 'POR_DESCARGA' }); }}>Cancelar</button>
+                        </div>
+                      </form>
+                    </div>
+                  </div>
+                )}
+
+                {/* Modal: Adicionar/Editar Autorização Whitelist */}
+                {showAddAutorizacao && (
+                  <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: '1rem' }}>
+                    <div className="card" style={{ width: '100%', maxWidth: '450px', marginBottom: 0 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                        <h3>{editingAutorizacaoId ? 'Editar Whitelist / Limites' : 'Configurar Whitelist / Limites'}</h3>
+                        <button style={{ background: 'none', border: 'none', cursor: 'pointer' }} onClick={() => setShowAddAutorizacao(false)}><X size={20} /></button>
+                      </div>
+                      <form onSubmit={handleSaveAutorizacao}>
+                        <div className="form-group">
+                          <label className="form-label">Selecionar Cliente contratado *</label>
+                          <select className="form-input" required disabled={!!editingAutorizacaoId} value={newAutorizacaoData.id_cliente} onChange={e => setNewAutorizacaoData({ ...newAutorizacaoData, id_cliente: e.target.value })}>
+                            <option value="">-- Escolha um cliente --</option>
+                            {clientesList.map(c => (
+                              <option key={c.id_cliente} value={c.id_cliente}>{c.nome}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="form-group">
+                          <label className="form-label">Selecionar ETAR autorizada *</label>
+                          <select className="form-input" required disabled={!!editingAutorizacaoId} value={newAutorizacaoData.id_etar} onChange={e => setNewAutorizacaoData({ ...newAutorizacaoData, id_etar: e.target.value })}>
+                            <option value="">-- Escolha uma ETAR --</option>
+                            {etarsList.map(e => (
+                              <option key={e.id_etar} value={e.id_etar}>{e.nome}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="form-group">
+                          <label className="form-label">Quota Diária de Descargas (Deixe em branco para 'Sem limite')</label>
+                          <input type="number" className="form-input" min="1" value={newAutorizacaoData.quota} onChange={e => setNewAutorizacaoData({ ...newAutorizacaoData, quota: e.target.value })} />
+                        </div>
+                        <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', margin: '1rem 0' }}>
+                          <input
+                            type="checkbox"
+                            id="auto-aprovacao-check"
+                            style={{ width: '20px', height: '20px', cursor: 'pointer' }}
+                            checked={newAutorizacaoData.auto_aprovacao}
+                            onChange={e => setNewAutorizacaoData({ ...newAutorizacaoData, auto_aprovacao: e.target.checked })}
+                          />
+                          <label htmlFor="auto-aprovacao-check" style={{ fontSize: '0.85rem', cursor: 'pointer' }}>
+                            <strong>Ativar Auto-Aprovação</strong> (Ignora triagem manual)
+                          </label>
+                        </div>
+                        <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem' }}>
+                          <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>{editingAutorizacaoId ? 'Gravar Alterações' : 'Gravar Regra'}</button>
+                          <button type="button" className="btn btn-secondary" onClick={() => setShowAddAutorizacao(false)}>Cancelar</button>
+                        </div>
+                      </form>
+                    </div>
+                  </div>
+                )}
+
+                {/* Modal: Adicionar/Editar Utilizador Interno */}
+                {showAddUtilizador && (
+                  <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: '1rem' }}>
+                    <div className="card" style={{ width: '100%', maxWidth: '480px', marginBottom: 0, maxHeight: '90vh', overflowY: 'auto' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                        <h3>{editingUtilizadorId ? 'Editar Utilizador Interno' : 'Registar Novo Utilizador Interno'}</h3>
+                        <button
+                          style={{ background: 'none', border: 'none', cursor: 'pointer' }}
+                          onClick={() => setShowAddUtilizador(false)}
+                        >
+                          <X size={20} />
+                        </button>
+                      </div>
+
+                      <form onSubmit={handleSaveUtilizador}>
+                        <div className="form-group">
+                          <label className="form-label">Nome Completo *</label>
+                          <input
+                            type="text"
+                            className="form-input"
+                            placeholder="Ex: Carlos Silva"
+                            required
+                            disabled={!!editingUtilizadorId}
+                            value={newUtilizadorData.nome}
+                            onChange={e => setNewUtilizadorData({ ...newUtilizadorData, nome: e.target.value })}
+                          />
+                        </div>
+
+                        <div className="form-group">
+                          <label className="form-label">Endereço de Email (Acesso) *</label>
+                          <input
+                            type="email"
+                            className="form-input"
+                            placeholder="carlos.silva@etar.pt"
+                            required
+                            value={newUtilizadorData.email}
+                            onChange={e => setNewUtilizadorData({ ...newUtilizadorData, email: e.target.value })}
+                          />
+                        </div>
+
+                        <div className="form-group">
+                          <label className="form-label">Perfil / Permissões de Acesso *</label>
+                          <select
+                            className="form-input"
+                            required
+                            value={newUtilizadorData.id_perfil}
+                            onChange={e => setNewUtilizadorData({ ...newUtilizadorData, id_perfil: e.target.value, id_etar: (e.target.value !== '2' && e.target.value !== '3') ? '' : newUtilizadorData.id_etar })}
+                          >
+                            {perfisList.length > 0 ? (
+                              perfisList
+                                .filter(p => Number(p.id_perfil) !== 1)
+                                .map(p => (
+                                  <option key={p.id_perfil} value={String(p.id_perfil)}>
+                                    {p.nome.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, c => c.toUpperCase())}
+                                  </option>
+                                ))
+                            ) : (
+                              <>
+                                <option value="2">Operador de ETAR</option>
+                                <option value="3">Responsável de ETAR</option>
+                                <option value="4">Técnico de Laboratório</option>
+                                <option value="5">Responsável de Laboratório</option>
+                                <option value="6">Gestor de Clientes</option>
+                                <option value="7">Gestor Admin</option>
+                              </>
+                            )}
+                          </select>
+                        </div>
+
+                        {(newUtilizadorData.id_perfil === '2' || newUtilizadorData.id_perfil === '3') && (
+                          <div className="form-group">
+                            <label className="form-label">ETAR Associada *</label>
+                            <select
+                              className="form-input"
+                              required
+                              value={newUtilizadorData.id_etar}
+                              onChange={e => setNewUtilizadorData({ ...newUtilizadorData, id_etar: e.target.value })}
+                            >
+                              <option value="">-- Escolha uma ETAR --</option>
+                              {etarsList.map(e => (
+                                <option key={e.id_etar} value={e.id_etar}>{e.nome}</option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
+
+                        <div className="form-group">
+                          <label className="form-label">
+                            {editingUtilizadorId
+                              ? 'Alterar Palavra-passe (Opcional - deixar em branco para manter)'
+                              : 'Palavra-passe (Opcional - por omissão: Descargas123!)'}
+                          </label>
+                          <input
+                            type="password"
+                            className="form-input"
+                            placeholder={editingUtilizadorId ? "Deixe em branco para manter" : "Introduza a palavra-passe"}
+                            value={newUtilizadorData.password || ''}
+                            onChange={e => setNewUtilizadorData({ ...newUtilizadorData, password: e.target.value })}
+                          />
+                        </div>
+
+                        <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '1.25rem' }}>
+                          <input
+                            type="checkbox"
+                            id="utilizador_ativo"
+                            checked={!!newUtilizadorData.ativo}
+                            onChange={e => setNewUtilizadorData({ ...newUtilizadorData, ativo: e.target.checked })}
+                          />
+                          <label htmlFor="utilizador_ativo" className="form-label" style={{ marginBottom: 0, cursor: 'pointer' }}>
+                            Conta de Utilizador Ativa (Permite login)
+                          </label>
+                        </div>
+
+                        <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem' }}>
+                          <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>
+                            {editingUtilizadorId ? 'Gravar Alterações' : 'Criar Utilizador'}
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-secondary"
+                            onClick={() => setShowAddUtilizador(false)}
+                          >
+                            Cancelar
+                          </button>
+                        </div>
+                      </form>
+                    </div>
+                  </div>
+                )}
+
+                {/* Modal: Adicionar Nova ETAR */}
+                {showAddEtar && (
+                  <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: '1rem' }}>
+                    <div className="card" style={{ width: '100%', maxWidth: '450px', marginBottom: 0 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                        <h3>Registar Nova ETAR</h3>
+                        <button style={{ background: 'none', border: 'none', cursor: 'pointer' }} onClick={() => setShowAddEtar(false)}><X size={20} /></button>
+                      </div>
+                      <form onSubmit={handleSaveEtar}>
+                        <div className="form-group">
+                          <label className="form-label">Nome da ETAR *</label>
+                          <input
+                            type="text"
+                            className="form-input"
+                            placeholder="Ex: ETAR Leste"
+                            required
+                            value={newEtarData.nome}
+                            onChange={e => setNewEtarData({ ...newEtarData, nome: e.target.value })}
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label className="form-label">Localização (Concelho/Cidade)</label>
+                          <input
+                            type="text"
+                            className="form-input"
+                            placeholder="Ex: Vila Real"
+                            value={newEtarData.localizacao}
+                            onChange={e => setNewEtarData({ ...newEtarData, localizacao: e.target.value })}
+                          />
+                        </div>
+                        <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', margin: '1rem 0' }}>
+                          <input
+                            type="checkbox"
+                            id="etar-disponivel-check"
+                            style={{ width: '20px', height: '20px', cursor: 'pointer' }}
+                            checked={newEtarData.disponivel}
+                            onChange={e => setNewEtarData({ ...newEtarData, disponivel: e.target.checked })}
+                          />
+                          <label htmlFor="etar-disponivel-check" style={{ fontSize: '0.85rem', cursor: 'pointer' }}>
+                            <strong>Ativa / Disponível para receber descargas</strong>
+                          </label>
+                        </div>
+                        <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem' }}>
+                          <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>Gravar ETAR</button>
+                          <button type="button" className="btn btn-secondary" onClick={() => setShowAddEtar(false)}>Cancelar</button>
+                        </div>
+                      </form>
+                    </div>
+                  </div>
+                )}
+
+                {/* Modal: Adicionar Novo Parâmetro Analítico */}
+                {showAddParam && (
+                  <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: '1rem' }}>
+                    <div className="card" style={{ width: '100%', maxWidth: '450px', marginBottom: 0 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                        <h3>{editingGlobalParamId ? 'Editar Parâmetro' : 'Registar Novo Parâmetro'}</h3>
+                        <button style={{ background: 'none', border: 'none', cursor: 'pointer' }} onClick={() => { setShowAddParam(false); setEditingGlobalParamId(null); setShowAddTypeInline(false); setNewTypeName(''); }}><X size={20} /></button>
+                      </div>
+                      <form onSubmit={handleSaveParam}>
+                        <div className="form-group">
+                          <label className="form-label">Nome do Parâmetro *</label>
+                          <input
+                            type="text"
+                            className="form-input"
+                            placeholder="Ex: CBO5"
+                            required
+                            value={newParamData.nome}
+                            onChange={e => setNewParamData({ ...newParamData, nome: e.target.value })}
+                          />
+                        </div>
+                        <div className="form-group">
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                            <label className="form-label" style={{ marginBottom: 0 }}>Tipo de Parâmetro *</label>
+                            <button
+                              type="button"
+                              className="btn-link"
+                              style={{ fontSize: '0.8rem', background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer', padding: 0 }}
+                              onClick={() => setShowAddTypeInline(!showAddTypeInline)}
+                            >
+                              {showAddTypeInline ? 'Cancelar' : '+ Novo Tipo'}
+                            </button>
+                          </div>
+                          {!showAddTypeInline ? (
+                            <select
+                              className="form-input"
+                              required
+                              value={newParamData.tipo_parametro}
+                              onChange={e => setNewParamData({ ...newParamData, tipo_parametro: e.target.value })}
+                            >
+                              {tiposParametrosList.map(type => (
+                                <option key={type} value={type}>
+                                  {type.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, c => c.toUpperCase())}
+                                </option>
+                              ))}
+                            </select>
+                          ) : (
+                            <div style={{ display: 'flex', gap: '0.5rem' }}>
+                              <input
+                                type="text"
+                                className="form-input"
+                                style={{ margin: 0, flex: 1 }}
+                                placeholder="Ex: Microbiologia"
+                                value={newTypeName}
+                                onChange={e => setNewTypeName(e.target.value)}
+                              />
                               <button
                                 type="button"
                                 className="btn btn-primary"
-                                style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem' }}
-                                onClick={() => {
-                                  setEditingPerfilId(p.id_perfil);
-                                  setNewPerfilData({ nome: p.nome.replace(/_/g, ' ') });
+                                style={{ padding: '0.4rem 0.8rem', minWidth: 'auto' }}
+                                onClick={async () => {
+                                  if (!newTypeName.trim()) return;
+                                  try {
+                                    const res = await adminService.criarTipoParametro(newTypeName);
+                                    const newType = res.tipo;
+                                    // Adicionar à lista local de tipos
+                                    setTiposParametrosList(prev => [...prev, newType].sort());
+                                    // Selecionar o novo tipo criado
+                                    setNewParamData(prev => ({ ...prev, tipo_parametro: newType }));
+                                    setNewTypeName('');
+                                    setShowAddTypeInline(false);
+                                    setSuccess('Novo tipo de parâmetro adicionado com sucesso!');
+                                  } catch (err) {
+                                    setError(err.message || 'Erro ao criar novo tipo.');
+                                  }
                                 }}
                               >
-                                Editar
+                                Adicionar
                               </button>
-                            ) : (
-                              <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontStyle: 'italic' }}>Sistema</span>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+                            </div>
+                          )}
+                        </div>
+                        <div className="form-group">
+                          <label className="form-label">Unidade Padrão *</label>
+                          <input
+                            type="text"
+                            className="form-input"
+                            placeholder="Ex: mg/L"
+                            required
+                            value={newParamData.unidade_default}
+                            onChange={e => setNewParamData({ ...newParamData, unidade_default: e.target.value })}
+                          />
+                        </div>
+                        <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', margin: '1rem 0' }}>
+                          <input
+                            type="checkbox"
+                            id="param-obrigatorio-check"
+                            style={{ width: '20px', height: '20px', cursor: 'pointer' }}
+                            checked={newParamData.obrigatorio}
+                            onChange={e => setNewParamData({ ...newParamData, obrigatorio: e.target.checked })}
+                          />
+                          <label htmlFor="param-obrigatorio-check" style={{ fontSize: '0.85rem', cursor: 'pointer' }}>
+                            <strong>Obrigatório em todas as análises</strong>
+                          </label>
+                        </div>
+                        <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem' }}>
+                          <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>{editingGlobalParamId ? 'Gravar Alterações' : 'Gravar Parâmetro'}</button>
+                          <button type="button" className="btn btn-secondary" onClick={() => { setShowAddParam(false); setEditingGlobalParamId(null); setShowAddTypeInline(false); setNewTypeName(''); }}>Cancelar</button>
+                        </div>
+                      </form>
+                    </div>
+                  </div>
+                )}
 
-              <div style={{ marginTop: '1.5rem', display: 'flex', justifyContent: 'flex-end' }}>
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  onClick={() => {
-                    setShowPerfisModal(false);
-                    setEditingPerfilId(null);
-                    setNewPerfilData({ nome: '' });
-                  }}
-                >
-                  Fechar
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+                {/* Modal: Enviar Aviso Geral a Todos os Utilizadores */}
+                {showGeneralMsgModal && (
+                  <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: '1rem' }}>
+                    <div className="card animate-fade-in" style={{ width: '100%', maxWidth: '480px', marginBottom: 0 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                        <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Megaphone size={20} /> Enviar Aviso Geral</h3>
+                        <button style={{ background: 'none', border: 'none', cursor: 'pointer' }} onClick={() => setShowGeneralMsgModal(false)}><X size={20} /></button>
+                      </div>
+                      <form onSubmit={handleSendGeneralMessage}>
+                        <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '1.25rem' }}>
+                          Escreva um aviso ou mensagem de sistema. Esta mensagem será enviada em tempo real para o sininho de notificações de **todos** os utilizadores do sistema (clientes, operadores, técnicos, etc.).
+                        </p>
+                        <div className="form-group">
+                          <label className="form-label">Mensagem *</label>
+                          <textarea
+                            className="form-input"
+                            required
+                            rows={4}
+                            value={generalMsgText}
+                            onChange={e => setGeneralMsgText(e.target.value)}
+                            placeholder="Ex: Informamos que a ETAR Norte estará em manutenção programada amanhã..."
+                            style={{ resize: 'vertical' }}
+                          />
+                        </div>
+                        <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem' }}>
+                          <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>Enviar Aviso</button>
+                          <button type="button" className="btn btn-secondary" onClick={() => setShowGeneralMsgModal(false)}>Cancelar</button>
+                        </div>
+                      </form>
+                    </div>
+                  </div>
+                )}
+
+                {/* Modal: Gerir Perfis / Cargos */}
+                {showPerfisModal && (
+                  <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: '1rem' }}>
+                    <div className="card animate-fade-in" style={{ width: '100%', maxWidth: '500px', marginBottom: 0, maxHeight: '90vh', overflowY: 'auto' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                        <h3>Gerir Perfis e Cargos</h3>
+                        <button
+                          style={{ background: 'none', border: 'none', cursor: 'pointer' }}
+                          onClick={() => {
+                            setShowPerfisModal(false);
+                            setEditingPerfilId(null);
+                            setNewPerfilData({ nome: '' });
+                          }}
+                        >
+                          <X size={20} />
+                        </button>
+                      </div>
+
+                      {/* Form de Criação/Edição */}
+                      <form onSubmit={handleSavePerfil} style={{ marginBottom: '2rem', paddingBottom: '1.5rem', borderBottom: '1px solid var(--border)' }}>
+                        <h4 style={{ marginBottom: '1rem' }}>
+                          {editingPerfilId ? 'Editar Nome do Perfil' : 'Adicionar Novo Perfil'}
+                        </h4>
+                        <div className="form-group">
+                          <label className="form-label">Nome do Perfil *</label>
+                          <input
+                            type="text"
+                            className="form-input"
+                            placeholder="Ex: Técnico de Qualidade"
+                            required
+                            value={newPerfilData.nome}
+                            onChange={e => setNewPerfilData({ nome: e.target.value })}
+                          />
+                        </div>
+                        <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1rem' }}>
+                          <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>
+                            {editingPerfilId ? 'Gravar Alteração' : 'Criar Perfil'}
+                          </button>
+                          {editingPerfilId && (
+                            <button
+                              type="button"
+                              className="btn btn-secondary"
+                              onClick={() => {
+                                setEditingPerfilId(null);
+                                setNewPerfilData({ nome: '' });
+                              }}
+                            >
+                              Cancelar
+                            </button>
+                          )}
+                        </div>
+                      </form>
+
+                      {/* Listagem de Perfis existentes */}
+                      <div>
+                        <h4 style={{ marginBottom: '1rem' }}>Perfis Disponíveis no Sistema</h4>
+                        <div className="table-container" style={{ maxHeight: '300px', overflowY: 'auto' }}>
+                          <table className="data-table" style={{ fontSize: '0.85rem' }}>
+                            <thead>
+                              <tr>
+                                <th>ID</th>
+                                <th>Perfil</th>
+                                <th style={{ textAlign: 'right' }}>Ações</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {perfisList.map(p => (
+                                <tr key={p.id_perfil}>
+                                  <td><strong>#{p.id_perfil}</strong></td>
+                                  <td>
+                                    <span className="badge badge-info" style={{ fontSize: '0.75rem' }}>
+                                      {p.nome}
+                                    </span>
+                                  </td>
+                                  <td style={{ textAlign: 'right' }}>
+                                    {p.id_perfil !== 1 ? (
+                                      <button
+                                        type="button"
+                                        className="btn btn-primary"
+                                        style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem' }}
+                                        onClick={() => {
+                                          setEditingPerfilId(p.id_perfil);
+                                          setNewPerfilData({ nome: p.nome.replace(/_/g, ' ') });
+                                        }}
+                                      >
+                                        Editar
+                                      </button>
+                                    ) : (
+                                      <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontStyle: 'italic' }}>Sistema</span>
+                                    )}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+
+                      <div style={{ marginTop: '1.5rem', display: 'flex', justifyContent: 'flex-end' }}>
+                        <button
+                          type="button"
+                          className="btn btn-secondary"
+                          onClick={() => {
+                            setShowPerfisModal(false);
+                            setEditingPerfilId(null);
+                            setNewPerfilData({ nome: '' });
+                          }}
+                        >
+                          Fechar
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
       </main>
     </div>
   );

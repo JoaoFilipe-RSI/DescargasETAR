@@ -36,7 +36,11 @@ exports.criarPedido = async (req, res) => {
     let dataDecisao = null;
     let autoAprovado = false;
 
-    if (autRes.rows.length > 0 && autRes.rows[0].ativo) {
+    // Pedidos com produtor externo obrigam SEMPRE a revisão manual pelo gestor de clientes,
+    // independentemente de whitelist, quota ou auto_aprovacao configurados para o cliente.
+    const temProdutorExterno = nome_produtor_externo && nome_produtor_externo.trim().length > 0;
+
+    if (!temProdutorExterno && autRes.rows.length > 0 && autRes.rows[0].ativo) {
       const auth = autRes.rows[0];
 
       // Verificar quota de descargas efetuadas hoje
@@ -82,9 +86,11 @@ exports.criarPedido = async (req, res) => {
       INSERT INTO historico (entidade, id_entidade, acao, descricao, id_utilizador)
       VALUES ('DESCARGA', $1, 'CRIACAO', $2, $3)
     `;
-    const histDesc = autoAprovado 
-      ? 'Pedido criado e aprovado automaticamente pelo sistema (Whitelist/Quota).'
-      : 'Pedido criado. A aguardar aprovação manual.';
+    const histDesc = temProdutorExterno
+      ? 'Pedido criado com dados de produtor externo. Revisão manual obrigatória pela Gestão de Clientes.'
+      : (autoAprovado 
+          ? 'Pedido criado e aprovado automaticamente pelo sistema (Whitelist/Quota).'
+          : 'Pedido criado. A aguardar aprovação manual.');
     await pool.query(histQuery, [descarga.id_descarga, histDesc, req.user.id_utilizador]);
 
     if (estado === 'SOLICITADA') {
@@ -92,14 +98,17 @@ exports.criarPedido = async (req, res) => {
       enviarNotificacao('gestores-clientes', 'novo-pedido', {
         id_descarga: descarga.id_descarga,
         cliente_nome: req.user.nome,
-        quantidade: descarga.quantidade
+        quantidade: descarga.quantidade,
+        tem_produtor_externo: temProdutorExterno
       });
     }
 
     return res.status(201).json({
-      mensagem: autoAprovado 
-        ? 'Pedido de descarga criado e AUTORIZADO automaticamente.' 
-        : 'Pedido de descarga criado com sucesso. A aguardar autorização.',
+      mensagem: temProdutorExterno
+        ? 'Pedido submetido com dados de produtor externo. Ficará pendente de aprovação manual pela Gestão de Clientes.'
+        : (autoAprovado 
+            ? 'Pedido de descarga criado e AUTORIZADO automaticamente.' 
+            : 'Pedido de descarga criado com sucesso. A aguardar autorização.'),
       descarga
     });
 
@@ -425,7 +434,11 @@ exports.editarPedido = async (req, res) => {
     let dataDecisao = null;
     let autoAprovado = false;
 
-    if (autRes.rows.length > 0 && autRes.rows[0].ativo) {
+    // Pedidos com produtor externo obrigam SEMPRE a revisão manual pelo gestor de clientes,
+    // independentemente de whitelist, quota ou auto_aprovacao configurados para o cliente.
+    const temProdutorExterno = nome_produtor_externo && nome_produtor_externo.trim().length > 0;
+
+    if (!temProdutorExterno && autRes.rows.length > 0 && autRes.rows[0].ativo) {
       const auth = autRes.rows[0];
 
       // Verificar quota de descargas efetuadas hoje
@@ -472,9 +485,11 @@ exports.editarPedido = async (req, res) => {
       INSERT INTO historico (entidade, id_entidade, acao, descricao, id_utilizador)
       VALUES ('DESCARGA', $1, 'EDICAO', $2, $3)
     `;
-    const histDesc = autoAprovado 
-      ? 'Pedido reeditado pelo cliente e aprovado automaticamente (Whitelist/Quota).'
-      : 'Pedido reeditado pelo cliente. A aguardar aprovação manual.';
+    const histDesc = temProdutorExterno
+      ? 'Pedido reeditado pelo cliente com dados de produtor externo. Revisão manual obrigatória pela Gestão de Clientes.'
+      : (autoAprovado 
+          ? 'Pedido reeditado pelo cliente e aprovado automaticamente (Whitelist/Quota).'
+          : 'Pedido reeditado pelo cliente. A aguardar aprovação manual.');
     await pool.query(histQuery, [id, histDesc, req.user.id_utilizador]);
 
     const { enviarNotificacao } = require('../config/socket');
@@ -483,7 +498,8 @@ exports.editarPedido = async (req, res) => {
       enviarNotificacao('gestores-clientes', 'novo-pedido', {
         id_descarga: id,
         cliente_nome: req.user.nome,
-        quantidade: updatedDescarga.quantidade
+        quantidade: updatedDescarga.quantidade,
+        tem_produtor_externo: temProdutorExterno
       });
     } else {
       enviarNotificacao(`cliente-${id_cliente}`, 'decisao-pedido', {
@@ -797,9 +813,9 @@ exports.gerarFichaDescargaPDF = async (req, res) => {
 
   try {
     const query = `
-      SELECT d.*, c.nome AS cliente_nome, c.email AS cliente_email, c.contacto AS cliente_contacto, c.morada AS cliente_morada,
+      SELECT d.*, c.nome AS cliente_nome, c.email AS cliente_email, c.contacto AS cliente_contacto, c.telefone AS cliente_telefone, c.morada AS cliente_morada,
              e.nome AS etar_nome,
-             u_dec.nome AS decisor_nome, u_rec.nome AS operador_nome
+             u_dec.nome AS decisor_nome, u_dec.email AS decisor_email, u_rec.nome AS operador_nome
       FROM descarga d
       JOIN cliente c ON d.id_cliente = c.id_cliente
       LEFT JOIN etar e ON d.id_etar = e.id_etar
@@ -822,13 +838,17 @@ exports.gerarFichaDescargaPDF = async (req, res) => {
     // Determinar se o cliente atua como Produtor ou Transportador
     const isTransportador = d.nome_produtor_externo && d.nome_produtor_externo.trim().length > 0;
 
-    const formatarDataPT = (date) => {
+    const formatarDataPT = (date, incluirHora = false) => {
       if (!date) return '-';
       const dt = new Date(date);
       const dia = String(dt.getDate()).padStart(2, '0');
       const mes = String(dt.getMonth() + 1).padStart(2, '0');
       const ano = dt.getFullYear();
-      return `${dia}/${mes}/${ano}`;
+      if (!incluirHora) return `${dia}/${mes}/${ano}`;
+      const hora = String(dt.getHours()).padStart(2, '0');
+      const min = String(dt.getMinutes()).padStart(2, '0');
+      const seg = String(dt.getSeconds()).padStart(2, '0');
+      return `${dia}/${mes}/${ano} ${hora}:${min}:${seg}`;
     };
 
     const doc = new PDFDocument({ size: 'A4', margin: 40 });
@@ -872,7 +892,7 @@ exports.gerarFichaDescargaPDF = async (req, res) => {
       produtorNome = d.cliente_nome;
       produtorMorada = d.cliente_morada || 'Morada não especificada';
       produtorContacto = d.cliente_contacto || 'N/A';
-      produtorTelefone = d.cliente_contacto || 'N/A'; // Usar contacto como telefone
+      produtorTelefone = d.cliente_telefone || 'N/A';
       produtorEmail = d.cliente_email || 'N/A';
     }
 
@@ -923,7 +943,7 @@ exports.gerarFichaDescargaPDF = async (req, res) => {
     if (!isTransportador) {
       doc.fillColor('#666666').fontSize(7.5).text('Declaração: certifico a exactidão das declarações prestadas e que a água residual/lama fossa séptica está conforme acordado na autorização de descarga concedida.', 45, 272, { width: 500 });
       doc.fontSize(8.5).fillColor('#333333').text(`Ass. Cliente (Produtor): ${d.cliente_nome}`, 45, 292);
-      doc.text(`Data: ${formatarDataPT(d.data_pedido)}`, 400, 292);
+      doc.text(`Data: ${formatarDataPT(d.data_pedido, true)}`, 400, 292);
       doc.strokeColor('#EEEEEE').moveTo(40, 312).lineTo(555, 312).stroke();
     } else {
       doc.strokeColor('#EEEEEE').moveTo(40, 272).lineTo(555, 272).stroke();
@@ -945,7 +965,7 @@ exports.gerarFichaDescargaPDF = async (req, res) => {
       transportadorNome = d.cliente_nome;
       transportadorMorada = d.cliente_morada || 'Morada não especificada';
       transportadorContacto = d.cliente_contacto || 'N/A';
-      transportadorTelefone = d.cliente_contacto || 'N/A';
+      transportadorTelefone = d.cliente_telefone || 'N/A';
       transportadorEmail = d.cliente_email || 'N/A';
     } else {
       // Se for produtor, a transportadora é externa
@@ -968,7 +988,7 @@ exports.gerarFichaDescargaPDF = async (req, res) => {
     if (isTransportador) {
       doc.fillColor('#666666').fontSize(7.5).text('Declaração: certifico a exactidão das declarações prestadas e que a água residual/lama fossa séptica está conforme acordado na autorização de descarga concedida.', 45, transY + 67, { width: 500 });
       doc.fontSize(8.5).fillColor('#333333').text(`Ass. Transportador: ${d.cliente_nome}`, 45, transY + 87);
-      doc.text(`Data: ${formatarDataPT(d.data_agendamento || d.data_pedido)}`, 400, transY + 87);
+      doc.text(`Data: ${formatarDataPT(d.data_agendamento || d.data_pedido, true)}`, 400, transY + 87);
       doc.strokeColor('#EEEEEE').moveTo(40, transY + 107).lineTo(555, transY + 107).stroke();
     } else {
       doc.strokeColor('#EEEEEE').moveTo(40, transY + 68).lineTo(555, transY + 68).stroke();
@@ -978,9 +998,11 @@ exports.gerarFichaDescargaPDF = async (req, res) => {
     const gestoraY = isTransportador ? 405 : 405;
     doc.fillColor('#1A365D').fontSize(10).text('ENTIDADE GESTORA', 40, gestoraY, { bold: true });
     doc.fontSize(8.5).fillColor('#333333');
-    doc.text('Pessoa a contactar: Gestor de cliente', 45, gestoraY + 15);
+    const decisorNomeGestora = d.decisor_nome ? d.decisor_nome.split(' - ')[0].trim() : 'Gestor de Clientes';
+    const decisorEmailGestora = d.decisor_email || 'gestao.clientes@entidadegestora.pt';
+    doc.text(`Pessoa a contactar: ${decisorNomeGestora}`, 45, gestoraY + 15);
     doc.text('Telefone: +351 252 000 000', 45, gestoraY + 27);
-    doc.text('E-mail: gestao.clientes@entidadegestora.pt', 280, gestoraY + 27);
+    doc.text(`E-mail: ${decisorEmailGestora}`, 280, gestoraY + 27);
 
     // Recepção Aceite
     doc.fillColor('#1A365D').fontSize(9).text('Receção Aceite na ETAR', 45, gestoraY + 45, { bold: true });
@@ -991,7 +1013,7 @@ exports.gerarFichaDescargaPDF = async (req, res) => {
     doc.text(quantRealLitros, 60, gestoraY + 70, { bold: true });
     doc.text(quantRealM3, 170, gestoraY + 70, { bold: true });
 
-    doc.text(`Data da Receção: ${formatarDataPT(d.data_rececao)}`, 280, gestoraY + 58);
+    doc.text(`Data da Receção: ${formatarDataPT(d.data_rececao, true)}`, 280, gestoraY + 58);
     doc.text(`Operador Recetor: ${d.operador_nome || 'N/A'}`, 280, gestoraY + 70);
 
     doc.strokeColor('#EEEEEE').moveTo(40, gestoraY + 90).lineTo(555, gestoraY + 90).stroke();

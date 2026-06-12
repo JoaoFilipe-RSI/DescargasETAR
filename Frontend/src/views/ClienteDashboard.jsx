@@ -12,6 +12,10 @@ export default function ClienteDashboard({ user, onLogout, notifications, onMark
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
+  // Qualquer cliente pode indicar que o pedido é de um produtor externo
+  const [hasExternalProducer, setHasExternalProducer] = useState(false);
+  const [editHasExternalProducer, setEditHasExternalProducer] = useState(false);
+
   // Form para nova descarga
   const [newDescarga, setNewDescarga] = useState({
     id_etar: '1',
@@ -99,12 +103,10 @@ export default function ClienteDashboard({ user, onLogout, notifications, onMark
     setError('');
     setSuccess('');
 
-    const isTransportador = user?.nome?.toLowerCase().includes('transportador');
-
-    // Validar produtor externo obrigatório se for transportador
-    if (isTransportador) {
+    // Validar produtor externo obrigatório se a opção estiver ativa
+    if (hasExternalProducer) {
       if (!newDescarga.nome_produtor_externo?.trim() || !newDescarga.morada_produtor_externo?.trim()) {
-        setError('A informação do produtor externo (Nome e Morada) é obrigatória para clientes transportadores.');
+        setError('A informação do produtor externo (Nome e Morada) é obrigatória.');
         return;
       }
     }
@@ -115,8 +117,8 @@ export default function ClienteDashboard({ user, onLogout, notifications, onMark
         tipo_efluente: newDescarga.tipo_efluente,
         quantidade: parseFloat(newDescarga.quantidade),
         numero_recipientes: newDescarga.numero_recipientes ? parseInt(newDescarga.numero_recipientes, 10) : null,
-        nome_produtor_externo: isTransportador ? newDescarga.nome_produtor_externo.trim() : null,
-        morada_produtor_externo: isTransportador ? newDescarga.morada_produtor_externo.trim() : null
+        nome_produtor_externo: hasExternalProducer ? newDescarga.nome_produtor_externo.trim() : null,
+        morada_produtor_externo: hasExternalProducer ? newDescarga.morada_produtor_externo.trim() : null
       };
 
       const res = await descargaService.criarPedido(payload);
@@ -129,6 +131,7 @@ export default function ClienteDashboard({ user, onLogout, notifications, onMark
         nome_produtor_externo: '',
         morada_produtor_externo: ''
       });
+      setHasExternalProducer(false);
       setActiveTab('pedidos');
     } catch (err) {
       setError(err.message || 'Erro ao criar pedido de descarga.');
@@ -151,18 +154,26 @@ export default function ClienteDashboard({ user, onLogout, notifications, onMark
     }
   };
 
+  // Ver Boletim Analítico inline no browser
+  const handleVerBoletim = async (idDescarga) => {
+    setError('');
+    try {
+      const amostras = await amostraService.obterAmostras({ estado: 'CONCLUIDA' });
+      const amostra = amostras.find(a => a.id_descarga === idDescarga);
+      if (!amostra) throw new Error('Nenhum Boletim Analítico validado para esta descarga.');
+      await amostraService.verBoletimPDF(amostra.id_amostra);
+    } catch (err) {
+      setError(err.message || 'Erro ao abrir o Boletim.');
+    }
+  };
+
   // Descarregar PDF do Boletim Analítico
   const handleDownloadBoletim = async (idDescarga) => {
     setError('');
     try {
-      // Obter amostra concluída correspondente à descarga
       const amostras = await amostraService.obterAmostras({ estado: 'CONCLUIDA' });
       const amostra = amostras.find(a => a.id_descarga === idDescarga);
-
-      if (!amostra) {
-        throw new Error('Nenhum Boletim Analítico validado para esta descarga.');
-      }
-
+      if (!amostra) throw new Error('Nenhum Boletim Analítico validado para esta descarga.');
       await amostraService.descarregarBoletimPDF(amostra.id_amostra, amostra.qr_code_token);
     } catch (err) {
       setError(err.message || 'Erro ao efetuar download do Boletim.');
@@ -198,6 +209,7 @@ export default function ClienteDashboard({ user, onLogout, notifications, onMark
   // Iniciar Edição de Pedido Rejeitado
   const handleStartEdit = (d) => {
     setEditingDescarga(d);
+    setEditHasExternalProducer(!!d.nome_produtor_externo);
     setEditForm({
       id_etar: String(d.id_etar),
       tipo_efluente: d.tipo_efluente,
@@ -214,10 +226,9 @@ export default function ClienteDashboard({ user, onLogout, notifications, onMark
     setError('');
     setSuccess('');
 
-    const isTransportador = user?.nome?.toLowerCase().includes('transportador');
-    if (isTransportador) {
+    if (editHasExternalProducer) {
       if (!editForm.nome_produtor_externo?.trim() || !editForm.morada_produtor_externo?.trim()) {
-        setError('A informação do produtor externo (Nome e Morada) é obrigatória para clientes transportadores.');
+        setError('A informação do produtor externo (Nome e Morada) é obrigatória.');
         return;
       }
     }
@@ -228,8 +239,8 @@ export default function ClienteDashboard({ user, onLogout, notifications, onMark
         tipo_efluente: editForm.tipo_efluente,
         quantidade: parseFloat(editForm.quantidade),
         numero_recipientes: editForm.numero_recipientes ? parseInt(editForm.numero_recipientes, 10) : null,
-        nome_produtor_externo: isTransportador ? editForm.nome_produtor_externo.trim() : null,
-        morada_produtor_externo: isTransportador ? editForm.morada_produtor_externo.trim() : null
+        nome_produtor_externo: editHasExternalProducer ? editForm.nome_produtor_externo.trim() : null,
+        morada_produtor_externo: editHasExternalProducer ? editForm.morada_produtor_externo.trim() : null
       };
 
       const res = await descargaService.editarPedido(editingDescarga.id_descarga, payload);
@@ -322,7 +333,29 @@ export default function ClienteDashboard({ user, onLogout, notifications, onMark
                           </div>
                         </td>
                         <td>{d.etar_nome || `ETAR ${d.id_etar}`}</td>
-                        <td>{d.tipo_efluente}</td>
+                        <td>
+                          {d.tipo_efluente}
+                          {d.nome_produtor_externo && (
+                            <div style={{
+                              marginTop: '4px',
+                              fontSize: '0.72rem',
+                              fontWeight: 600,
+                              color: 'var(--warning-dark, #92400e)',
+                              backgroundColor: 'var(--warning-light, #fff8e1)',
+                              border: '1px solid var(--warning, #f59e0b)',
+                              borderRadius: '4px',
+                              padding: '2px 5px',
+                              display: 'inline-block',
+                              maxWidth: '130px',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap'
+                            }}
+                            title={`Produtor externo: ${d.nome_produtor_externo}`}>
+                              ↳ {d.nome_produtor_externo}
+                            </div>
+                          )}
+                        </td>
                         <td>{d.quantidade} L</td>
                         <td>
                           <span className={`badge badge-${
@@ -388,13 +421,24 @@ export default function ClienteDashboard({ user, onLogout, notifications, onMark
                                 <Eye size={14} style={{ verticalAlign: 'middle', marginRight: '4px' }} /> Ver Ficha
                               </button>
                               {d.id_amostra && d.boletim_publico && (
-                                <button
-                                  className="btn btn-primary"
-                                  style={{ padding: '0.35rem 0.7rem', fontSize: '0.8rem', backgroundColor: 'var(--success)' }}
-                                  onClick={() => handleDownloadBoletim(d.id_descarga)}
-                                >
-                                  <Download size={14} style={{ verticalAlign: 'middle', marginRight: '4px' }} /> Boletim
-                                </button>
+                                <div style={{ display: 'flex', gap: '0.25rem', alignItems: 'center' }}>
+                                  <button
+                                    className="btn btn-secondary"
+                                    style={{ padding: '0.35rem 0.7rem', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '4px' }}
+                                    onClick={() => handleVerBoletim(d.id_descarga)}
+                                    title="Ver Boletim Analítico"
+                                  >
+                                    <Eye size={14} /> Ver Boletim
+                                  </button>
+                                  <button
+                                    className="btn btn-secondary"
+                                    style={{ padding: '0.35rem 0.5rem', fontSize: '0.8rem' }}
+                                    onClick={() => handleDownloadBoletim(d.id_descarga)}
+                                    title="Descarregar PDF"
+                                  >
+                                    <Download size={14} />
+                                  </button>
+                                </div>
                               )}
                             </div>
                           )}
@@ -495,30 +539,66 @@ export default function ClienteDashboard({ user, onLogout, notifications, onMark
                 <input type="number" className="form-input" placeholder="Ex: 1" value={newDescarga.numero_recipientes} onChange={(e) => setNewDescarga({ ...newDescarga, numero_recipientes: e.target.value })} />
               </div>
 
-              {user?.nome?.toLowerCase().includes('transportador') && (
-                <div style={{ borderTop: '1px solid var(--border)', margin: '1.5rem 0', paddingTop: '1.5rem' }}>
-                  <h4 style={{ fontSize: '0.95rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>Informação do Produtor Externo *</h4>
-                  <div className="form-group">
-                    <label className="form-label">Nome do Produtor *</label>
-                    <input 
-                      type="text" 
-                      className="form-input" 
-                      placeholder="Ex: Lavandaria Sol Lda" 
-                      required 
-                      value={newDescarga.nome_produtor_externo} 
-                      onChange={(e) => setNewDescarga({ ...newDescarga, nome_produtor_externo: e.target.value })} 
-                    />
+              <div style={{ margin: '1.5rem 0 0.5rem 0' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <input 
+                    type="checkbox" 
+                    id="hasExternalProducer"
+                    checked={hasExternalProducer} 
+                    onChange={(e) => setHasExternalProducer(e.target.checked)} 
+                    style={{ width: '18px', height: '18px', cursor: 'pointer', flexShrink: 0 }}
+                  />
+                  <label htmlFor="hasExternalProducer" style={{ cursor: 'pointer', fontSize: '0.9rem', fontWeight: 500 }}>
+                    A descarga pertence a um produtor externo (recolha em nome de terceiro)
+                  </label>
+                </div>
+              </div>
+
+              {hasExternalProducer && (
+                <div>
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: '0.6rem',
+                    backgroundColor: 'var(--warning-light, #fff8e1)',
+                    border: '1px solid var(--warning, #f59e0b)',
+                    borderRadius: 'var(--radius-sm)',
+                    padding: '0.75rem 1rem',
+                    marginBottom: '1rem',
+                    fontSize: '0.85rem',
+                    color: 'var(--warning-dark, #92400e)',
+                    lineHeight: '1.4'
+                  }}>
+                    <span style={{ fontSize: '1.1rem', flexShrink: 0 }}>⚠️</span>
+                    <div>
+                      <strong>Atenção:</strong> Pedidos com produtor externo requerem aprovação manual da Gestão de Clientes.
+                      Este pedido ficará <strong>pendente de revisão</strong>, mesmo que possua quota automática disponível na ETAR selecionada.
+                    </div>
                   </div>
-                  <div className="form-group">
-                    <label className="form-label">Morada do Produtor *</label>
-                    <input 
-                      type="text" 
-                      className="form-input" 
-                      placeholder="Ex: Zona Industrial Maia" 
-                      required 
-                      value={newDescarga.morada_produtor_externo} 
-                      onChange={(e) => setNewDescarga({ ...newDescarga, morada_produtor_externo: e.target.value })} 
-                    />
+                  <div style={{ borderTop: '1px solid var(--border)', paddingTop: '1rem' }}>
+                    <h4 style={{ fontSize: '0.95rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>Identificação do Produtor Externo *</h4>
+                    <div className="form-group">
+                      <label className="form-label">Nome do Produtor *</label>
+                      <input 
+                        type="text" 
+                        className="form-input" 
+                        placeholder="Ex: Lavandaria Sol Lda" 
+                        required 
+                        value={newDescarga.nome_produtor_externo} 
+                        onChange={(e) => setNewDescarga({ ...newDescarga, nome_produtor_externo: e.target.value })} 
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Morada do Produtor *</label>
+                      <input 
+                        type="text" 
+                        className="form-input" 
+                        placeholder="Ex: Zona Industrial Maia" 
+                        required 
+                        value={newDescarga.morada_produtor_externo} 
+                        onChange={(e) => setNewDescarga({ ...newDescarga, morada_produtor_externo: e.target.value })} 
+                      />
+                    </div>
                   </div>
                 </div>
               )}
@@ -626,30 +706,66 @@ export default function ClienteDashboard({ user, onLogout, notifications, onMark
                   <input type="number" className="form-input" placeholder="Ex: 1" value={editForm.numero_recipientes} onChange={(e) => setEditForm({ ...editForm, numero_recipientes: e.target.value })} />
                 </div>
 
-                {user?.nome?.toLowerCase().includes('transportador') && (
-                  <div style={{ borderTop: '1px solid var(--border)', margin: '1.5rem 0', paddingTop: '1.5rem' }}>
-                    <h4 style={{ fontSize: '0.95rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>Informação do Produtor Externo *</h4>
-                    <div className="form-group">
-                      <label className="form-label">Nome do Produtor *</label>
-                      <input 
-                        type="text" 
-                        className="form-input" 
-                        placeholder="Ex: Lavandaria Sol Lda" 
-                        required 
-                        value={editForm.nome_produtor_externo} 
-                        onChange={(e) => setEditForm({ ...editForm, nome_produtor_externo: e.target.value })} 
-                      />
+                <div style={{ margin: '1.5rem 0 0.5rem 0' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <input 
+                      type="checkbox" 
+                      id="editHasExternalProducer"
+                      checked={editHasExternalProducer} 
+                      onChange={(e) => setEditHasExternalProducer(e.target.checked)} 
+                      style={{ width: '18px', height: '18px', cursor: 'pointer', flexShrink: 0 }}
+                    />
+                    <label htmlFor="editHasExternalProducer" style={{ cursor: 'pointer', fontSize: '0.9rem', fontWeight: 500 }}>
+                      A descarga pertence a um produtor externo (recolha em nome de terceiro)
+                    </label>
+                  </div>
+                </div>
+
+                {editHasExternalProducer && (
+                  <div>
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: '0.6rem',
+                      backgroundColor: 'var(--warning-light, #fff8e1)',
+                      border: '1px solid var(--warning, #f59e0b)',
+                      borderRadius: 'var(--radius-sm)',
+                      padding: '0.75rem 1rem',
+                      marginBottom: '1rem',
+                      fontSize: '0.85rem',
+                      color: 'var(--warning-dark, #92400e)',
+                      lineHeight: '1.4'
+                    }}>
+                      <span style={{ fontSize: '1.1rem', flexShrink: 0 }}>⚠️</span>
+                      <div>
+                        <strong>Atenção:</strong> Pedidos com produtor externo requerem aprovação manual da Gestão de Clientes.
+                        Este pedido ficará <strong>pendente de revisão</strong>, mesmo que possua quota automática disponível na ETAR selecionada.
+                      </div>
                     </div>
-                    <div className="form-group">
-                      <label className="form-label">Morada do Produtor *</label>
-                      <input 
-                        type="text" 
-                        className="form-input" 
-                        placeholder="Ex: Zona Industrial Maia" 
-                        required 
-                        value={editForm.morada_produtor_externo} 
-                        onChange={(e) => setEditForm({ ...editForm, morada_produtor_externo: e.target.value })} 
-                      />
+                    <div style={{ borderTop: '1px solid var(--border)', paddingTop: '1rem' }}>
+                      <h4 style={{ fontSize: '0.95rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>Identificação do Produtor Externo *</h4>
+                      <div className="form-group">
+                        <label className="form-label">Nome do Produtor *</label>
+                        <input 
+                          type="text" 
+                          className="form-input" 
+                          placeholder="Ex: Lavandaria Sol Lda" 
+                          required 
+                          value={editForm.nome_produtor_externo} 
+                          onChange={(e) => setEditForm({ ...editForm, nome_produtor_externo: e.target.value })} 
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label className="form-label">Morada do Produtor *</label>
+                        <input 
+                          type="text" 
+                          className="form-input" 
+                          placeholder="Ex: Zona Industrial Maia" 
+                          required 
+                          value={editForm.morada_produtor_externo} 
+                          onChange={(e) => setEditForm({ ...editForm, morada_produtor_externo: e.target.value })} 
+                        />
+                      </div>
                     </div>
                   </div>
                 )}

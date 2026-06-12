@@ -628,7 +628,7 @@ exports.atualizarParametrosCliente = async (req, res) => {
 };
 
 exports.obterRelatorios = async (req, res) => {
-  const { id_cliente, id_etar, mes, ano, estado } = req.query;
+  const { id_cliente, id_etar, mes, ano, estado, data_inicio, data_fim } = req.query;
 
   let query = `
     SELECT d.id_descarga, d.data_pedido, d.data_rececao, d.tipo_efluente, d.quantidade, d.quantidade_real, d.estado_descarga, d.observacoes,
@@ -667,18 +667,28 @@ exports.obterRelatorios = async (req, res) => {
   }
 
   if (mes && mes !== 'all') {
-    query += ` AND EXTRACT(MONTH FROM d.data_pedido) = $${paramIndex++}`;
+    query += ` AND EXTRACT(MONTH FROM COALESCE(d.data_rececao, d.data_pedido)) = $${paramIndex++}`;
     values.push(parseInt(mes, 10));
   }
 
   if (ano && ano !== 'all') {
-    query += ` AND EXTRACT(YEAR FROM d.data_pedido) = $${paramIndex++}`;
+    query += ` AND EXTRACT(YEAR FROM COALESCE(d.data_rececao, d.data_pedido)) = $${paramIndex++}`;
     values.push(parseInt(ano, 10));
   }
 
   if (estado && estado !== 'all') {
     query += ` AND d.estado_descarga = $${paramIndex++}`;
     values.push(estado.toUpperCase());
+  }
+
+  if (data_inicio) {
+    query += ` AND COALESCE(d.data_rececao, d.data_pedido)::date >= $${paramIndex++}::date`;
+    values.push(data_inicio);
+  }
+
+  if (data_fim) {
+    query += ` AND COALESCE(d.data_rececao, d.data_pedido)::date <= $${paramIndex++}::date`;
+    values.push(data_fim);
   }
 
   query += ' ORDER BY d.data_pedido DESC';

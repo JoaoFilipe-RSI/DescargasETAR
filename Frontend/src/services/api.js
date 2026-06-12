@@ -184,6 +184,20 @@ export const amostraService = {
     });
   },
   
+  async verBoletimPDF(id) {
+    const token = localStorage.getItem('token');
+    const response = await fetch(`${API_URL}/amostras/${id}/boletim`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.erro || 'Erro ao abrir PDF.');
+    }
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    window.open(url, '_blank');
+  },
+  
   async descarregarBoletimPDF(id, refAmostra) {
     const token = localStorage.getItem('token');
     const response = await fetch(`${API_URL}/amostras/${id}/boletim`, {
@@ -311,6 +325,8 @@ export const adminService = {
       if (filtros.mes) params.append('mes', filtros.mes);
       if (filtros.ano) params.append('ano', filtros.ano);
       if (filtros.estado) params.append('estado', filtros.estado);
+      if (filtros.data_inicio) params.append('data_inicio', filtros.data_inicio);
+      if (filtros.data_fim) params.append('data_fim', filtros.data_fim);
     }
     const queryStr = params.toString();
     return request(`/admin/relatorios${queryStr ? '?' + queryStr : ''}`);

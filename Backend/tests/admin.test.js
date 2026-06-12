@@ -192,14 +192,14 @@ describe('Módulo de Administração - Testes de Integração', () => {
           morada: 'Nova Morada 999',
           contacto: 'Novo Colaborador',
           telefone: '912345678',
-          periodicidade_analise: 'SEMANAL'
+          periodicidade_analise: 'MENSAL'
         });
 
       expect(res.status).toBe(200);
       expect(res.body.cliente.nome).toBe('Empresa Teste Alterada');
       expect(res.body.cliente.email).toBe('alterado@empresateste.pt');
       expect(res.body.cliente.contacto).toBe('Novo Colaborador');
-      expect(res.body.cliente.periodicidade_analise).toBe('SEMANAL');
+      expect(res.body.cliente.periodicidade_analise).toBe('MENSAL');
     });
   });
 
@@ -307,7 +307,7 @@ describe('Módulo de Administração - Testes de Integração', () => {
           nome: 'Empresa Teste Alterada',
           email: 'alterado@empresateste.pt',
           password: 'NovaSenhaCliente123!',
-          periodicidade_analise: 'SEMANAL'
+          periodicidade_analise: 'MENSAL'
         });
 
       expect(res.status).toBe(200);
