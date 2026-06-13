@@ -78,19 +78,21 @@ DescargasETAR/
 
 - **12 tabelas**: `perfil`, `utilizador`, `cliente`, `etar`, `parametro`, `descarga`, `amostra`, `resultado_analitico`, `autorizacao`, `cliente_parametro`, `historico`, `notificacao`
 - **ENUMs**: `estado_descarga_enum`, `estado_amostra_enum`, `tipo_parametro_enum`, `tipo_notificacao_enum`
-- **Auditoria completa de constraints** (aplicada em 2026-06-11) — **23 CHECK + 5 UNIQUE** activas:
+- **Auditoria completa de constraints** — **23 CHECK + 9 UNIQUE** activas:
 
-  | Tabela | Constraints notáveis |
+  | Tabela | Constraints Notáveis (CHECK e UNIQUE) |
   |--------|---------------------|
-  | `descarga` | `quantidade > 0`, `quantidade_real > 0`, cronologia de datas (pedido→decisão→agendamento→receção), desvio máx. 200% da quantidade real vs. solicitada, `numero_recipientes > 0` |
-  | `amostra` | **1 amostra por descarga** (`UNIQUE id_descarga`), cadeia de datas completa (recolha→lab→início análise→fim→validação) |
-  | `resultado_analitico` | **Parâmetro único por amostra** (`UNIQUE id_amostra + id_parametro`), `valor >= 0`, `incerteza >= 0` |
-  | `autorizacao` | `quota > 0` (ou NULL = ilimitada) |
-  | `utilizador` | `TRIM(nome) <> ''`, formato de email por regex |
-  | `cliente` | `TRIM(nome) <> ''`, periodicidade restrita a valores válidos |
-  | `etar` | `TRIM(nome) <> ''` |
-  | `historico` | `entidade` restrita ao conjunto definido de entidades do sistema |
-  | `notificacao` | Mensagem não vazia, não pode estar lida sem ter sido enviada |
+  | `descarga` | `quantidade > 0`, `quantidade_real > 0`<br>• `qr_code_token` **UNIQUE** (Token do QR Code único da descarga)<br>• `chk_numero_recipientes_positivo` (`numero_recipientes > 0`)<br>• `chk_data_rececao_agendamento` (`data_rececao >= data_agendamento`) <br>• `chk_data_decisao_pedido` (`data_decisao >= data_pedido`) <br>• `chk_data_agendamento_decisao` (`data_agendamento >= data_decisao`) <br>• `chk_quantidade_real_desvio` (Quantidade real deve situar-se entre 10% e 200% da solicitada) |
+  | `amostra` | **1 amostra por descarga** (`id_descarga` **UNIQUE**)<br>• `qr_code_token` **UNIQUE** (Token do QR Code único do frasco de amostra)<br>• `chk_data_analise_laboratorio` (`data_inicio_analise >= data_rececao_lab`) <br>• `chk_data_rececao_lab_recolha` (`data_rececao_lab >= data_recolha`) <br>• `chk_data_fim_analise_inicio` (`data_fim_analise >= data_inicio_analise`) <br>• `chk_data_validacao_fim_analise` (`data_validacao >= data_fim_analise`) |
+  | `resultado_analitico` | **Parâmetro único por amostra** (`UNIQUE (id_amostra, id_parametro)`) <br>• `chk_valor_positivo` (`valor >= 0`) <br>• `chk_incerteza_positiva` (`incerteza >= 0`) |
+  | `autorizacao` | **Par cliente-ETAR único** (`UNIQUE (id_cliente, id_etar)`) <br>• `chk_quota_positiva` (`quota > 0` ou NULL = ilimitada) |
+  | `utilizador` | `email` **UNIQUE** <br>• `chk_utilizador_nome_not_empty` (`TRIM(nome) <> ''`) <br>• `chk_email_formato` (Validação de formato de email por Regex) |
+  | `cliente` | `id_utilizador` **UNIQUE** <br>• `chk_cliente_nome_not_empty` (`TRIM(nome) <> ''`) <br>• `chk_periodicidade_analise` (Restrito a `POR_DESCARGA`, `QUINZENAL`, `MENSAL`, `TRIMESTRAL`, `SEMESTRAL`, `ANUAL`) |
+  | `etar` | `chk_etar_nome_not_empty` (`TRIM(nome) <> ''`) |
+  | `historico` | `chk_entidade_valida` (Restringe entidade às entidades declaradas no sistema) |
+  | `notificacao` | `chk_mensagem_not_empty` (`TRIM(mensagem) <> ''`) <br>• `chk_lida_enviada` (Notificação não pode estar lida sem antes ter sido enviada) |
+  | `perfil` | `nome` **UNIQUE** |
+  | `parametro` | `nome` **UNIQUE** <br>• `incerteza_default >= 0` |
 
 ---
 
@@ -217,7 +219,7 @@ DescargasETAR/
 
 ## 🧪 Testes de Integração
 
-Suite de **89 testes de integração** (Jest + Supertest) cobrindo todos os módulos:
+Suite de **93 testes de integração** (Jest + Supertest) cobrindo todos os módulos:
 
 ```bash
 cd Backend
@@ -227,9 +229,10 @@ npm test
 | Suite | Testes | Cobertura |
 |-------|--------|-----------|
 | `auth.test.js` | Login, sessão, acesso negado | Autenticação + JWT |
-| `descargas.test.js` | Criação, aprovação, agendamento, QR, receção, cancelamento, edição | Fluxo completo de descargas |
+| `descargas.test.js` | Criação, aprovação, agendamento, QR, receção, cancelamento, edição, reencaminhamento manual | Fluxo completo de descargas |
 | `amostras.test.js` | Check-in, resultados, validação, boletim, descarte | Fluxo completo de laboratório |
 | `admin.test.js` | Clientes, ETARs, autorizações, parâmetros, tipos, relatórios, auditoria | Módulo de administração |
+
 
 > Os testes criam dados isolados e fazem limpeza automática da base de dados após execução.
 
