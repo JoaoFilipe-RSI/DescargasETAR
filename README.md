@@ -94,9 +94,23 @@ DescargasETAR/
   | `perfil` | `nome` **UNIQUE** |
   | `parametro` | `nome` **UNIQUE** <br>• `incerteza_default >= 0` |
 
+### 2. Motores de Regras & Lógica de Negócio (Resumo)
+
+* **Mecanismo de Auto-Aprovação (Whitelist):** Aprovação automática (`AUTORIZADA`) de pedidos de efluentes industriais de segunda a sexta-feira, se o cliente tiver whitelist ativa na ETAR e estiver dentro da quota diária.
+* **Controlo de Quotas Operacionais:** Bloqueio automático de novos pedidos se excedida a quota diária contratada do cliente para a ETAR específica.
+* **Triagem Inteligente de Periodicidade Laboratorial:** Algoritmo que decide autonomamente, no check-in, se a amostra de efluente deve avançar para ensaio ou ser descartada, cruzando a periodicidade do contrato com a data do último ensaio.
+* **Gestão de Indisponibilidade de ETARs (Contingência):**
+  * *Reencaminhamento Autónomo:* Desvio automático de pedidos `AUTORIZADA` para ETARs geográficas viáveis do cliente com whitelist ativa e quota disponível.
+  * *Contingência Manual:* Se não houver desvio automático, reverte o pedido, emite alerta WebSockets para o Gestor e permite o **reencaminhamento manual** (com opção de forçar excecionalmente a rota para ETARs sem whitelist).
+* **Segurança Ativa no Motor Relacional (In-Database Rules):** Aplicação de regras de integridade (como formato estrito de e-mails via regex) diretamente nas constraints físicas do PostgreSQL, atuando como última linha de defesa.
+* **Controlo de Desvio Volumétrico:** Bloqueio de receções no portão com desvios volumétricos grosseiros ou fraudulentos (limite de tolerância entre 10% e 200% do volume original).
+* **Cálculo Automático de Incertezas:** Cálculo dinâmico e síncrono da incerteza expandida com base nas incertezas padrão definidas no catálogo de parâmetros.
+* **Bloqueio de Estados Operacionais:** Blindagem e imutabilidade dos dados operacionais da descarga (como matrículas e volumes) após o check-in do veículo (`RECEBIDA` / `CONCLUIDA`).
+* **Disponibilização Condicional de Boletins:** Retenção confidencial dos boletins analíticos gerados, que só ficam acessíveis para o cliente após aprovação expressa da Gestão de Clientes.
+
 ---
 
-### 2. Backend — API RESTful Completa
+### 3. Backend — API RESTful Completa
 
 #### Autenticação & Segurança
 - `POST /api/auth/login` — Login com JWT + perfil do utilizador
@@ -135,7 +149,7 @@ DescargasETAR/
 
 ---
 
-### 3. Frontend React — Dashboards por Perfil
+### 4. Frontend React — Dashboards por Perfil
 
 #### Cliente / Produtor / Transportador
 - Criação de pedidos de descarga com preenchimento condicional (Produtor vs. Transportador)
@@ -179,7 +193,7 @@ DescargasETAR/
 
 ---
 
-### 4. Notificações em Tempo Real (WebSockets)
+### 5. Notificações em Tempo Real (WebSockets)
 
 - Conexão Socket.io bidirecional com autenticação JWT no momento da ligação
 - **Salas por perfil**: `cliente-<id>`, `etar-<id>`, `laboratorio-tecnicos`, `laboratorio-responsaveis`, `gestores-clientes`
@@ -202,7 +216,7 @@ DescargasETAR/
 
 ---
 
-### 5. Geração de PDF
+### 6. Geração de PDF
 
 #### Ficha de Descarga (`GET /api/descargas/:id/ficha`)
 - Documento único adaptado ao tipo de cliente (Produtor vs. Transportador)

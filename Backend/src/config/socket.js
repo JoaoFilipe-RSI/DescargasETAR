@@ -80,7 +80,9 @@ function inicializarSocket(server) {
  */
 function enviarNotificacao(sala, evento, dados) {
   if (!io) {
-    console.warn('⚠️ Tentou-se enviar notificação antes do Socket.io ser inicializado.');
+    if (process.env.NODE_ENV !== 'test') {
+      console.warn('⚠️ Tentou-se enviar notificação antes do Socket.io ser inicializado.');
+    }
     return;
   }
   
@@ -93,7 +95,9 @@ function enviarNotificacao(sala, evento, dados) {
  */
 function enviarNotificacaoGeral(evento, dados) {
   if (!io) {
-    console.warn('⚠️ Tentou-se enviar notificação antes do Socket.io ser inicializado.');
+    if (process.env.NODE_ENV !== 'test') {
+      console.warn('⚠️ Tentou-se enviar notificação antes do Socket.io ser inicializado.');
+    }
     return;
   }
   
