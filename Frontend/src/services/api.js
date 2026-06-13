@@ -132,6 +132,13 @@ export const descargaService = {
       body: pedidoData
     });
   },
+
+  reencaminharManual(id, reencaminharData) {
+    return request(`/descargas/${id}/reencaminharManual`, {
+      method: 'PUT',
+      body: reencaminharData
+    });
+  },
   
   async abrirFichaPDF(id) {
     const token = localStorage.getItem('token');

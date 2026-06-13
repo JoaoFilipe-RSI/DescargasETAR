@@ -21,6 +21,9 @@ router.put('/:id/agendar', verificarPerfis(['CLIENTE']), descargaController.agen
 // PUT /api/descargas/:id/cancelar - Cancelar descarga pelo cliente (Apenas Clientes)
 router.put('/:id/cancelar', verificarPerfis(['CLIENTE']), descargaController.cancelarDescarga);
 
+// PUT /api/descargas/:id/reencaminharManual - Reencaminhar descarga agendada (Apenas Gestor de Clientes/Admin)
+router.put('/:id/reencaminharManual', verificarPerfis(['GESTOR_CLIENTES', 'GESTOR_ADMIN']), descargaController.reencaminharManual);
+
 // PUT /api/descargas/:id - Editar pedido de descarga rejeitado/cancelado (Apenas Clientes)
 router.put('/:id', verificarPerfis(['CLIENTE']), descargaController.editarPedido);
 

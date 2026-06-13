@@ -114,9 +114,7 @@ describe('Módulo de Descargas - Testes de Integração', () => {
           id_etar: 1, // ETAR Norte
           tipo_efluente: 'Industrial',
           quantidade: 100,
-          numero_recipientes: 1,
-          nome_produtor_externo: 'Produtor Teste A',
-          morada_produtor_externo: 'Rua Teste A'
+          numero_recipientes: 1
         });
 
       expect(res.status).toBe(201);
@@ -573,6 +571,117 @@ describe('Módulo de Descargas - Testes de Integração', () => {
 
       expect(editRes.status).toBe(400);
       expect(editRes.body.erro).toContain('Apenas pedidos no estado REJEITADA');
+    });
+  });
+
+  describe('10. Reencaminhar Descarga Agendada Manualmente (PUT /api/descargas/:id/reencaminharManual)', () => {
+    let idDescAgendada = null;
+
+    beforeAll(async () => {
+      // 1. Criar descarga para cliente AAA na ETAR 1
+      const res1 = await request(app)
+        .post('/api/descargas')
+        .set('Authorization', `Bearer ${tokens.clienteAAA}`)
+        .send({
+          id_etar: 1,
+          tipo_efluente: 'Industrial',
+          quantidade: 100,
+          numero_recipientes: 1
+        });
+      idDescAgendada = res1.body.descarga.id_descarga;
+      createdDescargaIds.push(idDescAgendada);
+
+      // 2. Agendar a descarga
+      await request(app)
+        .put(`/api/descargas/${idDescAgendada}/agendar`)
+        .set('Authorization', `Bearer ${tokens.clienteAAA}`)
+        .send({
+          empresa_transportadora: 'TransRapida Lda',
+          matricula_trator: 'ZZ-11-ZZ'
+        });
+    });
+
+    test('Deve impedir reencaminhar se o utilizador for cliente (403)', async () => {
+      const res = await request(app)
+        .put(`/api/descargas/${idDescAgendada}/reencaminharManual`)
+        .set('Authorization', `Bearer ${tokens.clienteAAA}`)
+        .send({
+          id_etar: 2,
+          observacoes: 'Tentativa de reencaminhar por cliente'
+        });
+      expect(res.status).toBe(403);
+    });
+
+    test('Deve recusar reencaminhar para uma ETAR não autorizada sem a flag forcar (400)', async () => {
+      // Cliente AAA só tem whitelist para ETAR 1 (Centro/Sul/Algarve não têm whitelist no seed)
+      const res = await request(app)
+        .put(`/api/descargas/${idDescAgendada}/reencaminharManual`)
+        .set('Authorization', `Bearer ${tokens.gestorClientes}`)
+        .send({
+          id_etar: 2, // ETAR Centro (Não autorizada para cliente AAA no seed)
+          observacoes: 'Desviar para ETAR Centro'
+        });
+      expect(res.status).toBe(400);
+      expect(res.body.erro).toContain('whitelist');
+      expect(res.body.podeForcar).toBe(true);
+    });
+
+    test('Deve permitir forçar o reencaminhamento para uma ETAR não autorizada com a flag forcar = true', async () => {
+      const res = await request(app)
+        .put(`/api/descargas/${idDescAgendada}/reencaminharManual`)
+        .set('Authorization', `Bearer ${tokens.gestorClientes}`)
+        .send({
+          id_etar: 2,
+          forcar: true,
+          observacoes: 'Forçar desvio excecional'
+        });
+      expect(res.status).toBe(200);
+      expect(res.body.descarga.id_etar).toBe(2);
+      expect(res.body.descarga.observacoes).toContain('Forçado excecionalmente');
+    });
+
+    test('Deve reencaminhar com sucesso para uma ETAR autorizada (com whitelist)', async () => {
+      // Vamos criar outra descarga agendada para testar o fluxo normal
+      const res1 = await request(app)
+        .post('/api/descargas')
+        .set('Authorization', `Bearer ${tokens.clienteAAA}`)
+        .send({
+          id_etar: 1,
+          tipo_efluente: 'Industrial',
+          quantidade: 100,
+          numero_recipientes: 1
+        });
+      const tempId = res1.body.descarga.id_descarga;
+      createdDescargaIds.push(tempId);
+
+      await request(app)
+        .put(`/api/descargas/${tempId}/agendar`)
+        .set('Authorization', `Bearer ${tokens.clienteAAA}`)
+        .send({
+          empresa_transportadora: 'TransRapida Lda',
+          matricula_trator: 'ZZ-11-ZZ'
+        });
+
+      // Nota: Cliente AAA tem whitelist para ETAR 1. Vamos simular que criamos whitelist para ETAR 2 para testar sem forçar
+      await pool.query(
+        "INSERT INTO autorizacao (id_cliente, id_etar, quota, ativo, auto_aprovacao) VALUES (1, 2, 5, true, true)"
+      );
+
+      const res = await request(app)
+        .put(`/api/descargas/${tempId}/reencaminharManual`)
+        .set('Authorization', `Bearer ${tokens.gestorClientes}`)
+        .send({
+          id_etar: 2,
+          observacoes: 'Desvio normal'
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.descarga.id_etar).toBe(2);
+
+      // Limpar autorizacao criada
+      await pool.query(
+        "DELETE FROM autorizacao WHERE id_cliente = 1 AND id_etar = 2"
+      );
     });
   });
 });

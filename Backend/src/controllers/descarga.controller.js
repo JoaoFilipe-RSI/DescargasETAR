@@ -1058,3 +1058,142 @@ exports.gerarFichaDescargaPDF = async (req, res) => {
     }
   }
 };
+
+/**
+ * Gestor reencaminha manualmente uma descarga agendada (AGENDADA) para outra ETAR.
+ */
+exports.reencaminharManual = async (req, res) => {
+  const { id } = req.params;
+  const { id_etar, forcar, observacoes } = req.body;
+
+  if (!id_etar) {
+    return res.status(400).json({ erro: 'Por favor, indique a ETAR de destino.' });
+  }
+
+  const idEtarDestino = parseInt(id_etar, 10);
+  const isForcado = !!forcar;
+
+  try {
+    // 1. Buscar a descarga e verificar se existe e está AGENDADA
+    const checkRes = await pool.query('SELECT estado_descarga, id_etar, id_cliente, observacoes FROM descarga WHERE id_descarga = $1', [id]);
+    if (checkRes.rows.length === 0) {
+      return res.status(404).json({ erro: 'Descarga não encontrada.' });
+    }
+    const descarga = checkRes.rows[0];
+
+    if (descarga.estado_descarga !== 'AGENDADA') {
+      return res.status(400).json({ erro: 'Apenas descargas no estado AGENDADA podem ser reencaminhadas manualmente.' });
+    }
+
+    const idEtarAntiga = descarga.id_etar;
+    const id_cliente = descarga.id_cliente;
+
+    // 2. Verificar se a ETAR de destino está ativa
+    const etarRes = await pool.query('SELECT disponivel, nome FROM etar WHERE id_etar = $1', [idEtarDestino]);
+    if (etarRes.rows.length === 0) {
+      return res.status(404).json({ erro: 'ETAR de destino não encontrada.' });
+    }
+    const etarDestino = etarRes.rows[0];
+    if (!etarDestino.disponivel) {
+      return res.status(400).json({ erro: `A ${etarDestino.nome} encontra-se indisponível para receber descargas.` });
+    }
+
+    // 3. Se não for forçado, validar whitelist e quotas diárias
+    if (!isForcado) {
+      const authRes = await pool.query(
+        "SELECT quota, auto_aprovacao, ativo FROM autorizacao WHERE id_cliente = $1 AND id_etar = $2 AND ativo = true",
+        [id_cliente, idEtarDestino]
+      );
+
+      if (authRes.rows.length === 0) {
+        return res.status(400).json({
+          erro: 'O cliente não possui uma regra de whitelist ativa para esta ETAR de destino.',
+          podeForcar: true
+        });
+      }
+
+      const auth = authRes.rows[0];
+
+      // Verificar quota de descargas consumida hoje para a nova ETAR
+      const countRes = await pool.query(
+        "SELECT COUNT(*)::int AS total FROM descarga WHERE id_cliente = $1 AND id_etar = $2 AND data_pedido::date = CURRENT_DATE",
+        [id_cliente, idEtarDestino]
+      );
+      const totalHoje = countRes.rows[0].total;
+
+      if (auth.quota !== null && auth.quota !== undefined && totalHoje >= auth.quota) {
+        return res.status(400).json({
+          erro: `A quota diária contratada do cliente para a ${etarDestino.nome} já foi excedida (${totalHoje}/${auth.quota} descargas).`,
+          podeForcar: true
+        });
+      }
+    }
+
+    // 4. Limpar o alerta operacional das observações e juntar a justificação do Gestor
+    let obs = descarga.observacoes || '';
+    // Remover o alerta operacional: [ALERTA OPERACIONAL: ...] ou variações
+    obs = obs.replace(/\[ALERTA OPERACIONAL:[^\]]*\]/g, '').trim();
+    
+    // Adicionar log do reencaminhamento
+    const timestampStr = new Date().toLocaleDateString('pt-PT');
+    const logsReencaminhar = `[Reencaminhado manualmente para a ${etarDestino.nome} por ${req.user.nome} em ${timestampStr}].${isForcado ? ' (Forçado excecionalmente).' : ''}`;
+    let finalObs = logsReencaminhar;
+    if (observacoes && observacoes.trim().length > 0) {
+      finalObs += ` Obs: ${observacoes.trim()}`;
+    }
+    if (obs.length > 0) {
+      finalObs += `\n${obs}`;
+    }
+
+    // 5. Atualizar descarga na base de dados
+    const updateQuery = `
+      UPDATE descarga
+      SET id_etar = $1, observacoes = $2
+      WHERE id_descarga = $3
+      RETURNING *
+    `;
+    const result = await pool.query(updateQuery, [idEtarDestino, finalObs, id]);
+    const descargaAtualizada = result.rows[0];
+
+    // 6. Registar no histórico
+    const histAcao = isForcado ? 'REENCAMINHAMENTO_MANUAL_FORCADO' : 'REENCAMINHAMENTO_MANUAL';
+    const histDesc = `Descarga reencaminhada manualmente da ETAR #${idEtarAntiga} para a ${etarDestino.nome} (${idEtarDestino}) pelo gestor ${req.user.nome}.${isForcado ? ' (Bypass excecional de Whitelist/Quota).' : ''}`;
+    await pool.query(
+      "INSERT INTO historico (entidade, id_entidade, acao, descricao, id_utilizador) VALUES ($1, $2, $3, $4, $5)",
+      ['DESCARGA', id, histAcao, histDesc, req.user.id_utilizador]
+    );
+
+    // 7. Enviar notificações WebSockets em tempo real
+    const { enviarNotificacao } = require('../config/socket');
+    
+    // Notificar o cliente
+    enviarNotificacao(`cliente-${id_cliente}`, 'decisao-pedido', {
+      id_descarga: id,
+      estado_descarga: 'AGENDADA',
+      mensagem: `O reencaminhamento manual da descarga #${id} para a ${etarDestino.nome} foi concluído com sucesso.`
+    });
+
+    // Notificar a ETAR anterior (cancela agendamento)
+    enviarNotificacao(`etar-${idEtarAntiga}`, 'agendamento-cancelado', {
+      id_descarga: id,
+      mensagem: `A descarga agendada #${id} foi reencaminhada para outra ETAR.`
+    });
+
+    // Notificar a nova ETAR
+    enviarNotificacao(`etar-${idEtarDestino}`, 'novo-agendamento', {
+      id_descarga: id,
+      empresa_transportadora: descargaAtualizada.empresa_transportadora,
+      matricula_trator: descargaAtualizada.matricula_trator
+    });
+
+    return res.json({
+      mensagem: `Descarga reencaminhada com sucesso para a ${etarDestino.nome}.`,
+      descarga: descargaAtualizada
+    });
+
+  } catch (err) {
+    console.error('Erro ao reencaminhar descarga manualmente:', err);
+    return res.status(500).json({ erro: 'Erro interno ao reencaminhar descarga manualmente.' });
+  }
+};
+

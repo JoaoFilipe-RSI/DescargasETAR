@@ -16,6 +16,14 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
   const [solicitadas, setSolicitadas] = useState([]);
   const [decisaoObs, setDecisaoObs] = useState('');
   const [selectedDescarga, setSelectedDescarga] = useState(null);
+  
+  // Estados para reencaminhamento manual de descargas agendadas (Contingência)
+  const [selectedReencaminharDescarga, setSelectedReencaminharDescarga] = useState(null);
+  const [reencaminharEtarId, setReencaminharEtarId] = useState('');
+  const [reencaminharForcar, setReencaminharForcar] = useState(false);
+  const [reencaminharObservacoes, setReencaminharObservacoes] = useState('');
+  const [reencaminharLoading, setReencaminharLoading] = useState(false);
+  const [exibirOpcaoForcar, setExibirOpcaoForcar] = useState(false);
 
   // Estados do Responsável de Laboratório/ETAR
   const [analisadas, setAnalisadas] = useState([]);
@@ -570,6 +578,68 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
       loadData();
     } catch (err) {
       setError('Erro ao atualizar disponibilidade da ETAR.');
+    }
+  };
+
+  // Gestor de Clientes: Reencaminhamento Manual de Descarga (Contingência)
+  const clienteTemWhitelist = (clienteId, etarId) => {
+    return autorizacoesList.some(a => a.id_cliente === parseInt(clienteId, 10) && a.id_etar === parseInt(etarId, 10) && a.ativo);
+  };
+
+  const handleAbrirReencaminhar = (descarga) => {
+    setError('');
+    setSuccess('');
+    setSelectedReencaminharDescarga(descarga);
+    // Tentar pré-selecionar uma ETAR diferente que esteja disponível
+    const outraEtar = etarsList.find(e => e.id_etar !== descarga.id_etar && e.disponivel);
+    const etarIdInicial = outraEtar ? String(outraEtar.id_etar) : '';
+    setReencaminharEtarId(etarIdInicial);
+    setReencaminharForcar(false);
+    setReencaminharObservacoes('');
+    
+    // Validar whitelist inicial
+    if (etarIdInicial && !clienteTemWhitelist(descarga.id_cliente, etarIdInicial)) {
+      setExibirOpcaoForcar(true);
+    } else {
+      setExibirOpcaoForcar(false);
+    }
+  };
+
+  const handleEtarReencaminharChange = (val) => {
+    setReencaminharEtarId(val);
+    const temWl = clienteTemWhitelist(selectedReencaminharDescarga.id_cliente, val);
+    if (!temWl) {
+      setExibirOpcaoForcar(true);
+    } else {
+      setExibirOpcaoForcar(false);
+      setReencaminharForcar(false);
+    }
+  };
+
+  const handleReencaminharSubmeter = async (e) => {
+    if (e) e.preventDefault();
+    setError('');
+    setSuccess('');
+    setReencaminharLoading(true);
+
+    try {
+      const payload = {
+        id_etar: parseInt(reencaminharEtarId, 10),
+        forcar: reencaminharForcar,
+        observacoes: reencaminharObservacoes
+      };
+
+      await descargaService.reencaminharManual(selectedReencaminharDescarga.id_descarga, payload);
+      setSuccess(`Descarga #${selectedReencaminharDescarga.id_descarga} reencaminhada com sucesso!`);
+      setSelectedReencaminharDescarga(null);
+      loadData(); // Atualiza a tabela e relatórios
+    } catch (err) {
+      setError(err.message || 'Erro ao reencaminhar descarga.');
+      if (err.message && (err.message.includes('whitelist') || err.message.includes('quota') || err.message.includes('excedida'))) {
+        setExibirOpcaoForcar(true);
+      }
+    } finally {
+      setReencaminharLoading(false);
     }
   };
 
@@ -1869,18 +1939,36 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
                                           </div>
                                         )}
                                         {r.observacoes && r.observacoes.includes('ALERTA OPERACIONAL') && (
-                                          <div style={{
-                                            fontSize: '0.65rem',
-                                            color: 'var(--danger)',
-                                            backgroundColor: 'var(--danger-light)',
-                                            padding: '2px 4px',
-                                            borderRadius: '4px',
-                                            border: '1px solid var(--danger)',
-                                            marginTop: '0.2rem',
-                                            whiteSpace: 'normal',
-                                            lineHeight: '1.1'
-                                          }}>
-                                            ⚠️ Contacto Urgente
+                                          <div>
+                                            <div style={{
+                                              fontSize: '0.65rem',
+                                              color: 'var(--danger)',
+                                              backgroundColor: 'var(--danger-light)',
+                                              padding: '2px 4px',
+                                              borderRadius: '4px',
+                                              border: '1px solid var(--danger)',
+                                              marginTop: '0.2rem',
+                                              whiteSpace: 'normal',
+                                              lineHeight: '1.1',
+                                              textAlign: 'center'
+                                            }}>
+                                              ⚠️ Contacto Urgente
+                                            </div>
+                                            <button
+                                              className="btn btn-primary"
+                                              style={{
+                                                padding: '0.25rem 0.5rem',
+                                                fontSize: '0.7rem',
+                                                marginTop: '0.35rem',
+                                                width: '100%',
+                                                backgroundColor: 'var(--primary)',
+                                                border: 'none',
+                                                borderRadius: 'var(--radius-sm)'
+                                              }}
+                                              onClick={() => handleAbrirReencaminhar(r)}
+                                            >
+                                              Reencaminhar
+                                            </button>
                                           </div>
                                         )}
                                         {r.observacoes && r.observacoes.includes('Revertido') && (
@@ -2523,6 +2611,108 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
                         <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem' }}>
                           <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>Gravar Alterações</button>
                           <button type="button" className="btn btn-secondary" onClick={() => setShowEditParamCatalog(false)}>Cancelar</button>
+                        </div>
+                      </form>
+                    </div>
+                  </div>
+                )}
+
+
+                {selectedReencaminharDescarga && (
+                  <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }}>
+                    <div className="card" style={{ width: '100%', maxWidth: '480px', marginBottom: 0 }}>
+                      <h3>Reencaminhar Descarga Agendada</h3>
+                      <p style={{ color: 'var(--text-secondary)', fontSize: '0.88rem', margin: '0.5rem 0 1.2rem 0' }}>
+                        Transfira a descarga <strong>#{selectedReencaminharDescarga.id_descarga}</strong> da <strong>{selectedReencaminharDescarga.cliente_nome}</strong> para outra ETAR devido a indisponibilidade.
+                      </p>
+
+                      <div style={{ backgroundColor: 'var(--bg-base)', padding: '0.6rem', borderRadius: 'var(--radius-sm)', fontSize: '0.82rem', marginBottom: '1rem', border: '1px solid var(--border)' }}>
+                        <div><strong>Origem Atual:</strong> {selectedReencaminharDescarga.etar_nome || `ETAR ${selectedReencaminharDescarga.id_etar}`}</div>
+                        <div><strong>Volume:</strong> {selectedReencaminharDescarga.quantidade} Litros</div>
+                        <div><strong>Veículo:</strong> {selectedReencaminharDescarga.empresa_transportadora || 'N/A'} (Trator: {selectedReencaminharDescarga.matricula_trator || 'N/A'})</div>
+                      </div>
+
+                      <form onSubmit={handleReencaminharSubmeter}>
+                        <div className="form-group">
+                          <label className="form-label">ETAR de Destino</label>
+                          <select
+                            className="form-input"
+                            value={reencaminharEtarId}
+                            onChange={(e) => handleEtarReencaminharChange(e.target.value)}
+                            required
+                          >
+                            <option value="">-- Selecione a ETAR --</option>
+                            {etarsList
+                              .filter(e => e.id_etar !== selectedReencaminharDescarga.id_etar && e.disponivel)
+                              .map(e => {
+                                const temWl = clienteTemWhitelist(selectedReencaminharDescarga.id_cliente, e.id_etar);
+                                return (
+                                  <option key={e.id_etar} value={e.id_etar}>
+                                    {e.nome} {temWl ? '(Autorizada)' : '(Não Autorizada)'}
+                                  </option>
+                                );
+                              })
+                            }
+                          </select>
+                        </div>
+
+                        {exibirOpcaoForcar && (
+                          <div className="card" style={{
+                            backgroundColor: 'var(--warning-light)',
+                            color: 'var(--warning)',
+                            padding: '0.75rem',
+                            marginBottom: '1rem',
+                            borderLeft: '4px solid var(--warning)',
+                            fontSize: '0.85rem',
+                            borderRadius: 'var(--radius-sm)'
+                          }}>
+                            <strong>Aviso de Autorização Excecional:</strong>
+                            <div style={{ marginTop: '0.25rem', marginBottom: '0.5rem', lineHeight: '1.2' }}>
+                              O cliente não possui whitelist ou quota ativa para esta ETAR. É necessário forçar o reencaminhamento.
+                            </div>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontWeight: '500' }}>
+                              <input
+                                type="checkbox"
+                                checked={reencaminharForcar}
+                                onChange={(e) => setReencaminharForcar(e.target.checked)}
+                              />
+                              Confirmar reencaminhamento forçado
+                            </label>
+                          </div>
+                        )}
+
+                        <div className="form-group">
+                          <label className="form-label">Motivo / Justificação</label>
+                          <textarea
+                            className="form-input"
+                            style={{ minHeight: '70px', resize: 'vertical' }}
+                            placeholder="Descreva o motivo ou acordo de reagendamento com o cliente..."
+                            value={reencaminharObservacoes}
+                            onChange={(e) => setReencaminharObservacoes(e.target.value)}
+                            required
+                          ></textarea>
+                        </div>
+
+                        {error && <p style={{ color: 'var(--danger)', fontSize: '0.85rem', marginBottom: '1rem' }}>{error}</p>}
+
+                        <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.5rem' }}>
+                          <button
+                            type="submit"
+                            className="btn btn-primary"
+                            style={{ flex: 1, backgroundColor: 'var(--success)', border: 'none' }}
+                            disabled={reencaminharLoading || (exibirOpcaoForcar && !reencaminharForcar)}
+                          >
+                            {reencaminharLoading ? 'A processar...' : 'Confirmar'}
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-secondary"
+                            style={{ flex: 1 }}
+                            onClick={() => setSelectedReencaminharDescarga(null)}
+                            disabled={reencaminharLoading}
+                          >
+                            Cancelar
+                          </button>
                         </div>
                       </form>
                     </div>

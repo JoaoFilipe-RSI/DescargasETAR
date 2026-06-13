@@ -109,7 +109,9 @@ DescargasETAR/
 - `PUT /api/descargas/:id/receber` — Receção física com volume real e criação automática de amostra
 - `PUT /api/descargas/:id/cancelar` — Cancelamento pelo Cliente
 - `PUT /api/descargas/:id/editar` — Reedição de pedido rejeitado com reavaliação automática
+- `PUT /api/descargas/:id/reencaminharManual` — Reencaminhamento manual de descargas agendadas afetadas por indisponibilidade de ETAR (com bypass opcional de whitelist/quota)
 - `GET /api/descargas/:id/ficha` — Ficha de Descarga em PDF (Produtor ou Transportador)
+
 
 #### Módulo de Laboratório & Amostras
 - `PUT /api/amostras/receber/:token` — Check-in com triagem inteligente por periodicidade
@@ -163,7 +165,9 @@ DescargasETAR/
 - Gestão completa de clientes, autorizações, ETARs e catálogo de parâmetros
 - **Catálogo Global de Parâmetros**: Edição de parâmetros existentes + criação de novos tipos dinâmicos inline
 - Painel de Relatórios com filtros avançados e informação de "quem fez" cada mudança de estado
+- **Reencaminhamento Manual de Contingência**: Possibilidade de transferir descargas agendadas afetadas por indisponibilidade de ETAR (com bypass opcional de quota/whitelist)
 - Envio de mensagens gerais a todos os utilizadores activos
+
 
 #### Gestor Admin (perfil completo)
 - Tudo do Gestor de Clientes +
