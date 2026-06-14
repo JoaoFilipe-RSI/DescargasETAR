@@ -1,6 +1,7 @@
 import { io } from 'socket.io-client';
 
 let socket = null;
+let listenersQueue = [];
 
 export const webSocketService = {
   /**
@@ -39,6 +40,15 @@ export const webSocketService = {
       console.log('🔌 Ligação WebSocket perdida:', reason);
     });
 
+    // Registar todos os ouvintes que estavam em fila
+    if (listenersQueue.length > 0) {
+      console.log(`📥 A registar ${listenersQueue.length} ouvintes que estavam em fila...`);
+      listenersQueue.forEach(({ event, callback }) => {
+        socket.on(event, callback);
+      });
+      listenersQueue = [];
+    }
+
     return socket;
   },
 
@@ -60,7 +70,8 @@ export const webSocketService = {
     if (socket) {
       socket.on(event, callback);
     } else {
-      console.warn(`⚠️ Tentou registar evento [${event}] mas o socket não está ligado.`);
+      // Se o socket ainda não está inicializado, guardar na fila
+      listenersQueue.push({ event, callback });
     }
   },
 
@@ -70,6 +81,11 @@ export const webSocketService = {
   off(event, callback) {
     if (socket) {
       socket.off(event, callback);
+    } else {
+      // Remover da fila caso ainda não tenha sido registado
+      listenersQueue = listenersQueue.filter(
+        (l) => !(l.event === event && l.callback === callback)
+      );
     }
   }
 };

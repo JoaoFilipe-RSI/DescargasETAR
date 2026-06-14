@@ -2,12 +2,11 @@
 -- PostgreSQL database dump
 --
 
-\restrict gEnB5dNLfRxG49M6KEfGxQzeP3UzGxxjaB7akZ1Lcd0xcnE6J0QopSfIlQs9dc7
 
 -- Dumped from database version 18.3
 -- Dumped by pg_dump version 18.3
 
--- Started on 2026-06-11 01:43:37
+-- Started on 2026-06-12 19:41:01
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
@@ -80,7 +79,18 @@ CREATE TYPE public.tipo_parametro_enum AS ENUM (
     'METAIS PESADOS',
     'TEST_TYPE_1781124927766',
     'TEST_TYPE_1781133517107',
-    'TEST_TYPE_1781134805397'
+    'TEST_TYPE_1781134805397',
+    'TEST_TYPE_1781172216869',
+    'TEST_TYPE_1781172630726',
+    'TEST_TYPE_1781174573998',
+    'TEST_TYPE_1781188836611',
+    'TEST_TYPE_1781189512985',
+    'TEST_TYPE_1781189538964',
+    'TEST_TYPE_1781197631771',
+    'TEST_TYPE_1781219189330',
+    'TEST_TYPE_1781219525184',
+    'TEST_TYPE_1781220310623',
+    'TEST_TYPE_1781220705292'
 );
 
 
@@ -663,10 +673,10 @@ ALTER TABLE ONLY public.utilizador ALTER COLUMN id_utilizador SET DEFAULT nextva
 
 COPY public.amostra (id_amostra, id_descarga, estado_amostra, data_recolha, data_rececao_lab, data_inicio_analise, data_fim_analise, data_descarte, data_validacao, id_tecnico, id_responsavel, qr_code_token, boletim_publico) FROM stdin;
 28	2	RECOLHIDA	2026-06-08 15:59:28.920728	\N	\N	\N	\N	\N	\N	\N	AMOSTRA-2026-7CA864	f
+44	1	CONCLUIDA	2026-06-08 18:44:09.196369	2026-06-08 18:45:24.118393	2026-06-08 18:45:24.118393	2026-06-10 19:30:40.40571	\N	2026-06-11 12:39:00.04352	7	8	AMOSTRA-2026-9DF686	f
 29	3	CONCLUIDA	2026-06-08 16:02:27.008393	2026-06-08 16:03:51.446094	2026-06-08 16:03:51.446094	2026-06-08 16:10:51.286079	\N	2026-06-08 16:11:27.306714	7	8	AMOSTRA-2026-18DA0C	t
-49	82	CONCLUIDA	2026-06-08 19:22:01.324165	2026-06-08 19:42:48.284807	2026-06-08 19:42:48.284807	2026-06-08 19:45:36.322648	\N	2026-06-08 19:46:21.250988	7	8	AMOSTRA-2026-D143BD	f
-1	4	CONCLUIDA	2026-06-06 22:45:25.59788	2026-06-06 22:45:25.59788	2026-06-07 22:45:25.59788	2026-06-08 05:31:08.000111	\N	2026-06-08 05:31:56.190933	7	8	AMOSTRA-2026-BBB99F	f
-44	1	ANALISADA	2026-06-08 18:44:09.196369	2026-06-08 18:45:24.118393	2026-06-08 18:45:24.118393	2026-06-10 19:30:40.40571	\N	\N	7	\N	AMOSTRA-2026-9DF686	f
+49	82	CONCLUIDA	2026-06-08 19:22:01.324165	2026-06-08 19:42:48.284807	2026-06-08 19:42:48.284807	2026-06-08 19:45:36.322648	\N	2026-06-08 19:46:21.250988	7	8	AMOSTRA-2026-D143BD	t
+1	4	CONCLUIDA	2026-06-06 22:45:25.59788	2026-06-06 22:45:25.59788	2026-06-07 22:45:25.59788	2026-06-08 05:31:08.000111	\N	2026-06-08 05:31:56.190933	7	8	AMOSTRA-2026-BBB99F	t
 2	6	CONCLUIDA	2026-06-08 02:04:53.709569	2026-06-08 19:33:38.735237	2026-06-08 19:33:38.735237	2026-06-10 06:15:16.541096	\N	2026-06-10 19:32:06.038954	7	8	AMOSTRA-2026-AC8AB6	f
 \.
 
@@ -694,8 +704,8 @@ COPY public.autorizacao (id_autorizacao, id_cliente, id_etar, quota, ativo, auto
 
 COPY public.cliente (id_cliente, id_utilizador, nome, morada, contacto, telefone, email, periodicidade_analise, data_ultima_analise) FROM stdin;
 11	18	EmpresaIndustrialCCC	Travessa das fontainhas, 102	Nuno Fonseca	966666666	mariana.Abreu@administracao.pt	QUINZENAL	\N
-1	1	EmpresaIndustrialAAA SA	Zona Industrial da Maia, Lote 5	Rui Santos	911111111	geral@empresaindustrialaaa.pt	MENSAL	\N
 2	2	EmpresaIndustrialBBB SA	Parque Industrial de Coimbra, Pavilhão 3	Marta Lima	922222222	geral@empresaindustrialbbb.pt	TRIMESTRAL	2026-06-06 22:45:25.597
+1	1	EmpresaIndustrialAAA SA	Zona Industrial da Maia, Lote 5	Rui Santos	911111111	geral@empresaindustrialaaa.pt	MENSAL	\N
 3	3	TransEfluentes Lda	Sede Logística - Viseu	Jorge Duarte	933333333	logistica@transefluentes.pt	POR_DESCARGA	2026-06-08 19:22:01.324
 \.
 
@@ -720,19 +730,20 @@ COPY public.cliente_parametro (id_cliente, id_parametro, ativo) FROM stdin;
 --
 
 COPY public.descarga (id_descarga, id_cliente, id_etar, data_pedido, tipo_efluente, quantidade, numero_recipientes, estado_descarga, data_decisao, id_utilizador_decisao, data_agendamento, empresa_transportadora, nome_produtor_externo, morada_produtor_externo, matricula_trator, matricula_cisterna, data_rececao, quantidade_real, recolha_amostra, observacoes, id_utilizador_rececao, qr_code_token) FROM stdin;
+22	1	1	2026-06-08 04:32:50.351	Domestico	1500	1	CONCLUIDA	2026-06-10 01:03:05.483	9	2026-06-11 11:53:54.028584	Viatura própria	\N	\N	BB-66-CC	\N	2026-06-11 11:55:56.55055	1500	f	\N	4	DESC-2026-90B9AC
+1	1	1	2026-06-06 22:45:25.59788	Domestico	100	2	CONCLUIDA	2026-06-08 15:29:52.349198	9	2026-06-08 15:32:31.120299	Transporte próprio	\N	\N	11-AB-22	\N	2026-06-08 18:44:09.196369	100	t	\N	4	DESC-2026-91FEA5
 7	1	2	2026-06-08 02:04:53.511	Domestico	300	\N	AGENDADA	2026-06-08 02:04:53.605216	9	2026-06-08 23:18:21.317249	Transporte próprio	\N	\N	SS-09-OP	\N	\N	\N	\N	[ALERTA OPERACIONAL: ETAR indisponível. Contactar o cliente imediatamente se a descarga não puder ser realizada (ex: impossibilidade de usar o tanque de retenção).]\nAprovado pelo gestor de plantão.	\N	DESC-2026-3B5E14
-22	1	1	2026-06-08 04:32:50.351	Domestico	1500	1	AUTORIZADA	2026-06-10 01:03:05.483	9	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N
-292	11	3	2026-06-10 00:44:58.459	Industrial	1000	1	SOLICITADA	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N
 26	1	1	2026-06-08 04:39:45.41	Domestico	15000	1	REJEITADA	2026-06-08 04:39:45.41	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	Cancelada pelo cliente	\N	\N
 27	1	2	2026-06-08 04:41:00.57	Industrial	15000	1	REJEITADA	2026-06-08 04:41:56.365983	9	\N	\N	\N	\N	\N	\N	\N	\N	\N	volume muito elevado.	\N	\N
 4	2	1	2026-06-03 22:45:25.59788	Domestico	150	\N	CONCLUIDA	2026-06-04 22:45:25.59788	6	2026-06-05 22:45:25.59788	Transportes Y	\N	\N	IT-45_LL	\N	2026-06-06 22:45:25.59788	145	t	\N	5	\N
 71	3	1	2026-06-08 18:27:53.863	Industrial	5000	1	SOLICITADA	\N	\N	\N	\N	CAPITALMOVEL, Fabrica de Moveis	Zona Industrial Paços de Ferreira	\N	\N	\N	\N	\N	Carateristicas e proveniência do efluente a descarregar.	\N	\N
-1	1	1	2026-06-06 22:45:25.59788	Domestico	100	2	RECEBIDA	2026-06-08 15:29:52.349198	9	2026-06-08 15:32:31.120299	Transporte próprio	\N	\N	11-AB-22	\N	2026-06-08 18:44:09.196369	100	t	\N	4	DESC-2026-91FEA5
 2	1	1	2026-06-05 22:45:25.59788	Industrial	200	\N	RECEBIDA	2026-06-06 22:45:25.59788	6	2026-06-08 15:12:22.726446	Transporte próprio	\N	\N	QQ-01-YY	\N	2026-06-08 15:59:28.920728	200	t	\N	4	DESC-2026-F824F4
 3	1	1	2026-06-04 22:45:25.59788	Industrial	300	\N	CONCLUIDA	2026-06-05 22:45:25.59788	6	2026-06-06 22:45:25.59788	Transportes X	\N	\N	AA-00-AA	BB-00-BB	2026-06-08 16:02:27.008393	300	t	\N	4	\N
 168	11	2	2026-06-09 18:59:14.324	Domestico	2000	1	SOLICITADA	2026-06-09 18:59:14.324	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	[Revertido por indisponibilidade urgente da ETAR Centro].\nNão foi encontrada alternativa viável automaticamente.\nAguarde reencaminhamento por parte da Gestão de Clientes.	\N	\N
 82	3	2	2026-06-08 19:18:06.393	Industrial	1000	\N	CONCLUIDA	2026-06-08 19:18:06.393	\N	2026-06-08 19:20:04.821247	TransEfluentes, Lda	ABC, Supermercados	Zona Industrial Porto	XZ-99-SD	21-EE-12	2026-06-08 19:22:01.324165	1000	t	\N	5	DESC-2026-298144
+292	11	3	2026-06-10 00:44:58.459	Industrial	1000	1	AUTORIZADA	2026-06-11 11:48:49.831247	120	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N
 6	1	1	2026-06-08 02:04:53.496	Industrial	500	1	CONCLUIDA	2026-06-08 02:04:53.496	\N	2026-06-08 02:04:53.613925	TransEfluentes Lda	\N	\N	AA-11-BB	CC-22-DD	2026-06-08 02:04:53.709569	480	t	Volume ligeiramente menor. Amostra colhida para o frasco.	4	DESC-2026-6770F2
+849	1	3	2026-06-11 11:51:23.442	Domestico	2500	1	AUTORIZADA	2026-06-12 01:29:33.440099	120	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N
 \.
 
 
@@ -743,10 +754,10 @@ COPY public.descarga (id_descarga, id_cliente, id_etar, data_pedido, tipo_efluen
 --
 
 COPY public.etar (id_etar, nome, localizacao, disponivel) FROM stdin;
-4	ETAR Algarve	Faro	f
 1	ETAR Norte	Porto	t
 3	ETAR Sul	Lisboa	t
 2	ETAR Centro	Coimbra	f
+4	ETAR Algarve	Faro	t
 \.
 
 
@@ -786,6 +797,7 @@ COPY public.historico (id_historico, entidade, id_entidade, acao, descricao, dat
 91	AMOSTRA	1	RESULTADOS	Resultados laboratoriais inseridos com sucesso na bancada.	2026-06-08 05:31:08.000111	7
 92	AMOSTRA	1	VALIDACAO	Análise laboratorial validada e concluída pelo responsável.	2026-06-08 05:31:56.190933	8
 93	DESCARGA	4	CONCLUSAO	Descarga finalizada e concluída após validação do Boletim Analítico.	2026-06-08 05:31:56.190933	8
+1975	CLIENTE	142	CRIACAO	Cliente contratado Empresa Teste CRUD Lda registado no sistema.	2026-06-11 11:10:28.228876	9
 1888	AUTORIZACAO	273	CRIACAO	Regra de whitelist criada para cliente #138 na ETAR #2 com quota de 7 descargas/dia.	2026-06-11 00:40:03.622836	9
 210	DESCARGA	71	CRIACAO	Pedido criado. A aguardar aprovação manual.	2026-06-08 18:27:53.878438	3
 211	DESCARGA	71	PEDIDO_ELEMENTOS	Foram solicitados elementos adicionais ao cliente. Obs: Carateristicas e proveniência do efluente a descarregar.	2026-06-08 18:29:23.362791	9
@@ -815,18 +827,136 @@ COPY public.historico (id_historico, entidade, id_entidade, acao, descricao, dat
 1578	DESCARGA	6	CONCLUSAO	Descarga finalizada e concluída após validação do Boletim Analítico.	2026-06-10 19:32:06.038954	8
 740	DESCARGA	292	CRIACAO	Pedido criado. A aguardar aprovação manual.	2026-06-10 00:44:58.488446	18
 1893	UTILIZADOR	212	EDICAO	Utilizador interno Técnico de Teste Editado atualizado (palavra-passe alterada). Ativo: Não.	2026-06-11 00:40:05.09157	120
+1976	CLIENTE	142	ALTERACAO_STATUS	Estado da conta do cliente id #142 atualizado para inativo.	2026-06-11 11:10:28.629375	9
+1977	CLIENTE	142	ALTERACAO_STATUS	Estado da conta do cliente id #142 atualizado para ativo.	2026-06-11 11:10:28.647384	9
+1978	CLIENTE	142	EDICAO	Dados do cliente Empresa Teste Alterada atualizados no sistema.	2026-06-11 11:10:28.666917	9
+2069	DESCARGA	292	AUTORIZACAO	Pedido de descarga analisado e autorizada manualmente. Obs: Sem observações	2026-06-11 11:48:49.83514	120
+1980	AUTORIZACAO	283	CRIACAO	Regra de whitelist criada para cliente #142 na ETAR #2 com quota de 7 descargas/dia.	2026-06-11 11:10:28.867152	9
+1981	AUTORIZACAO	284	CRIACAO	Regra de whitelist criada para cliente #142 na ETAR #3 com quota de Sem limite.	2026-06-11 11:10:28.887084	9
+1982	AUTORIZACAO	283	EDICAO	Regra de whitelist id #283 atualizada. Quota: Sem limite, Auto-Aprovação: Sim, Ativa: Sim.	2026-06-11 11:10:28.907135	9
+1983	CLIENTE	142	EDICAO	Dados do cliente Empresa Teste Alterada atualizados no sistema.	2026-06-11 11:10:28.98036	9
+1984	UTILIZADOR	218	CRIACAO	Utilizador interno Técnico de Teste CRUD (tecnico.crud@laboratorio.pt) criado com perfil id #4.	2026-06-11 11:10:30.030322	120
+1985	UTILIZADOR	218	EDICAO	Utilizador interno Técnico de Teste Editado atualizado (palavra-passe alterada). Ativo: Não.	2026-06-11 11:10:30.369451	120
+2071	DESCARGA	22	AGENDAMENTO	Descarga agendada: Viatura própria | Trator: BB-66-CC | Cisterna: N/A	2026-06-11 11:53:54.031182	1
+2073	AMOSTRA	44	RESULTADOS	Resultados laboratoriais inseridos com sucesso na bancada.	2026-06-11 12:39:00.007924	8
+2074	AMOSTRA	44	VALIDACAO	Análise laboratorial validada e concluída pelo responsável.	2026-06-11 12:39:00.04352	8
+2075	DESCARGA	1	CONCLUSAO	Descarga finalizada e concluída após validação do Boletim Analítico.	2026-06-11 12:39:00.04352	8
+2081	AMOSTRA	49	DISPONIBILIZAR	Boletim analítico disponibilizado para o cliente pela gestão.	2026-06-11 15:11:02.945452	120
+2083	CLIENTE	146	CRIACAO	Cliente contratado Empresa Teste CRUD Lda registado no sistema.	2026-06-11 15:40:33.920012	9
+2084	CLIENTE	146	ALTERACAO_STATUS	Estado da conta do cliente id #146 atualizado para inativo.	2026-06-11 15:40:34.348681	9
+2085	CLIENTE	146	ALTERACAO_STATUS	Estado da conta do cliente id #146 atualizado para ativo.	2026-06-11 15:40:34.367839	9
+2086	CLIENTE	146	EDICAO	Dados do cliente Empresa Teste Alterada atualizados no sistema.	2026-06-11 15:40:34.390301	9
+2087	AUTORIZACAO	293	CRIACAO	Regra de whitelist criada para cliente #146 na ETAR #2 com quota de 7 descargas/dia.	2026-06-11 15:40:34.592807	9
+2088	AUTORIZACAO	294	CRIACAO	Regra de whitelist criada para cliente #146 na ETAR #3 com quota de Sem limite.	2026-06-11 15:40:34.612627	9
 1615	PARAMETRO	26	CRIACAO	Parâmetro analítico global Hidrocarbonetos (OLEOS E GORDURAS) criado no catálogo do sistema.	2026-06-10 20:00:57.739986	120
+2089	AUTORIZACAO	293	EDICAO	Regra de whitelist id #293 atualizada. Quota: Sem limite, Auto-Aprovação: Sim, Ativa: Sim.	2026-06-11 15:40:34.632694	9
+2090	CLIENTE	146	EDICAO	Dados do cliente Empresa Teste Alterada atualizados no sistema.	2026-06-11 15:40:34.706292	9
 766	DESCARGA	22	EDICAO	Pedido reeditado pelo cliente e aprovado automaticamente (Whitelist/Quota).	2026-06-10 01:03:05.49426	1
+2091	UTILIZADOR	224	CRIACAO	Utilizador interno Técnico de Teste CRUD (tecnico.crud@laboratorio.pt) criado com perfil id #4.	2026-06-11 15:40:35.923501	120
+2092	UTILIZADOR	224	EDICAO	Utilizador interno Técnico de Teste Editado atualizado (palavra-passe alterada). Ativo: Não.	2026-06-11 15:40:36.26996	120
+2224	CLIENTE	152	CRIACAO	Cliente contratado Empresa Teste CRUD Lda registado no sistema.	2026-06-11 18:07:09.17022	9
 1836	CLIENTE	136	CRIACAO	Cliente contratado Empresa Teste CRUD Lda registado no sistema.	2026-06-11 00:18:34.669109	9
 1837	CLIENTE	136	ALTERACAO_STATUS	Estado da conta do cliente id #136 atualizado para inativo.	2026-06-11 00:18:35.07445	9
 1838	CLIENTE	136	ALTERACAO_STATUS	Estado da conta do cliente id #136 atualizado para ativo.	2026-06-11 00:18:35.090873	9
 1839	CLIENTE	136	EDICAO	Dados do cliente Empresa Teste Alterada atualizados no sistema.	2026-06-11 00:18:35.109675	9
+2225	CLIENTE	152	ALTERACAO_STATUS	Estado da conta do cliente id #152 atualizado para inativo.	2026-06-11 18:07:09.607248	9
 1841	AUTORIZACAO	268	CRIACAO	Regra de whitelist criada para cliente #136 na ETAR #2 com quota de 7 descargas/dia.	2026-06-11 00:18:35.285214	9
 1842	AUTORIZACAO	269	CRIACAO	Regra de whitelist criada para cliente #136 na ETAR #3 com quota de Sem limite.	2026-06-11 00:18:35.303758	9
 1843	AUTORIZACAO	268	EDICAO	Regra de whitelist id #268 atualizada. Quota: Sem limite, Auto-Aprovação: Sim, Ativa: Sim.	2026-06-11 00:18:35.32276	9
 1844	CLIENTE	136	EDICAO	Dados do cliente Empresa Teste Alterada atualizados no sistema.	2026-06-11 00:18:35.393523	9
 1845	UTILIZADOR	209	CRIACAO	Utilizador interno Técnico de Teste CRUD (tecnico.crud@laboratorio.pt) criado com perfil id #4.	2026-06-11 00:18:36.436958	120
 1846	UTILIZADOR	209	EDICAO	Utilizador interno Técnico de Teste Editado atualizado (palavra-passe alterada). Ativo: Não.	2026-06-11 00:18:36.781723	120
+2226	CLIENTE	152	ALTERACAO_STATUS	Estado da conta do cliente id #152 atualizado para ativo.	2026-06-11 18:07:09.626597	9
+2227	CLIENTE	152	EDICAO	Dados do cliente Empresa Teste Alterada atualizados no sistema.	2026-06-11 18:07:09.644436	9
+1930	CLIENTE	140	CRIACAO	Cliente contratado Empresa Teste CRUD Lda registado no sistema.	2026-06-11 11:03:32.08993	9
+1931	CLIENTE	140	ALTERACAO_STATUS	Estado da conta do cliente id #140 atualizado para inativo.	2026-06-11 11:03:32.593334	9
+1932	CLIENTE	140	ALTERACAO_STATUS	Estado da conta do cliente id #140 atualizado para ativo.	2026-06-11 11:03:32.618504	9
+1934	AUTORIZACAO	278	CRIACAO	Regra de whitelist criada para cliente #140 na ETAR #2 com quota de 7 descargas/dia.	2026-06-11 11:03:35.119712	9
+1935	AUTORIZACAO	279	CRIACAO	Regra de whitelist criada para cliente #140 na ETAR #3 com quota de Sem limite.	2026-06-11 11:03:35.142125	9
+1936	AUTORIZACAO	278	EDICAO	Regra de whitelist id #278 atualizada. Quota: Sem limite, Auto-Aprovação: Sim, Ativa: Sim.	2026-06-11 11:03:35.161019	9
+1937	UTILIZADOR	215	CRIACAO	Utilizador interno Técnico de Teste CRUD (tecnico.crud@laboratorio.pt) criado com perfil id #4.	2026-06-11 11:03:36.015135	120
+1938	UTILIZADOR	215	EDICAO	Utilizador interno Técnico de Teste Editado atualizado (palavra-passe alterada). Ativo: Não.	2026-06-11 11:03:36.377376	120
+2070	DESCARGA	849	CRIACAO	Pedido criado. A aguardar aprovação manual.	2026-06-11 11:51:23.457986	1
+2072	DESCARGA	22	RECECAO	Descarga recebida na ETAR. Vol Real: 1500L | Amostra Recolhida: NÃO	2026-06-11 11:55:56.55055	4
+2228	AUTORIZACAO	308	CRIACAO	Regra de whitelist criada para cliente #152 na ETAR #2 com quota de 7 descargas/dia.	2026-06-11 18:07:09.855023	9
+2022	CLIENTE	144	CRIACAO	Cliente contratado Empresa Teste CRUD Lda registado no sistema.	2026-06-11 11:42:51.516898	9
+2023	CLIENTE	144	ALTERACAO_STATUS	Estado da conta do cliente id #144 atualizado para inativo.	2026-06-11 11:42:51.916514	9
+2024	CLIENTE	144	ALTERACAO_STATUS	Estado da conta do cliente id #144 atualizado para ativo.	2026-06-11 11:42:51.933341	9
+2025	CLIENTE	144	EDICAO	Dados do cliente Empresa Teste Alterada atualizados no sistema.	2026-06-11 11:42:51.952176	9
+2229	AUTORIZACAO	309	CRIACAO	Regra de whitelist criada para cliente #152 na ETAR #3 com quota de Sem limite.	2026-06-11 18:07:09.878802	9
+2027	AUTORIZACAO	288	CRIACAO	Regra de whitelist criada para cliente #144 na ETAR #2 com quota de 7 descargas/dia.	2026-06-11 11:42:52.143825	9
+2028	AUTORIZACAO	289	CRIACAO	Regra de whitelist criada para cliente #144 na ETAR #3 com quota de Sem limite.	2026-06-11 11:42:52.182146	9
+2029	AUTORIZACAO	288	EDICAO	Regra de whitelist id #288 atualizada. Quota: Sem limite, Auto-Aprovação: Sim, Ativa: Sim.	2026-06-11 11:42:52.219896	9
+2030	CLIENTE	144	EDICAO	Dados do cliente Empresa Teste Alterada atualizados no sistema.	2026-06-11 11:42:52.289707	9
+2031	UTILIZADOR	221	CRIACAO	Utilizador interno Técnico de Teste CRUD (tecnico.crud@laboratorio.pt) criado com perfil id #4.	2026-06-11 11:42:53.318331	120
+2032	UTILIZADOR	221	EDICAO	Utilizador interno Técnico de Teste Editado atualizado (palavra-passe alterada). Ativo: Não.	2026-06-11 11:42:53.65187	120
+2230	AUTORIZACAO	308	EDICAO	Regra de whitelist id #308 atualizada. Quota: Sem limite, Auto-Aprovação: Sim, Ativa: Sim.	2026-06-11 18:07:09.897279	9
+2231	CLIENTE	152	EDICAO	Dados do cliente Empresa Teste Alterada atualizados no sistema.	2026-06-11 18:07:09.980124	9
+2232	UTILIZADOR	233	CRIACAO	Utilizador interno Técnico de Teste CRUD (tecnico.crud@laboratorio.pt) criado com perfil id #4.	2026-06-11 18:07:11.074624	120
+2082	AMOSTRA	1	DISPONIBILIZAR	Boletim analítico disponibilizado para o cliente pela gestão.	2026-06-11 15:11:13.594907	120
+2233	UTILIZADOR	233	EDICAO	Utilizador interno Técnico de Teste Editado atualizado (palavra-passe alterada). Ativo: Não.	2026-06-11 18:07:11.416525	120
+2365	CLIENTE	158	CRIACAO	Cliente contratado Empresa Teste CRUD Lda registado no sistema.	2026-06-12 00:25:08.192794	9
+2366	CLIENTE	158	ALTERACAO_STATUS	Estado da conta do cliente id #158 atualizado para inativo.	2026-06-12 00:25:08.593851	9
+2367	CLIENTE	158	ALTERACAO_STATUS	Estado da conta do cliente id #158 atualizado para ativo.	2026-06-12 00:25:08.614008	9
+2368	CLIENTE	158	EDICAO	Dados do cliente Empresa Teste Alterada atualizados no sistema.	2026-06-12 00:25:08.629654	9
+2369	AUTORIZACAO	323	CRIACAO	Regra de whitelist criada para cliente #158 na ETAR #2 com quota de 7 descargas/dia.	2026-06-12 00:25:08.801789	9
+2370	AUTORIZACAO	324	CRIACAO	Regra de whitelist criada para cliente #158 na ETAR #3 com quota de Sem limite.	2026-06-12 00:25:08.822357	9
+2371	AUTORIZACAO	323	EDICAO	Regra de whitelist id #323 atualizada. Quota: Sem limite, Auto-Aprovação: Sim, Ativa: Sim.	2026-06-12 00:25:08.844047	9
+2372	CLIENTE	158	EDICAO	Dados do cliente Empresa Teste Alterada atualizados no sistema.	2026-06-12 00:25:08.915939	9
+2373	UTILIZADOR	242	CRIACAO	Utilizador interno Técnico de Teste CRUD (tecnico.crud@laboratorio.pt) criado com perfil id #4.	2026-06-12 00:25:09.959297	120
+2374	UTILIZADOR	242	EDICAO	Utilizador interno Técnico de Teste Editado atualizado (palavra-passe alterada). Ativo: Não.	2026-06-12 00:25:10.296858	120
+2130	CLIENTE	148	CRIACAO	Cliente contratado Empresa Teste CRUD Lda registado no sistema.	2026-06-11 15:51:50.527488	9
+2131	CLIENTE	148	ALTERACAO_STATUS	Estado da conta do cliente id #148 atualizado para inativo.	2026-06-11 15:51:50.925254	9
+2132	CLIENTE	148	ALTERACAO_STATUS	Estado da conta do cliente id #148 atualizado para ativo.	2026-06-11 15:51:50.941895	9
+2133	CLIENTE	148	EDICAO	Dados do cliente Empresa Teste Alterada atualizados no sistema.	2026-06-11 15:51:50.95956	9
+2134	AUTORIZACAO	298	CRIACAO	Regra de whitelist criada para cliente #148 na ETAR #2 com quota de 7 descargas/dia.	2026-06-11 15:51:51.165383	9
+2135	AUTORIZACAO	299	CRIACAO	Regra de whitelist criada para cliente #148 na ETAR #3 com quota de Sem limite.	2026-06-11 15:51:51.189612	9
+2136	AUTORIZACAO	298	EDICAO	Regra de whitelist id #298 atualizada. Quota: Sem limite, Auto-Aprovação: Sim, Ativa: Sim.	2026-06-11 15:51:51.214613	9
+2137	CLIENTE	148	EDICAO	Dados do cliente Empresa Teste Alterada atualizados no sistema.	2026-06-11 15:51:51.286099	9
+2138	UTILIZADOR	227	CRIACAO	Utilizador interno Técnico de Teste CRUD (tecnico.crud@laboratorio.pt) criado com perfil id #4.	2026-06-11 15:51:52.333065	120
+2139	UTILIZADOR	227	EDICAO	Utilizador interno Técnico de Teste Editado atualizado (palavra-passe alterada). Ativo: Não.	2026-06-11 15:51:52.665052	120
+2177	CLIENTE	150	CRIACAO	Cliente contratado Empresa Teste CRUD Lda registado no sistema.	2026-06-11 15:52:16.456217	9
+2178	CLIENTE	150	ALTERACAO_STATUS	Estado da conta do cliente id #150 atualizado para inativo.	2026-06-11 15:52:16.832529	9
+2179	CLIENTE	150	ALTERACAO_STATUS	Estado da conta do cliente id #150 atualizado para ativo.	2026-06-11 15:52:16.849962	9
+2180	CLIENTE	150	EDICAO	Dados do cliente Empresa Teste Alterada atualizados no sistema.	2026-06-11 15:52:16.869463	9
+2181	AUTORIZACAO	303	CRIACAO	Regra de whitelist criada para cliente #150 na ETAR #2 com quota de 7 descargas/dia.	2026-06-11 15:52:17.053282	9
+2182	AUTORIZACAO	304	CRIACAO	Regra de whitelist criada para cliente #150 na ETAR #3 com quota de Sem limite.	2026-06-11 15:52:17.073267	9
+2183	AUTORIZACAO	303	EDICAO	Regra de whitelist id #303 atualizada. Quota: Sem limite, Auto-Aprovação: Sim, Ativa: Sim.	2026-06-11 15:52:17.093033	9
+2184	CLIENTE	150	EDICAO	Dados do cliente Empresa Teste Alterada atualizados no sistema.	2026-06-11 15:52:17.160667	9
+2185	UTILIZADOR	230	CRIACAO	Utilizador interno Técnico de Teste CRUD (tecnico.crud@laboratorio.pt) criado com perfil id #4.	2026-06-11 15:52:18.203881	120
+2186	UTILIZADOR	230	EDICAO	Utilizador interno Técnico de Teste Editado atualizado (palavra-passe alterada). Ativo: Não.	2026-06-11 15:52:18.537665	120
+2271	CLIENTE	154	CRIACAO	Cliente contratado Empresa Teste CRUD Lda registado no sistema.	2026-06-12 00:06:22.415221	9
+2272	CLIENTE	154	ALTERACAO_STATUS	Estado da conta do cliente id #154 atualizado para inativo.	2026-06-12 00:06:23.175619	9
+2273	CLIENTE	154	ALTERACAO_STATUS	Estado da conta do cliente id #154 atualizado para ativo.	2026-06-12 00:06:23.209131	9
+2274	CLIENTE	154	EDICAO	Dados do cliente Empresa Teste Alterada atualizados no sistema.	2026-06-12 00:06:23.241449	9
+2275	AUTORIZACAO	313	CRIACAO	Regra de whitelist criada para cliente #154 na ETAR #2 com quota de 7 descargas/dia.	2026-06-12 00:06:26.281068	9
+2276	AUTORIZACAO	314	CRIACAO	Regra de whitelist criada para cliente #154 na ETAR #3 com quota de Sem limite.	2026-06-12 00:06:26.321025	9
+2277	AUTORIZACAO	313	EDICAO	Regra de whitelist id #313 atualizada. Quota: Sem limite, Auto-Aprovação: Sim, Ativa: Sim.	2026-06-12 00:06:26.373035	9
+2278	CLIENTE	154	EDICAO	Dados do cliente Empresa Teste Alterada atualizados no sistema.	2026-06-12 00:06:26.487828	9
+2279	UTILIZADOR	236	CRIACAO	Utilizador interno Técnico de Teste CRUD (tecnico.crud@laboratorio.pt) criado com perfil id #4.	2026-06-12 00:06:28.047876	120
+2280	UTILIZADOR	236	EDICAO	Utilizador interno Técnico de Teste Editado atualizado (palavra-passe alterada). Ativo: Não.	2026-06-12 00:06:28.598345	120
+2412	CLIENTE	160	CRIACAO	Cliente contratado Empresa Teste CRUD Lda registado no sistema.	2026-06-12 00:31:42.773728	9
+2413	CLIENTE	160	ALTERACAO_STATUS	Estado da conta do cliente id #160 atualizado para inativo.	2026-06-12 00:31:43.185901	9
+2414	CLIENTE	160	ALTERACAO_STATUS	Estado da conta do cliente id #160 atualizado para ativo.	2026-06-12 00:31:43.202242	9
+2415	CLIENTE	160	EDICAO	Dados do cliente Empresa Teste Alterada atualizados no sistema.	2026-06-12 00:31:43.21993	9
+2416	AUTORIZACAO	328	CRIACAO	Regra de whitelist criada para cliente #160 na ETAR #2 com quota de 7 descargas/dia.	2026-06-12 00:31:43.386607	9
+2417	AUTORIZACAO	329	CRIACAO	Regra de whitelist criada para cliente #160 na ETAR #3 com quota de Sem limite.	2026-06-12 00:31:43.409296	9
+2318	CLIENTE	156	CRIACAO	Cliente contratado Empresa Teste CRUD Lda registado no sistema.	2026-06-12 00:12:02.714222	9
+2319	CLIENTE	156	ALTERACAO_STATUS	Estado da conta do cliente id #156 atualizado para inativo.	2026-06-12 00:12:03.122989	9
+2320	CLIENTE	156	ALTERACAO_STATUS	Estado da conta do cliente id #156 atualizado para ativo.	2026-06-12 00:12:03.140429	9
+2321	CLIENTE	156	EDICAO	Dados do cliente Empresa Teste Alterada atualizados no sistema.	2026-06-12 00:12:03.15958	9
+2322	AUTORIZACAO	318	CRIACAO	Regra de whitelist criada para cliente #156 na ETAR #2 com quota de 7 descargas/dia.	2026-06-12 00:12:03.327204	9
+2323	AUTORIZACAO	319	CRIACAO	Regra de whitelist criada para cliente #156 na ETAR #3 com quota de Sem limite.	2026-06-12 00:12:03.347559	9
+2324	AUTORIZACAO	318	EDICAO	Regra de whitelist id #318 atualizada. Quota: Sem limite, Auto-Aprovação: Sim, Ativa: Sim.	2026-06-12 00:12:03.364868	9
+2325	CLIENTE	156	EDICAO	Dados do cliente Empresa Teste Alterada atualizados no sistema.	2026-06-12 00:12:03.435045	9
+2326	UTILIZADOR	239	CRIACAO	Utilizador interno Técnico de Teste CRUD (tecnico.crud@laboratorio.pt) criado com perfil id #4.	2026-06-12 00:12:04.47127	120
+2327	UTILIZADOR	239	EDICAO	Utilizador interno Técnico de Teste Editado atualizado (palavra-passe alterada). Ativo: Não.	2026-06-12 00:12:04.856942	120
+2418	AUTORIZACAO	328	EDICAO	Regra de whitelist id #328 atualizada. Quota: Sem limite, Auto-Aprovação: Sim, Ativa: Sim.	2026-06-12 00:31:43.427138	9
+2419	CLIENTE	160	EDICAO	Dados do cliente Empresa Teste Alterada atualizados no sistema.	2026-06-12 00:31:43.496359	9
+2420	UTILIZADOR	245	CRIACAO	Utilizador interno Técnico de Teste CRUD (tecnico.crud@laboratorio.pt) criado com perfil id #4.	2026-06-12 00:31:44.544639	120
+2421	UTILIZADOR	245	EDICAO	Utilizador interno Técnico de Teste Editado atualizado (palavra-passe alterada). Ativo: Não.	2026-06-12 00:31:44.923698	120
+2459	DESCARGA	849	AUTORIZACAO	Pedido de descarga analisado e autorizada manualmente. Obs: Sem observações	2026-06-12 01:29:33.444056	120
+2460	SISTEMA	0	ENVIO_AVISO_GERAL	Aviso Geral enviado a todos os utilizadores: "ETAR Algarve novamente disponível para descargas."	2026-06-12 01:32:11.878848	120
 \.
 
 
@@ -840,6 +970,28 @@ COPY public.notificacao (id_notificacao, id_utilizador, mensagem, tipo, enviada,
 1	1	Descarga autorizada	DESCARGA	t	f	2026-06-07 22:45:25.59788
 2	2	Descarga rejeitada	DESCARGA	t	f	2026-06-07 22:45:25.59788
 3	3	Nova receção registada	SISTEMA	t	f	2026-06-07 22:45:25.59788
+666	133	ETAR Algarve novamente disponível para descargas.	SISTEMA	t	f	2026-06-12 01:32:11.878848
+667	134	ETAR Algarve novamente disponível para descargas.	SISTEMA	t	f	2026-06-12 01:32:11.878848
+668	137	ETAR Algarve novamente disponível para descargas.	SISTEMA	t	f	2026-06-12 01:32:11.878848
+669	138	ETAR Algarve novamente disponível para descargas.	SISTEMA	t	f	2026-06-12 01:32:11.878848
+670	139	ETAR Algarve novamente disponível para descargas.	SISTEMA	t	f	2026-06-12 01:32:11.878848
+671	141	ETAR Algarve novamente disponível para descargas.	SISTEMA	t	f	2026-06-12 01:32:11.878848
+672	142	ETAR Algarve novamente disponível para descargas.	SISTEMA	t	f	2026-06-12 01:32:11.878848
+673	3	ETAR Algarve novamente disponível para descargas.	SISTEMA	t	f	2026-06-12 01:32:11.878848
+674	6	ETAR Algarve novamente disponível para descargas.	SISTEMA	t	f	2026-06-12 01:32:11.878848
+675	1	ETAR Algarve novamente disponível para descargas.	SISTEMA	t	f	2026-06-12 01:32:11.878848
+676	2	ETAR Algarve novamente disponível para descargas.	SISTEMA	t	f	2026-06-12 01:32:11.878848
+677	4	ETAR Algarve novamente disponível para descargas.	SISTEMA	t	f	2026-06-12 01:32:11.878848
+678	10	ETAR Algarve novamente disponível para descargas.	SISTEMA	t	f	2026-06-12 01:32:11.878848
+679	5	ETAR Algarve novamente disponível para descargas.	SISTEMA	t	f	2026-06-12 01:32:11.878848
+680	7	ETAR Algarve novamente disponível para descargas.	SISTEMA	t	f	2026-06-12 01:32:11.878848
+681	8	ETAR Algarve novamente disponível para descargas.	SISTEMA	t	f	2026-06-12 01:32:11.878848
+682	136	ETAR Algarve novamente disponível para descargas.	SISTEMA	t	f	2026-06-12 01:32:11.878848
+683	140	ETAR Algarve novamente disponível para descargas.	SISTEMA	t	f	2026-06-12 01:32:11.878848
+684	135	ETAR Algarve novamente disponível para descargas.	SISTEMA	t	f	2026-06-12 01:32:11.878848
+685	18	ETAR Algarve novamente disponível para descargas.	SISTEMA	t	f	2026-06-12 01:32:11.878848
+686	120	ETAR Algarve novamente disponível para descargas.	SISTEMA	t	f	2026-06-12 01:32:11.878848
+687	9	ETAR Algarve novamente disponível para descargas.	SISTEMA	t	f	2026-06-12 01:32:11.878848
 \.
 
 
@@ -885,12 +1037,6 @@ COPY public.perfil (id_perfil, nome) FROM stdin;
 --
 
 COPY public.resultado_analitico (id_resultado, id_amostra, id_parametro, valor, unidade, metodo, incerteza) FROM stdin;
-514	44	1	9.2	pH	SMEWW 4500-H+	0.13799999999999998
-515	44	2	550	mg/L	SMEWW 5220 B	27.5
-516	44	3	231	mg/L	SMEWW 5210 B	18.48
-517	44	4	111	mg/L	SMEWW 2540 D	11.100000000000001
-518	44	5	1.4	mS/cm	SMEWW 2510 B	0.06999999999999999
-519	44	6	28.6	mg/L	SMEWW 4500-N	1.716
 520	2	1	7.8	pH	SMEWW 4500-H+	11
 521	2	2	870	mg/L	SMEWW 5220 B	4
 522	2	3	310	mg/L	SMEWW 5210 B	8
@@ -908,6 +1054,12 @@ COPY public.resultado_analitico (id_resultado, id_amostra, id_parametro, valor, 
 151	49	3	200	mg/L	SMEWW 5210 B	\N
 152	49	4	120	mg/L	SMEWW 2540 D	\N
 153	49	5	1.89	mS/cm	SMEWW 2510 B	\N
+598	44	1	9.2	pH	SMEWW 4500-H+	0.13799999999999998
+599	44	2	550	mg/L	SMEWW 5220 B	27.5
+600	44	3	231	mg/L	SMEWW 5210 B	18.48
+601	44	4	111	mg/L	SMEWW 2540 D	11.100000000000001
+602	44	5	1.4	mS/cm	SMEWW 2510 B	0.06999999999999999
+603	44	6	28.6	mg/L	SMEWW 4500-N	1.716
 52	1	1	9.5	pH	SMEWW 4500-H+	\N
 53	1	2	1400	mg/L	SMEWW 5220 B	\N
 54	1	3	350	mg/L	SMEWW 5210 B	\N
@@ -945,8 +1097,8 @@ COPY public.utilizador (id_utilizador, id_perfil, nome, email, password_hash, at
 140	3	Helder Monteiro	helder.monteiro@etar.pt	$2b$12$QbE4uKgKYnKJ6jiWeTcl5usvjv6mB8zvffVoeuoA6W2oVdeieKBaK	t	3
 135	2	Joaquim Abreu	joaquim.abreu@etar.pt	$2b$12$QbE4uKgKYnKJ6jiWeTcl5usvjv6mB8zvffVoeuoA6W2oVdeieKBaK	t	3
 18	1	EmpresaIndustrialCCC	mariana.Abreu@administracao.pt	$2b$12$QbE4uKgKYnKJ6jiWeTcl5usvjv6mB8zvffVoeuoA6W2oVdeieKBaK	t	\N
-9	6	Mariana Costa	mariana.costa@administracao.pt	$2b$12$QbE4uKgKYnKJ6jiWeTcl5usvjv6mB8zvffVoeuoA6W2oVdeieKBaK	t	\N
 120	7	Filipe Ferreira	filipe.ferreira@admin.entidadegestora.pt	$2b$12$QbE4uKgKYnKJ6jiWeTcl5usvjv6mB8zvffVoeuoA6W2oVdeieKBaK	t	\N
+9	6	Mariana Costa	mariana.costa@administracao.pt	$2b$12$86HE9McQ6qD4AxHVtgVghewWNPA9bD.HFvrCrX3mnd60Lyv7l9tcW	t	\N
 \.
 
 
@@ -956,7 +1108,7 @@ COPY public.utilizador (id_utilizador, id_perfil, nome, email, password_hash, at
 -- Name: amostra_id_amostra_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.amostra_id_amostra_seq', 187, true);
+SELECT pg_catalog.setval('public.amostra_id_amostra_seq', 210, true);
 
 
 --
@@ -965,7 +1117,7 @@ SELECT pg_catalog.setval('public.amostra_id_amostra_seq', 187, true);
 -- Name: autorizacao_id_autorizacao_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.autorizacao_id_autorizacao_seq', 277, true);
+SELECT pg_catalog.setval('public.autorizacao_id_autorizacao_seq', 332, true);
 
 
 --
@@ -974,7 +1126,7 @@ SELECT pg_catalog.setval('public.autorizacao_id_autorizacao_seq', 277, true);
 -- Name: cliente_id_cliente_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.cliente_id_cliente_seq', 139, true);
+SELECT pg_catalog.setval('public.cliente_id_cliente_seq', 161, true);
 
 
 --
@@ -983,7 +1135,7 @@ SELECT pg_catalog.setval('public.cliente_id_cliente_seq', 139, true);
 -- Name: descarga_id_descarga_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.descarga_id_descarga_seq', 806, true);
+SELECT pg_catalog.setval('public.descarga_id_descarga_seq', 962, true);
 
 
 --
@@ -992,7 +1144,7 @@ SELECT pg_catalog.setval('public.descarga_id_descarga_seq', 806, true);
 -- Name: etar_id_etar_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.etar_id_etar_seq', 40, true);
+SELECT pg_catalog.setval('public.etar_id_etar_seq', 62, true);
 
 
 --
@@ -1001,7 +1153,7 @@ SELECT pg_catalog.setval('public.etar_id_etar_seq', 40, true);
 -- Name: historico_id_historico_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.historico_id_historico_seq', 1929, true);
+SELECT pg_catalog.setval('public.historico_id_historico_seq', 2460, true);
 
 
 --
@@ -1010,7 +1162,7 @@ SELECT pg_catalog.setval('public.historico_id_historico_seq', 1929, true);
 -- Name: notificacao_id_notificacao_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.notificacao_id_notificacao_seq', 379, true);
+SELECT pg_catalog.setval('public.notificacao_id_notificacao_seq', 687, true);
 
 
 --
@@ -1019,7 +1171,7 @@ SELECT pg_catalog.setval('public.notificacao_id_notificacao_seq', 379, true);
 -- Name: parametro_id_parametro_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.parametro_id_parametro_seq', 42, true);
+SELECT pg_catalog.setval('public.parametro_id_parametro_seq', 64, true);
 
 
 --
@@ -1028,7 +1180,7 @@ SELECT pg_catalog.setval('public.parametro_id_parametro_seq', 42, true);
 -- Name: perfil_id_perfil_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.perfil_id_perfil_seq', 34, true);
+SELECT pg_catalog.setval('public.perfil_id_perfil_seq', 56, true);
 
 
 --
@@ -1037,7 +1189,7 @@ SELECT pg_catalog.setval('public.perfil_id_perfil_seq', 34, true);
 -- Name: resultado_analitico_id_resultado_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.resultado_analitico_id_resultado_seq', 579, true);
+SELECT pg_catalog.setval('public.resultado_analitico_id_resultado_seq', 657, true);
 
 
 --
@@ -1046,7 +1198,7 @@ SELECT pg_catalog.setval('public.resultado_analitico_id_resultado_seq', 579, tru
 -- Name: utilizador_id_utilizador_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.utilizador_id_utilizador_seq', 213, true);
+SELECT pg_catalog.setval('public.utilizador_id_utilizador_seq', 246, true);
 
 
 --
@@ -1391,11 +1543,10 @@ ALTER TABLE ONLY public.utilizador
     ADD CONSTRAINT utilizador_id_perfil_fkey FOREIGN KEY (id_perfil) REFERENCES public.perfil(id_perfil);
 
 
--- Completed on 2026-06-11 01:43:38
+-- Completed on 2026-06-12 19:41:02
 
 --
 -- PostgreSQL database dump complete
 --
 
-\unrestrict gEnB5dNLfRxG49M6KEfGxQzeP3UzGxxjaB7akZ1Lcd0xcnE6J0QopSfIlQs9dc7
 
