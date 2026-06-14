@@ -16,36 +16,36 @@ INSERT INTO perfil (nome) VALUES
 -- UTILIZADORES
 INSERT INTO utilizador (id_perfil, nome, email, password_hash, ativo) VALUES
 -- Clientes (id_perfil = 1)
-(1, 'EmpresaIndustrialAAA SA', 'geral@empresaIndustrialaaa.pt', '$2b$12$K3vZg7mQxO7pL2R1vK9uOuE7eHB5V2p8FzJ9w6tGx4yM1qR3oSa2q', true),
-(1, 'EmpresaIndustrialBBB SA', 'geral@empresaIndustrialbbb.pt', '$2b$12$K3vZg7mQxO7pL2R1vK9uOuE7eHB5V2p8FzJ9w6tGx4yM1qR3oSa2q', true),
-(1, 'TransEfluentes Lda', 'logistica@transefluentes.pt', '$2b$12$K3vZg7mQxO7pL2R1vK9uOuE7eHB5V2p8FzJ9w6tGx4yM1qR3oSa2q', true),
+(1, 'EmpresaIndustrialAAA SA', 'geral@empresaIndustrialaaa.pt', '$2b$12$QbE4uKgKYnKJ6jiWeTcl5usvjv6mB8zvffVoeuoA6W2oVdeieKBaK', true),
+(2, 'EmpresaIndustrialBBB SA', 'geral@empresaIndustrialbbb.pt', '$2b$12$QbE4uKgKYnKJ6jiWeTcl5usvjv6mB8zvffVoeuoA6W2oVdeieKBaK', true),
+(3, 'TransEfluentes Lda', 'logistica@transefluentes.pt', '$2b$12$QbE4uKgKYnKJ6jiWeTcl5usvjv6mB8zvffVoeuoA6W2oVdeieKBaK', true),
 
 -- Operadores (id_perfil = 2)
-(2, 'Carlos Silva', 'carlos.silva@etar.pt', '$2b$12$K3vZg7mQxO7pL2R1vK9uOuE7eHB5V2p8FzJ9w6tGx4yM1qR3oSa2q', true),
-(2, 'José Teixeira', 'jose.teixeira@etar.pt', '$2b$12$K3vZg7mQxO7pL2R1vK9uOuE7eHB5V2p8FzJ9w6tGx4yM1qR3oSa2q', true),
-(2, 'Bruno Nogueira', 'bruno.nogueira@etar.pt', '$2b$12$K3vZg7mQxO7pL2R1vK9uOuE7eHB5V2p8FzJ9w6tGx4yM1qR3oSa2q', true),
-(2, 'Diana Santos', 'diana.santos@etar.pt', '$2b$12$K3vZg7mQxO7pL2R1vK9uOuE7eHB5V2p8FzJ9w6tGx4yM1qR3oSa2q', true),
-(2, 'Filipe Abreu', 'filipe.abreu@etar.pt', '$2b$12$K3vZg7mQxO7pL2R1vK9uOuE7eHB5V2p8FzJ9w6tGx4yM1qR3oSa2q', true),
-(2, 'Gabriela Sousa', 'gabriela.sousa@etar.pt', '$2b$12$K3vZg7mQxO7pL2R1vK9uOuE7eHB5V2p8FzJ9w6tGx4yM1qR3oSa2q', true),
-(2, 'Igor Gomes', 'igor.gomes@etar.pt', '$2b$12$K3vZg7mQxO7pL2R1vK9uOuE7eHB5V2p8FzJ9w6tGx4yM1qR3oSa2q', true),
-(2, 'Joana Cruz', 'joana.cruz@etar.pt', '$2b$12$K3vZg7mQxO7pL2R1vK9uOuE7eHB5V2p8FzJ9w6tGx4yM1qR3oSa2q', true),
+(2, 'Carlos Silva', 'carlos.silva@etar.pt', '$2b$12$QbE4uKgKYnKJ6jiWeTcl5usvjv6mB8zvffVoeuoA6W2oVdeieKBaK', true),
+(2, 'José Teixeira', 'jose.teixeira@etar.pt', '$2b$12$QbE4uKgKYnKJ6jiWeTcl5usvjv6mB8zvffVoeuoA6W2oVdeieKBaK', true),
+(2, 'Bruno Nogueira', 'bruno.nogueira@etar.pt', '$2b$12$QbE4uKgKYnKJ6jiWeTcl5usvjv6mB8zvffVoeuoA6W2oVdeieKBaK', true),
+(2, 'Diana Santos', 'diana.santos@etar.pt', '$2b$12$QbE4uKgKYnKJ6jiWeTcl5usvjv6mB8zvffVoeuoA6W2oVdeieKBaK', true),
+(2, 'Filipe Abreu', 'filipe.abreu@etar.pt', '$2b$12$QbE4uKgKYnKJ6jiWeTcl5usvjv6mB8zvffVoeuoA6W2oVdeieKBaK', true),
+(2, 'Gabriela Sousa', 'gabriela.sousa@etar.pt', '$2b$12$QbE4uKgKYnKJ6jiWeTcl5usvjv6mB8zvffVoeuoA6W2oVdeieKBaK', true),
+(2, 'Igor Gomes', 'igor.gomes@etar.pt', '$2b$12$QbE4uKgKYnKJ6jiWeTcl5usvjv6mB8zvffVoeuoA6W2oVdeieKBaK', true),
+(2, 'Joana Cruz', 'joana.cruz@etar.pt', '$2b$12$QbE4uKgKYnKJ6jiWeTcl5usvjv6mB8zvffVoeuoA6W2oVdeieKBaK', true),
 
 -- Responsáveis de ETAR (id_perfil = 3)
-(3, 'Fernando Rocha', 'fernando.rocha@etar.pt', '$2b$12$K3vZg7mQxO7pL2R1vK9uOuE7eHB5V2p8FzJ9w6tGx4yM1qR3oSa2q', true),
-(3, 'Eduardo Lima', 'eduardo.lima@etar.pt', '$2b$12$K3vZg7mQxO7pL2R1vK9uOuE7eHB5V2p8FzJ9w6tGx4yM1qR3oSa2q', true),
-(3, 'Helder Costa', 'helder.costa@etar.pt', '$2b$12$K3vZg7mQxO7pL2R1vK9uOuE7eHB5V2p8FzJ9w6tGx4yM1qR3oSa2q', true),
-(3, 'Katia Martins', 'katia.martins@etar.pt', '$2b$12$K3vZg7mQxO7pL2R1vK9uOuE7eHB5V2p8FzJ9w6tGx4yM1qR3oSa2q', true),
+(3, 'Fernando Rocha', 'fernando.rocha@etar.pt', '$2b$12$QbE4uKgKYnKJ6jiWeTcl5usvjv6mB8zvffVoeuoA6W2oVdeieKBaK', true),
+(3, 'Eduardo Lima', 'eduardo.lima@etar.pt', '$2b$12$QbE4uKgKYnKJ6jiWeTcl5usvjv6mB8zvffVoeuoA6W2oVdeieKBaK', true),
+(3, 'Helder Costa', 'helder.costa@etar.pt', '$2b$12$QbE4uKgKYnKJ6jiWeTcl5usvjv6mB8zvffVoeuoA6W2oVdeieKBaK', true),
+(3, 'Katia Martins', 'katia.martins@etar.pt', '$2b$12$QbE4uKgKYnKJ6jiWeTcl5usvjv6mB8zvffVoeuoA6W2oVdeieKBaK', true),
 
 -- Técnicos de Laboratório (id_perfil = 4)
-(4, 'Ana Pereira', 'ana.pereira@laboratorio.pt', '$2b$12$K3vZg7mQxO7pL2R1vK9uOuE7eHB5V2p8FzJ9w6tGx4yM1qR3oSa2q', true),
-(4, 'Pedro Sousa', 'pedro.sousa@laboratorio.pt', '$2b$12$K3vZg7mQxO7pL2R1vK9uOuE7eHB5V2p8FzJ9w6tGx4yM1qR3oSa2q', true),
+(4, 'Ana Pereira', 'ana.pereira@laboratorio.pt', '$2b$12$QbE4uKgKYnKJ6jiWeTcl5usvjv6mB8zvffVoeuoA6W2oVdeieKBaK', true),
+(4, 'Pedro Sousa', 'pedro.sousa@laboratorio.pt', '$2b$12$QbE4uKgKYnKJ6jiWeTcl5usvjv6mB8zvffVoeuoA6W2oVdeieKBaK', true),
 
 -- Responsável de Laboratório (id_perfil = 5)
-(5, 'Rui Fonseca', 'rui.fonseca@laboratorio.pt', '$2b$12$K3vZg7mQxO7pL2R1vK9uOuE7eHB5V2p8FzJ9w6tGx4yM1qR3oSa2q', true),
+(5, 'Paula Melo', 'paula.melo@laboratorio.pt', '$2b$12$QbE4uKgKYnKJ6jiWeTcl5usvjv6mB8zvffVoeuoA6W2oVdeieKBaK', true),
 
 -- Gestor de Clientes / Admin (id_perfil = 6 / 7)
-(6, 'Mariana Costa', 'mariana.costa@administracao.pt', '$2b$12$K3vZg7mQxO7pL2R1vK9uOuE7eHB5V2p8FzJ9w6tGx4yM1qR3oSa2q', true),
-(6, 'António Almeida', 'antonio.almeida@administracao.pt', '$2b$12$K3vZg7mQxO7pL2R1vK9uOuE7eHB5V2p8FzJ9w6tGx4yM1qR3oSa2q', true),
+(6, 'Mariana Costa', 'mariana.costa@administracao.pt', '$2b$12$QbE4uKgKYnKJ6jiWeTcl5usvjv6mB8zvffVoeuoA6W2oVdeieKBaK', true),
+(6, 'António Almeida', 'antonio.almeida@administracao.pt', '$2b$12$QbE4uKgKYnKJ6jiWeTcl5usvjv6mB8zvffVoeuoA6W2oVdeieKBaK', true),
 (7, 'Filipe Ferreira', 'filipe.ferreira@admin.entidadegestora.pt', '$2b$12$QbE4uKgKYnKJ6jiWeTcl5usvjv6mB8zvffVoeuoA6W2oVdeieKBaK', true);
 
 

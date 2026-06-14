@@ -13,7 +13,7 @@ const tokens = {
     { expiresIn: '1h' }
   ),
   responsavelLab: jwt.sign(
-    { id_utilizador: 8, perfil: 'RESPONSAVEL_LAB', nome: 'Rui Fonseca' },
+    { id_utilizador: 8, perfil: 'RESPONSAVEL_LAB', nome: 'Paula Melo' },
     JWT_SECRET,
     { expiresIn: '1h' }
   ),

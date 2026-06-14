@@ -25,7 +25,7 @@ export default function Login({ onLoginSuccess }) {
   // Função utilitária para testadores (preenche dados das sementes da BD)
   const handleQuickLogin = (quickEmail) => {
     setEmail(quickEmail);
-    setPassword('123456'); // Senha default encriptada no seed
+    setPassword('Descargas123!'); // Senha default encriptada no seed
     setError('');
   };
 
@@ -79,8 +79,8 @@ export default function Login({ onLoginSuccess }) {
             <button className="btn btn-secondary" style={{ padding: '0.4rem', fontSize: '0.75rem', justifyContent: 'flex-start' }} onClick={() => handleQuickLogin('ana.pereira@laboratorio.pt')}>
               🧪 Técnico Lab: Ana Pereira
             </button>
-            <button className="btn btn-secondary" style={{ padding: '0.4rem', fontSize: '0.75rem', justifyContent: 'flex-start' }} onClick={() => handleQuickLogin('rui.fonseca@laboratorio.pt')}>
-              🔬 Resp. Lab: Rui Fonseca
+            <button className="btn btn-secondary" style={{ padding: '0.4rem', fontSize: '0.75rem', justifyContent: 'flex-start' }} onClick={() => handleQuickLogin('paula.melo@laboratorio.pt')}>
+              🔬 Resp. Lab: Paula Melo
             </button>
             <button className="btn btn-secondary" style={{ padding: '0.4rem', fontSize: '0.75rem', justifyContent: 'flex-start' }} onClick={() => handleQuickLogin('mariana.costa@administracao.pt')}>
               💼 Gestor Clientes: Mariana Costa
