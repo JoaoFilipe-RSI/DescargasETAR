@@ -28,8 +28,8 @@ Sistema integrado para digitalização, centralização e gestão das descargas 
 | **Estilização** | CSS Vanilla (Design System HSL + Glassmorphism) |
 | **Segurança** | JWT (JSON Web Tokens) + Bcrypt |
 | **Geração de PDF** | PDFKit |
-| **Testes** | Jest + Supertest (89 testes de integração) |
-| **Alojamento (Planeado)** | AWS RDS + AWS EC2/Elastic Beanstalk |
+| **Testes** | Jest + Supertest (93 testes de integração) |
+| **Alojamento (Produção)** | Vercel (Frontend) + AWS EC2 (API) + AWS RDS (PostgreSQL) |
 
 ---
 
@@ -287,12 +287,21 @@ npm run dev       # Aplicação em http://localhost:5173
 
 ---
 
+## 🌐 Alojamento & Produção (Cloud)
+
+A plataforma encontra-se totalmente disponível e alojada em ambiente cloud descentralizado e seguro:
+
+* **Frontend (React)**: Alojado na [Vercel](https://descargas-etar.vercel.app/) com HTTPS ativo e suporte completo a PWA/Service Workers.
+* **Backend API (Node.js)**: Alojado em instância **AWS EC2 (Ubuntu 22.04 LTS)**:
+  * Executado em ambiente de produção gerido pelo **PM2** (24/7).
+  * Configurado como Proxy Inverso através do **Nginx**.
+  * Certificado SSL automático e seguro gerado pelo **Certbot (Let's Encrypt)** através do subdomínio `15-188-63-77.sslip.io` para resolver as restrições de *Mixed Content* dos browsers.
+* **Base de Dados (PostgreSQL)**: Alojada em instância **AWS RDS (db-descargas-prod)** com isolamento de acessos de rede e redundância lógica.
+
+---
+
 ## 📋 Próximas Etapas
 
-- [ ] **Alojamento & Cloud (AWS)**:
-  - [ ] Migração da BD local para AWS RDS (PostgreSQL)
-  - [ ] Deploy da API REST para AWS Elastic Beanstalk ou EC2
-  - [ ] Configuração do Frontend para produção na AWS S3/CloudFront
 - [ ] **Funcionalidades Futuras**:
   - [ ] Exportação de relatórios em Excel/CSV
   - [ ] Painel de estatísticas com gráficos (Chart.js ou Recharts)
