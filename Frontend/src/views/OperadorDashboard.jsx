@@ -146,15 +146,29 @@ export default function OperadorDashboard({ user, onLogout, notifications, onMar
               }
             },
             (decodedText) => {
-              setCameraActive(false);
-              setQrInput(decodedText);
-              handleValidateQR(null, decodedText);
+              // Parar a câmara antes de atualizar os estados para evitar race conditions no useEffect
+              if (html5QrCode && html5QrCode.isScanning) {
+                html5QrCode.stop().then(() => {
+                  try {
+                    html5QrCode.clear();
+                  } catch (e) {}
+                  html5QrCodeRef.current = null;
+                  setCameraActive(false);
+                  setQrInput(decodedText);
+                  handleValidateQR(null, decodedText);
+                }).catch(err => {
+                  console.error("Erro ao parar câmara após scan:", err);
+                  setCameraActive(false);
+                  setQrInput(decodedText);
+                  handleValidateQR(null, decodedText);
+                });
+              }
             },
             () => {}
           );
         } catch (err) {
           console.error("Erro ao iniciar o scanner:", err);
-          setScannerError("Não foi possível aceder à câmara. Verifique as permissões de acesso do browser, se tem uma webcam ativa ou se está sob HTTPS.");
+          setScannerError("Não foi possível aceder à câmara. Verifique as permissões de acesso do browser, se tem uma webcam activa ou se está sob HTTPS.");
           setCameraActive(false);
         }
       };
@@ -165,20 +179,20 @@ export default function OperadorDashboard({ user, onLogout, notifications, onMar
 
       return () => {
         clearTimeout(timer);
-        if (html5QrCode && html5QrCode.isScanning) {
-          html5QrCode.stop().then(() => {
-            html5QrCode.clear();
-          }).catch(e => console.error("Erro ao parar scanner no cleanup:", e));
+        if (html5QrCode) {
+          const instanceToStop = html5QrCode;
+          html5QrCodeRef.current = null;
+          if (instanceToStop.isScanning) {
+            instanceToStop.stop().then(() => {
+              try {
+                instanceToStop.clear();
+              } catch (e) {
+                console.warn("Erro ao limpar div no cleanup (provavelmente já desmontada):", e);
+              }
+            }).catch(e => console.error("Erro ao parar scanner no cleanup:", e));
+          }
         }
       };
-    } else {
-      if (html5QrCodeRef.current && html5QrCodeRef.current.isScanning) {
-        const scannerInstance = html5QrCodeRef.current;
-        html5QrCodeRef.current = null;
-        scannerInstance.stop().then(() => {
-          scannerInstance.clear();
-        }).catch(e => console.error("Erro ao parar câmara:", e));
-      }
     }
   }, [activeView, cameraActive]);
 
