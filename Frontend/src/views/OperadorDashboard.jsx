@@ -119,8 +119,25 @@ export default function OperadorDashboard({ user, onLogout, notifications, onMar
           html5QrCode = new Html5Qrcode("operador-qr-reader");
           html5QrCodeRef.current = html5QrCode;
 
+          // Obter os dispositivos de vídeo disponíveis (isto aciona o pedido de permissão do browser)
+          const devices = await Html5Qrcode.getCameras();
+          if (!devices || devices.length === 0) {
+            throw new Error("Nenhuma câmara detetada.");
+          }
+
+          // Procurar uma câmara que corresponda à traseira
+          const backCamera = devices.find(device => 
+            device.label.toLowerCase().includes('back') || 
+            device.label.toLowerCase().includes('traseira') || 
+            device.label.toLowerCase().includes('environment') || 
+            device.label.toLowerCase().includes('rear')
+          );
+
+          // Usar a traseira se disponível, senão a primeira (webcam do desktop)
+          const cameraId = backCamera ? backCamera.id : devices[0].id;
+
           await html5QrCode.start(
-            { facingMode: "environment" },
+            cameraId,
             {
               fps: 10,
               qrbox: (width, height) => {
@@ -137,7 +154,7 @@ export default function OperadorDashboard({ user, onLogout, notifications, onMar
           );
         } catch (err) {
           console.error("Erro ao iniciar o scanner:", err);
-          setScannerError("Não foi possível aceder à câmara. Verifique as permissões de acesso ou se está num domínio seguro (HTTPS).");
+          setScannerError("Não foi possível aceder à câmara. Verifique as permissões de acesso do browser, se tem uma webcam ativa ou se está sob HTTPS.");
           setCameraActive(false);
         }
       };
