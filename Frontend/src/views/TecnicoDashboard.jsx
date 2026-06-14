@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { amostraService } from '../services/api';
 import { FlaskConical, ClipboardList, ScanLine, Check, AlertCircle, LogOut, Settings } from 'lucide-react';
 import { webSocketService } from '../services/websocket';
 import NotificationBell from '../components/NotificationBell';
+import { Html5Qrcode } from 'html5-qrcode';
 
 export default function TecnicoDashboard({ user, onLogout, notifications, onMarkAsRead, onMarkAllAsRead, onChangePassword }) {
   const [activeView, setActiveView] = useState('checkin'); // 'checkin', 'lista', 'bancada', 'triagem-res'
@@ -10,6 +11,9 @@ export default function TecnicoDashboard({ user, onLogout, notifications, onMark
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [cameraActive, setCameraActive] = useState(true);
+  const [scannerError, setScannerError] = useState('');
+  const html5QrCodeRef = useRef(null);
   
   // Amostras listadas
   const [amostrasEmAnalise, setAmostrasEmAnalise] = useState([]);
@@ -104,17 +108,79 @@ export default function TecnicoDashboard({ user, onLogout, notifications, onMark
     };
   }, []);
 
+  // Controlar o Scanner de QR Code real (Câmara)
+  useEffect(() => {
+    let html5QrCode = null;
+
+    if (activeView === 'checkin' && cameraActive) {
+      setScannerError('');
+      
+      const startCamera = async () => {
+        try {
+          const element = document.getElementById("tecnico-qr-reader");
+          if (!element) return;
+
+          html5QrCode = new Html5Qrcode("tecnico-qr-reader");
+          html5QrCodeRef.current = html5QrCode;
+
+          await html5QrCode.start(
+            { facingMode: "environment" },
+            {
+              fps: 10,
+              qrbox: (width, height) => {
+                const size = Math.min(width, height) * 0.7;
+                return { width: size, height: size };
+              }
+            },
+            (decodedText) => {
+              setCameraActive(false);
+              setSampleTokenInput(decodedText);
+              handleCheckin(null, decodedText);
+            },
+            () => {}
+          );
+        } catch (err) {
+          console.error("Erro ao iniciar o scanner do técnico:", err);
+          setScannerError("Não foi possível aceder à câmara. Verifique as permissões de acesso ou se está num domínio seguro (HTTPS).");
+          setCameraActive(false);
+        }
+      };
+
+      const timer = setTimeout(() => {
+        startCamera();
+      }, 150);
+
+      return () => {
+        clearTimeout(timer);
+        if (html5QrCode && html5QrCode.isScanning) {
+          html5QrCode.stop().then(() => {
+            html5QrCode.clear();
+          }).catch(e => console.error("Erro ao parar scanner no cleanup:", e));
+        }
+      };
+    } else {
+      if (html5QrCodeRef.current && html5QrCodeRef.current.isScanning) {
+        const scannerInstance = html5QrCodeRef.current;
+        html5QrCodeRef.current = null;
+        scannerInstance.stop().then(() => {
+          scannerInstance.clear();
+        }).catch(e => console.error("Erro ao parar câmara:", e));
+      }
+    }
+  }, [activeView, cameraActive]);
+
   // Efetuar Check-in (Receber Amostra física e triagem)
-  const handleCheckin = async (e) => {
-    e.preventDefault();
-    if (!sampleTokenInput.trim()) return;
+  const handleCheckin = async (e, overrideToken = null) => {
+    if (e && e.preventDefault) e.preventDefault();
+    const token = overrideToken || sampleTokenInput;
+    if (!token || !token.trim()) return;
 
     setLoading(true);
     setError('');
     setSuccess('');
     setTriagemData(null);
     try {
-      const res = await amostraService.receberAmostra(sampleTokenInput.trim());
+      const res = await amostraService.receberAmostra(token.trim());
       setTriagemData(res);
       setActiveView('triagem-res');
       loadAmostrasRecolhidas(); // Atualizar lista de amostras recolhidas
@@ -225,7 +291,7 @@ export default function TecnicoDashboard({ user, onLogout, notifications, onMark
         
         {/* Menu Rápido */}
         <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem' }}>
-          <button className={`btn ${activeView === 'checkin' || activeView === 'triagem-res' ? 'btn-primary' : 'btn-secondary'}`} style={{ flex: 1 }} onClick={() => { setActiveView('checkin'); setError(''); setSuccess(''); setSampleTokenInput(''); }}>
+          <button className={`btn ${activeView === 'checkin' || activeView === 'triagem-res' ? 'btn-primary' : 'btn-secondary'}`} style={{ flex: 1 }} onClick={() => { setActiveView('checkin'); setError(''); setSuccess(''); setSampleTokenInput(''); setCameraActive(true); }}>
             <ScanLine size={16} /> Check-in de Frascos
           </button>
           <button className={`btn ${activeView === 'lista' || activeView === 'bancada' ? 'btn-primary' : 'btn-secondary'}`} style={{ flex: 1 }} onClick={() => { setActiveView('lista'); setError(''); setSuccess(''); }}>
@@ -244,9 +310,32 @@ export default function TecnicoDashboard({ user, onLogout, notifications, onMark
               Faça a leitura do código QR no frasco da amostra recolhida na ETAR para registar a sua entrada e obter a triagem.
             </p>
 
+            {scannerError && (
+              <div className="card" style={{ backgroundColor: 'var(--warning-light)', color: 'var(--warning)', padding: '0.75rem', fontSize: '0.85rem', borderLeft: '4px solid var(--warning)', marginBottom: '1.5rem', textAlign: 'left' }}>
+                {scannerError}
+              </div>
+            )}
+
+            {/* Viewport de Scanner (Câmara Real ou Feedback) */}
             <div className="scanner-viewport" style={{ marginBottom: '1.5rem' }}>
-              <div className="scanner-line"></div>
-              <FlaskConical size={64} style={{ color: '#ffffff', opacity: 0.15, position: 'absolute', top: 'calc(50% - 32px)', left: 'calc(50% - 32px)' }} />
+              {cameraActive ? (
+                <div id="tecnico-qr-reader" style={{ width: '100%', height: '100%', position: 'relative', zIndex: 1 }}></div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', padding: '2rem', color: '#ffffff' }}>
+                  {loading ? (
+                    <p style={{ fontWeight: 600 }}>A processar entrada...</p>
+                  ) : (
+                    <div style={{ textAlign: 'center' }}>
+                      <FlaskConical size={48} style={{ opacity: 0.5, marginBottom: '1rem', display: 'inline-block' }} />
+                      <p style={{ fontSize: '0.85rem', marginBottom: '1rem' }}>Câmara desativada</p>
+                      <button type="button" className="btn btn-primary" style={{ padding: '0.5rem 1rem', fontSize: '0.85rem' }} onClick={() => { setCameraActive(true); setError(''); setScannerError(''); }}>
+                        Digitalizar Novamente
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+              {cameraActive && <div className="scanner-line" style={{ zIndex: 2 }}></div>}
             </div>
 
             <form onSubmit={handleCheckin}>
@@ -332,7 +421,7 @@ export default function TecnicoDashboard({ user, onLogout, notifications, onMark
               )}
             </div>
 
-            <button className="btn btn-secondary" style={{ width: '100%' }} onClick={() => { setActiveView('checkin'); setTriagemData(null); }}>
+            <button className="btn btn-secondary" style={{ width: '100%' }} onClick={() => { setActiveView('checkin'); setTriagemData(null); setCameraActive(true); setSampleTokenInput(''); }}>
               Efetuar Novo Check-in
             </button>
           </div>

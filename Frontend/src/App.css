@@ -331,3 +331,12 @@
 .notification-item.unread .notification-item-text {
   font-weight: 600;
 }
+
+/* Estilos para o leitor de QR Code real */
+#operador-qr-reader video,
+#tecnico-qr-reader video {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  border-radius: var(--radius-md);
+}

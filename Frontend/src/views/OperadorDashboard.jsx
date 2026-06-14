@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { descargaService } from '../services/api';
 import { Camera, Search, FileText, CheckCircle2, AlertTriangle, LogOut, Printer, Settings } from 'lucide-react';
 import { webSocketService } from '../services/websocket';
 import NotificationBell from '../components/NotificationBell';
+import { Html5Qrcode } from 'html5-qrcode';
 
 export default function OperadorDashboard({ user, onLogout, notifications, onMarkAsRead, onMarkAllAsRead, onChangePassword }) {
   const [activeView, setActiveView] = useState(
@@ -12,6 +13,9 @@ export default function OperadorDashboard({ user, onLogout, notifications, onMar
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [cameraActive, setCameraActive] = useState(true);
+  const [scannerError, setScannerError] = useState('');
+  const html5QrCodeRef = useRef(null);
   
   // Dados da descarga validada
   const [validatedDescarga, setValidatedDescarga] = useState(null);
@@ -99,6 +103,67 @@ export default function OperadorDashboard({ user, onLogout, notifications, onMar
       webSocketService.off('novo-agendamento', handleNovoAgendamento);
     };
   }, []);
+
+  // Controlar o Scanner de QR Code real (Câmara)
+  useEffect(() => {
+    let html5QrCode = null;
+
+    if (activeView === 'scanner' && cameraActive) {
+      setScannerError('');
+      
+      const startCamera = async () => {
+        try {
+          const element = document.getElementById("operador-qr-reader");
+          if (!element) return;
+
+          html5QrCode = new Html5Qrcode("operador-qr-reader");
+          html5QrCodeRef.current = html5QrCode;
+
+          await html5QrCode.start(
+            { facingMode: "environment" },
+            {
+              fps: 10,
+              qrbox: (width, height) => {
+                const size = Math.min(width, height) * 0.7;
+                return { width: size, height: size };
+              }
+            },
+            (decodedText) => {
+              setCameraActive(false);
+              setQrInput(decodedText);
+              handleValidateQR(null, decodedText);
+            },
+            () => {}
+          );
+        } catch (err) {
+          console.error("Erro ao iniciar o scanner:", err);
+          setScannerError("Não foi possível aceder à câmara. Verifique as permissões de acesso ou se está num domínio seguro (HTTPS).");
+          setCameraActive(false);
+        }
+      };
+
+      const timer = setTimeout(() => {
+        startCamera();
+      }, 150);
+
+      return () => {
+        clearTimeout(timer);
+        if (html5QrCode && html5QrCode.isScanning) {
+          html5QrCode.stop().then(() => {
+            html5QrCode.clear();
+          }).catch(e => console.error("Erro ao parar scanner no cleanup:", e));
+        }
+      };
+    } else {
+      if (html5QrCodeRef.current && html5QrCodeRef.current.isScanning) {
+        const scannerInstance = html5QrCodeRef.current;
+        html5QrCodeRef.current = null;
+        scannerInstance.stop().then(() => {
+          scannerInstance.clear();
+        }).catch(e => console.error("Erro ao parar câmara:", e));
+      }
+    }
+  }, [activeView, cameraActive]);
 
   // Validar QR Code / Token
   const handleValidateQR = async (e, overrideToken = null) => {
@@ -239,7 +304,7 @@ export default function OperadorDashboard({ user, onLogout, notifications, onMar
               <FileText size={16} /> Histórico de descargas
             </button>
           )}
-          <button className={`btn ${activeView === 'scanner' ? 'btn-primary' : 'btn-secondary'}`} style={{ flex: 1 }} onClick={() => { setActiveView('scanner'); setError(''); setSuccess(''); setQrInput(''); }}>
+          <button className={`btn ${activeView === 'scanner' ? 'btn-primary' : 'btn-secondary'}`} style={{ flex: 1 }} onClick={() => { setActiveView('scanner'); setError(''); setSuccess(''); setQrInput(''); setCameraActive(true); }}>
             <Camera size={16} /> Ler QR Code
           </button>
           <button className={`btn ${activeView === 'agendados' ? 'btn-primary' : 'btn-secondary'}`} style={{ flex: 1 }} onClick={() => { setActiveView('agendados'); setError(''); setSuccess(''); }}>
@@ -250,7 +315,7 @@ export default function OperadorDashboard({ user, onLogout, notifications, onMar
         {error && <div className="card" style={{ backgroundColor: 'var(--danger-light)', color: 'var(--danger)', padding: '1rem', borderLeft: '5px solid var(--danger)' }}>{error}</div>}
         {success && <div className="card" style={{ backgroundColor: 'var(--success-light)', color: 'var(--success)', padding: '1rem', borderLeft: '5px solid var(--success)' }}>{success}</div>}
 
-        {/* 1. Scanner de QR Code (Visual) */}
+        {/* 1. Scanner de QR Code (Real ou Fallback) */}
         {activeView === 'scanner' && (
           <div className="card" style={{ textAlign: 'center' }}>
             <h3 style={{ marginBottom: '1rem' }}>Validação na Entrada da ETAR</h3>
@@ -258,10 +323,32 @@ export default function OperadorDashboard({ user, onLogout, notifications, onMar
               Utilize a câmara do tablet/smartphone para ler o QR Code de descarga apresentado pelo motorista.
             </p>
 
-            {/* Viewport de Scanner Animado (Simulação) */}
+            {scannerError && (
+              <div className="card" style={{ backgroundColor: 'var(--warning-light)', color: 'var(--warning)', padding: '0.75rem', fontSize: '0.85rem', borderLeft: '4px solid var(--warning)', marginBottom: '1.5rem', textAlign: 'left' }}>
+                {scannerError}
+              </div>
+            )}
+
+            {/* Viewport de Scanner (Câmara Real ou Feedback) */}
             <div className="scanner-viewport">
-              <div className="scanner-line"></div>
-              <Camera size={64} style={{ color: '#ffffff', opacity: 0.15, position: 'absolute', top: 'calc(50% - 32px)', left: 'calc(50% - 32px)' }} />
+              {cameraActive ? (
+                <div id="operador-qr-reader" style={{ width: '100%', height: '100%', position: 'relative', zIndex: 1 }}></div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', padding: '2rem', color: '#ffffff' }}>
+                  {loading ? (
+                    <p style={{ fontWeight: 600 }}>A validar código lido...</p>
+                  ) : (
+                    <div style={{ textAlign: 'center' }}>
+                      <Camera size={48} style={{ opacity: 0.5, marginBottom: '1rem', display: 'inline-block' }} />
+                      <p style={{ fontSize: '0.85rem', marginBottom: '1rem' }}>Câmara desativada</p>
+                      <button type="button" className="btn btn-primary" style={{ padding: '0.5rem 1rem', fontSize: '0.85rem' }} onClick={() => { setCameraActive(true); setError(''); setScannerError(''); }}>
+                        Digitalizar Novamente
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+              {cameraActive && <div className="scanner-line" style={{ zIndex: 2 }}></div>}
             </div>
 
             <form onSubmit={handleValidateQR}>
