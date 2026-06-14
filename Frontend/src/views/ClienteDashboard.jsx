@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { descargaService, amostraService } from '../services/api';
 import { webSocketService } from '../services/websocket';
 import { QRCodeSVG } from 'qrcode.react';
-import { PlusCircle, Calendar, ShieldCheck, Download, LogOut, Clock, Truck, Eye, Settings } from 'lucide-react';
+import { PlusCircle, Calendar, ShieldCheck, Download, LogOut, Clock, Truck, Eye, Settings, Menu, X } from 'lucide-react';
 import NotificationBell from '../components/NotificationBell';
 
 export default function ClienteDashboard({ user, onLogout, notifications, onMarkAsRead, onMarkAllAsRead, onChangePassword, onAddNotification }) {
@@ -11,6 +11,7 @@ export default function ClienteDashboard({ user, onLogout, notifications, onMark
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // Qualquer cliente pode indicar que o pedido é de um produtor externo
   const [hasExternalProducer, setHasExternalProducer] = useState(false);
@@ -254,12 +255,14 @@ export default function ClienteDashboard({ user, onLogout, notifications, onMark
 
   return (
     <div className="app-container">
-      <header className="navbar">
+      <header className="navbar" style={{ position: 'relative' }}>
         <div className="brand">
           <img src="/pwa-192x192.png" className="brand-logo" alt="Logo" />
           <span className="brand-name">DescargasETAR</span>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+
+        {/* Ações clássicas para Desktop */}
+        <div className="navbar-desktop-actions">
           <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
             Olá, <strong>{user.nome}</strong> (Cliente)
           </span>
@@ -275,6 +278,48 @@ export default function ClienteDashboard({ user, onLogout, notifications, onMark
             <LogOut size={16} /> Sair
           </button>
         </div>
+
+        {/* Ações simplificadas para Mobile */}
+        <div className="navbar-menu-mobile">
+          <NotificationBell
+            notifications={notifications}
+            onMarkAsRead={onMarkAsRead}
+            onMarkAllAsRead={onMarkAllAsRead}
+          />
+          <button 
+            className="btn btn-secondary" 
+            style={{ padding: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }} 
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+          >
+            {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
+          </button>
+        </div>
+
+        {/* Dropdown de Menu Mobile */}
+        {mobileMenuOpen && (
+          <div className="mobile-menu-dropdown card">
+            <div style={{ paddingBottom: '0.5rem', borderBottom: '1px solid var(--border)', fontSize: '0.85rem', textAlign: 'left' }}>
+              <div style={{ fontWeight: 'bold', color: 'var(--text-main)' }}>{user.nome}</div>
+              <div style={{ color: 'var(--text-secondary)', fontSize: '0.75rem', marginTop: '2px' }}>
+                Cliente
+              </div>
+            </div>
+            <button 
+              className="btn btn-secondary" 
+              style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center', fontSize: '0.85rem' }} 
+              onClick={() => { setMobileMenuOpen(false); onChangePassword(); }}
+            >
+              <Settings size={16} /> Configurações
+            </button>
+            <button 
+              className="btn btn-secondary" 
+              style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center', color: 'var(--danger)', fontSize: '0.85rem' }} 
+              onClick={() => { setMobileMenuOpen(false); onLogout(); }}
+            >
+              <LogOut size={16} /> Sair
+            </button>
+          </div>
+        )}
       </header>
 
       <main className="content-wrapper animate-fade-in">

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { amostraService, descargaService, adminService } from '../services/api';
-import { ShieldCheck, ClipboardList, CheckSquare, XSquare, Download, LogOut, FileText, ToggleLeft, ToggleRight, Settings, PlusCircle, Check, X, HelpCircle, Megaphone, Eye } from 'lucide-react';
+import { ShieldCheck, ClipboardList, CheckSquare, XSquare, Download, LogOut, FileText, ToggleLeft, ToggleRight, Settings, PlusCircle, Check, X, HelpCircle, Megaphone, Eye, Menu } from 'lucide-react';
 import { webSocketService } from '../services/websocket';
 import NotificationBell from '../components/NotificationBell';
 
@@ -11,6 +11,7 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // Estados do Gestor de Clientes
   const [solicitadas, setSolicitadas] = useState([]);
@@ -1055,12 +1056,14 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
 
   return (
     <div className="app-container">
-      <header className="navbar">
+      <header className="navbar" style={{ position: 'relative' }}>
         <div className="brand">
           <img src="/pwa-192x192.png" className="brand-logo" alt="Logo" />
           <span className="brand-name">DescargasETAR</span>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+        
+        {/* Ações clássicas para Desktop */}
+        <div className="navbar-desktop-actions">
           <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
             Olá, <strong>{user.nome}</strong> ({user.perfil.replace('_', ' ')})
           </span>
@@ -1089,6 +1092,61 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
             <LogOut size={16} /> Sair
           </button>
         </div>
+
+        {/* Ações simplificadas para Mobile */}
+        <div className="navbar-menu-mobile">
+          <NotificationBell
+            notifications={notifications}
+            onMarkAsRead={onMarkAsRead}
+            onMarkAllAsRead={onMarkAllAsRead}
+          />
+          <button 
+            className="btn btn-secondary" 
+            style={{ padding: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }} 
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+          >
+            {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
+          </button>
+        </div>
+
+        {/* Dropdown de Menu Mobile */}
+        {mobileMenuOpen && (
+          <div className="mobile-menu-dropdown card">
+            <div style={{ paddingBottom: '0.5rem', borderBottom: '1px solid var(--border)', fontSize: '0.85rem', textAlign: 'left' }}>
+              <div style={{ fontWeight: 'bold', color: 'var(--text-main)' }}>{user.nome}</div>
+              <div style={{ color: 'var(--text-secondary)', fontSize: '0.75rem', marginTop: '2px' }}>
+                {user.perfil.replace('_', ' ')}
+              </div>
+            </div>
+            {user.perfil === 'GESTOR_ADMIN' && (
+              <button
+                className="btn btn-secondary"
+                style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center', fontSize: '0.85rem' }}
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  setGeneralMsgText('');
+                  setShowGeneralMsgModal(true);
+                }}
+              >
+                <Megaphone size={16} /> Aviso Geral
+              </button>
+            )}
+            <button 
+              className="btn btn-secondary" 
+              style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center', fontSize: '0.85rem' }} 
+              onClick={() => { setMobileMenuOpen(false); onChangePassword(); }}
+            >
+              <Settings size={16} /> Configurações
+            </button>
+            <button 
+              className="btn btn-secondary" 
+              style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center', color: 'var(--danger)', fontSize: '0.85rem' }} 
+              onClick={() => { setMobileMenuOpen(false); onLogout(); }}
+            >
+              <LogOut size={16} /> Sair
+            </button>
+          </div>
+        )}
       </header>
 
       <main className="content-wrapper animate-fade-in" style={{ maxWidth: '1400px' }}>
@@ -1549,46 +1607,44 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
                   <p>A carregar descargas...</p>
                 ) : (
                   <>
-                    <div className="card" style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', marginBottom: '1rem', padding: '0.75rem', flexWrap: 'wrap' }}>
-                      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
-                        <div>
-                          <label className="form-label" style={{ fontSize: '0.75rem' }}>Mês</label>
-                          <select className="form-input" value={filtroMesDescargas} onChange={(e) => setFiltroMesDescargas(e.target.value)} style={{ padding: '0.35rem', minWidth: '120px' }}>
-                            <option value="all">-- Todos --</option>
-                            <option value="1">Janeiro</option>
-                            <option value="2">Fevereiro</option>
-                            <option value="3">Março</option>
-                            <option value="4">Abril</option>
-                            <option value="5">Maio</option>
-                            <option value="6">Junho</option>
-                            <option value="7">Julho</option>
-                            <option value="8">Agosto</option>
-                            <option value="9">Setembro</option>
-                            <option value="10">Outubro</option>
-                            <option value="11">Novembro</option>
-                            <option value="12">Dezembro</option>
-                          </select>
-                        </div>
-                        <div>
-                          <label className="form-label" style={{ fontSize: '0.75rem' }}>Ano</label>
-                          <select className="form-input" value={filtroAnoDescargas} onChange={(e) => setFiltroAnoDescargas(e.target.value)} style={{ padding: '0.35rem', minWidth: '100px' }}>
-                            <option value="all">-- Todos --</option>
-                            <option value="2024">2024</option>
-                            <option value="2025">2025</option>
-                            <option value="2026">2026</option>
-                          </select>
-                        </div>
-                        <div>
-                          <label className="form-label" style={{ fontSize: '0.75rem' }}>Período Início</label>
-                          <input type="date" className="form-input" value={periodoInicioDescargas} onChange={(e) => setPeriodoInicioDescargas(e.target.value)} style={{ padding: '0.35rem' }} />
-                        </div>
-                        <div>
-                          <label className="form-label" style={{ fontSize: '0.75rem' }}>Período Fim</label>
-                          <input type="date" className="form-input" value={periodoFimDescargas} onChange={(e) => setPeriodoFimDescargas(e.target.value)} style={{ padding: '0.35rem' }} />
-                        </div>
-                        <div style={{ display: 'flex', gap: '0.5rem', marginLeft: 'auto' }}>
-                          <button className="btn btn-secondary" onClick={() => { setFiltroMesDescargas('all'); setFiltroAnoDescargas('all'); setPeriodoInicioDescargas(''); setPeriodoFimDescargas(''); }}>Limpar</button>
-                        </div>
+                    <div className="filters-container card">
+                      <div>
+                        <label className="form-label" style={{ fontSize: '0.75rem' }}>Mês</label>
+                        <select className="form-input" value={filtroMesDescargas} onChange={(e) => setFiltroMesDescargas(e.target.value)} style={{ padding: '0.35rem' }}>
+                          <option value="all">-- Todos --</option>
+                          <option value="1">Janeiro</option>
+                          <option value="2">Fevereiro</option>
+                          <option value="3">Março</option>
+                          <option value="4">Abril</option>
+                          <option value="5">Maio</option>
+                          <option value="6">Junho</option>
+                          <option value="7">Julho</option>
+                          <option value="8">Agosto</option>
+                          <option value="9">Setembro</option>
+                          <option value="10">Outubro</option>
+                          <option value="11">Novembro</option>
+                          <option value="12">Dezembro</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="form-label" style={{ fontSize: '0.75rem' }}>Ano</label>
+                        <select className="form-input" value={filtroAnoDescargas} onChange={(e) => setFiltroAnoDescargas(e.target.value)} style={{ padding: '0.35rem' }}>
+                          <option value="all">-- Todos --</option>
+                          <option value="2024">2024</option>
+                          <option value="2025">2025</option>
+                          <option value="2026">2026</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="form-label" style={{ fontSize: '0.75rem' }}>Período Início</label>
+                        <input type="date" className="form-input" value={periodoInicioDescargas} onChange={(e) => setPeriodoInicioDescargas(e.target.value)} style={{ padding: '0.35rem' }} />
+                      </div>
+                      <div>
+                        <label className="form-label" style={{ fontSize: '0.75rem' }}>Período Fim</label>
+                        <input type="date" className="form-input" value={periodoFimDescargas} onChange={(e) => setPeriodoFimDescargas(e.target.value)} style={{ padding: '0.35rem' }} />
+                      </div>
+                      <div className="btn-clear-wrapper">
+                        <button className="btn btn-secondary" onClick={() => { setFiltroMesDescargas('all'); setFiltroAnoDescargas('all'); setPeriodoInicioDescargas(''); setPeriodoFimDescargas(''); }}>Limpar</button>
                       </div>
                     </div>
                     {descargasFiltradas.length === 0 ? (
@@ -1658,10 +1714,10 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
                       <p>A carregar boletins...</p>
                     ) : (
                       <>
-                        <div className="card" style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', marginBottom: '1rem', padding: '0.75rem', flexWrap: 'wrap' }}>
+                        <div className="filters-container card">
                           <div>
                             <label className="form-label" style={{ fontSize: '0.75rem' }}>Mês</label>
-                            <select className="form-input" value={filtroMesAmostras} onChange={(e) => setFiltroMesAmostras(e.target.value)} style={{ padding: '0.35rem', minWidth: '120px' }}>
+                            <select className="form-input" value={filtroMesAmostras} onChange={(e) => setFiltroMesAmostras(e.target.value)} style={{ padding: '0.35rem' }}>
                               <option value="all">-- Todos --</option>
                               <option value="1">Janeiro</option>
                               <option value="2">Fevereiro</option>
@@ -1679,7 +1735,7 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
                           </div>
                           <div>
                             <label className="form-label" style={{ fontSize: '0.75rem' }}>Ano</label>
-                            <select className="form-input" value={filtroAnoAmostras} onChange={(e) => setFiltroAnoAmostras(e.target.value)} style={{ padding: '0.35rem', minWidth: '100px' }}>
+                            <select className="form-input" value={filtroAnoAmostras} onChange={(e) => setFiltroAnoAmostras(e.target.value)} style={{ padding: '0.35rem' }}>
                               <option value="all">-- Todos --</option>
                               <option value="2024">2024</option>
                               <option value="2025">2025</option>
@@ -1694,7 +1750,7 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
                             <label className="form-label" style={{ fontSize: '0.75rem' }}>Período Fim</label>
                             <input type="date" className="form-input" value={periodoFimAmostras} onChange={(e) => setPeriodoFimAmostras(e.target.value)} style={{ padding: '0.35rem' }} />
                           </div>
-                          <div style={{ display: 'flex', gap: '0.5rem', marginLeft: 'auto' }}>
+                          <div className="btn-clear-wrapper">
                             <button className="btn btn-secondary" onClick={() => { setFiltroMesAmostras('all'); setFiltroAnoAmostras('all'); setPeriodoInicioAmostras(''); setPeriodoFimAmostras(''); }}>Limpar</button>
                           </div>
                         </div>
@@ -1771,7 +1827,7 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
                       <div>
                         <h3 style={{ marginBottom: '1.5rem' }}>Relatórios</h3>
 
-                        <div style={{ marginBottom: '0.75rem', display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                        <div className="filters-container" style={{ marginBottom: '0.75rem' }}>
                           <div>
                             <label className="form-label" style={{ fontSize: '0.75rem' }}>Período Início</label>
                             <input type="date" className="form-input" value={periodoInicioRelatorios} onChange={(e) => setPeriodoInicioRelatorios(e.target.value)} style={{ padding: '0.35rem' }} />
@@ -1780,10 +1836,9 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
                             <label className="form-label" style={{ fontSize: '0.75rem' }}>Período Fim</label>
                             <input type="date" className="form-input" value={periodoFimRelatorios} onChange={(e) => setPeriodoFimRelatorios(e.target.value)} style={{ padding: '0.35rem' }} />
                           </div>
-                          <div style={{ display: 'flex', gap: '0.5rem', alignSelf: 'flex-end', marginBottom: '2px' }}>
+                          <div className="btn-clear-wrapper">
                             <button
                               className="btn btn-secondary"
-                              style={{ padding: '0.35rem 0.75rem' }}
                               onClick={() => {
                                 setFiltroMesRelatorios('all');
                                 setFiltroAnoRelatorios('all');
@@ -1797,8 +1852,8 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
                         </div>
 
                         {/* Filtros de Pesquisa */}
-                        <div className="card" style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', padding: '1rem', marginBottom: '1.5rem', alignItems: 'center' }}>
-                          <div style={{ flex: 1, minWidth: '150px' }}>
+                        <div className="filters-container card">
+                          <div>
                             <label className="form-label" style={{ marginBottom: '0.25rem', fontSize: '0.8rem' }}>Cliente</label>
                             <select className="form-input" value={filtroCliente} onChange={(e) => setFiltroCliente(e.target.value)} style={{ padding: '0.4rem' }}>
                               <option value="all">-- Todos os Clientes --</option>
@@ -1808,7 +1863,7 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
                             </select>
                           </div>
 
-                          <div style={{ flex: 1, minWidth: '150px' }}>
+                          <div>
                             <label className="form-label" style={{ marginBottom: '0.25rem', fontSize: '0.8rem' }}>ETAR</label>
                             <select className="form-input" value={filtroEtar} onChange={(e) => setFiltroEtar(e.target.value)} style={{ padding: '0.4rem' }}>
                               <option value="all">-- Todas as ETARs --</option>
@@ -1818,7 +1873,7 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
                             </select>
                           </div>
 
-                          <div style={{ flex: 1, minWidth: '110px' }}>
+                          <div>
                             <label className="form-label" style={{ marginBottom: '0.25rem', fontSize: '0.8rem' }}>Mês</label>
                             <select className="form-input" value={filtroMesRelatorios} onChange={(e) => setFiltroMesRelatorios(e.target.value)} style={{ padding: '0.4rem' }}>
                               <option value="all">-- Todos --</option>
@@ -1837,7 +1892,7 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
                             </select>
                           </div>
 
-                          <div style={{ flex: 1, minWidth: '110px' }}>
+                          <div>
                             <label className="form-label" style={{ marginBottom: '0.25rem', fontSize: '0.8rem' }}>Ano</label>
                             <select className="form-input" value={filtroAnoRelatorios} onChange={(e) => setFiltroAnoRelatorios(e.target.value)} style={{ padding: '0.4rem' }}>
                               <option value="all">-- Todos --</option>
@@ -1847,7 +1902,7 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
                             </select>
                           </div>
 
-                          <div style={{ flex: 1, minWidth: '130px' }}>
+                          <div>
                             <label className="form-label" style={{ marginBottom: '0.25rem', fontSize: '0.8rem' }}>Estado da descarga</label>
                             <select className="form-input" value={filtroEstado} onChange={(e) => setFiltroEstado(e.target.value)} style={{ padding: '0.4rem' }}>
                               <option value="all">-- Todos os Estados --</option>
@@ -2157,8 +2212,8 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
                         <h3 style={{ marginBottom: '1.5rem' }}>Auditoria do Sistema (Logs de Rastreabilidade)</h3>
 
                         {/* Filtros de Pesquisa */}
-                        <div className="card" style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', padding: '1rem', marginBottom: '1.5rem', alignItems: 'center' }}>
-                          <div style={{ flex: 1, minWidth: '150px' }}>
+                        <div className="filters-container card">
+                          <div>
                             <label className="form-label" style={{ marginBottom: '0.25rem', fontSize: '0.8rem' }}>Filtrar por Entidade</label>
                             <select className="form-input" value={filtroAuditEntidade} onChange={(e) => setFiltroAuditEntidade(e.target.value)} style={{ padding: '0.4rem' }}>
                               <option value="all">-- Todas as Entidades --</option>
@@ -2174,7 +2229,7 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
                             </select>
                           </div>
 
-                          <div style={{ flex: 1, minWidth: '150px' }}>
+                          <div>
                             <label className="form-label" style={{ marginBottom: '0.25rem', fontSize: '0.8rem' }}>Filtrar por Ação</label>
                             <select className="form-input" value={filtroAuditAcao} onChange={(e) => setFiltroAuditAcao(e.target.value)} style={{ padding: '0.4rem' }}>
                               <option value="all">-- Todas as Ações --</option>
@@ -2193,7 +2248,7 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
                             </select>
                           </div>
 
-                          <div style={{ flex: 2, minWidth: '250px' }}>
+                          <div style={{ flexGrow: 2 }}>
                             <label className="form-label" style={{ marginBottom: '0.25rem', fontSize: '0.8rem' }}>Pesquisa por utilizador ou descrição</label>
                             <input
                               type="text"
@@ -2439,10 +2494,10 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
                       )
                     ) : (
                       <>
-                        <div className="card" style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', marginBottom: '1rem', padding: '0.75rem', flexWrap: 'wrap' }}>
+                        <div className="filters-container card">
                           <div>
                             <label className="form-label" style={{ fontSize: '0.75rem' }}>Mês</label>
-                            <select className="form-input" value={filtroMesConcluidasLab} onChange={(e) => setFiltroMesConcluidasLab(e.target.value)} style={{ padding: '0.35rem', minWidth: '120px' }}>
+                            <select className="form-input" value={filtroMesConcluidasLab} onChange={(e) => setFiltroMesConcluidasLab(e.target.value)} style={{ padding: '0.35rem' }}>
                               <option value="all">-- Todos --</option>
                               <option value="1">Janeiro</option>
                               <option value="2">Fevereiro</option>
@@ -2460,7 +2515,7 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
                           </div>
                           <div>
                             <label className="form-label" style={{ fontSize: '0.75rem' }}>Ano</label>
-                            <select className="form-input" value={filtroAnoConcluidasLab} onChange={(e) => setFiltroAnoConcluidasLab(e.target.value)} style={{ padding: '0.35rem', minWidth: '100px' }}>
+                            <select className="form-input" value={filtroAnoConcluidasLab} onChange={(e) => setFiltroAnoConcluidasLab(e.target.value)} style={{ padding: '0.35rem' }}>
                               <option value="all">-- Todos --</option>
                               <option value="2024">2024</option>
                               <option value="2025">2025</option>
@@ -2475,7 +2530,7 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
                             <label className="form-label" style={{ fontSize: '0.75rem' }}>Período Fim</label>
                             <input type="date" className="form-input" value={periodoFimConcluidasLab} onChange={(e) => setPeriodoFimConcluidasLab(e.target.value)} style={{ padding: '0.35rem' }} />
                           </div>
-                          <div style={{ flex: 1, minWidth: '180px' }}>
+                          <div style={{ flexGrow: 2 }}>
                             <label className="form-label" style={{ fontSize: '0.75rem' }}>Pesquisar amostra</label>
                             <input
                               type="text"
@@ -2486,7 +2541,7 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
                               style={{ padding: '0.35rem' }}
                             />
                           </div>
-                          <div style={{ display: 'flex', gap: '0.5rem', marginLeft: 'auto' }}>
+                          <div className="btn-clear-wrapper">
                             <button
                               className="btn btn-secondary"
                               onClick={() => {
