@@ -358,16 +358,35 @@
   top: 70px;
   right: 1.5rem;
   left: 1.5rem;
-  background-color: var(--card-bg);
+  background-color: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   padding: 1.25rem;
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  box-shadow: var(--shadow-lg);
   z-index: 1100;
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
   animation: slide-down-mobile-menu 0.2s ease-out;
+}
+
+/* Backdrop do menu mobile */
+.mobile-menu-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  z-index: 1090;
+  animation: fade-in-backdrop 0.2s ease-out;
+}
+
+@keyframes fade-in-backdrop {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 @keyframes slide-down-mobile-menu {

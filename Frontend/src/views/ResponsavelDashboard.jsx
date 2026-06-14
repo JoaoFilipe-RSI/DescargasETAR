@@ -1111,41 +1111,44 @@ export default function ResponsavelDashboard({ user, onLogout, notifications, on
 
         {/* Dropdown de Menu Mobile */}
         {mobileMenuOpen && (
-          <div className="mobile-menu-dropdown card">
-            <div style={{ paddingBottom: '0.5rem', borderBottom: '1px solid var(--border)', fontSize: '0.85rem', textAlign: 'left' }}>
-              <div style={{ fontWeight: 'bold', color: 'var(--text-main)' }}>{user.nome}</div>
-              <div style={{ color: 'var(--text-secondary)', fontSize: '0.75rem', marginTop: '2px' }}>
-                {user.perfil.replace('_', ' ')}
+          <>
+            <div className="mobile-menu-backdrop" onClick={() => setMobileMenuOpen(false)}></div>
+            <div className="mobile-menu-dropdown card">
+              <div style={{ paddingBottom: '0.5rem', borderBottom: '1px solid var(--border)', fontSize: '0.85rem', textAlign: 'left' }}>
+                <div style={{ fontWeight: 'bold', color: 'var(--text-main)' }}>{user.nome}</div>
+                <div style={{ color: 'var(--text-secondary)', fontSize: '0.75rem', marginTop: '2px' }}>
+                  {user.perfil.replace('_', ' ')}
+                </div>
               </div>
-            </div>
-            {user.perfil === 'GESTOR_ADMIN' && (
-              <button
-                className="btn btn-secondary"
-                style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center', fontSize: '0.85rem' }}
-                onClick={() => {
-                  setMobileMenuOpen(false);
-                  setGeneralMsgText('');
-                  setShowGeneralMsgModal(true);
-                }}
+              {user.perfil === 'GESTOR_ADMIN' && (
+                <button
+                  className="btn btn-secondary"
+                  style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center', fontSize: '0.85rem' }}
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    setGeneralMsgText('');
+                    setShowGeneralMsgModal(true);
+                  }}
+                >
+                  <Megaphone size={16} /> Aviso Geral
+                </button>
+              )}
+              <button 
+                className="btn btn-secondary" 
+                style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center', fontSize: '0.85rem' }} 
+                onClick={() => { setMobileMenuOpen(false); onChangePassword(); }}
               >
-                <Megaphone size={16} /> Aviso Geral
+                <Settings size={16} /> Configurações
               </button>
-            )}
-            <button 
-              className="btn btn-secondary" 
-              style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center', fontSize: '0.85rem' }} 
-              onClick={() => { setMobileMenuOpen(false); onChangePassword(); }}
-            >
-              <Settings size={16} /> Configurações
-            </button>
-            <button 
-              className="btn btn-secondary" 
-              style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center', color: 'var(--danger)', fontSize: '0.85rem' }} 
-              onClick={() => { setMobileMenuOpen(false); onLogout(); }}
-            >
-              <LogOut size={16} /> Sair
-            </button>
-          </div>
+              <button 
+                className="btn btn-secondary" 
+                style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center', color: 'var(--danger)', fontSize: '0.85rem' }} 
+                onClick={() => { setMobileMenuOpen(false); onLogout(); }}
+              >
+                <LogOut size={16} /> Sair
+              </button>
+            </div>
+          </>
         )}
       </header>
 

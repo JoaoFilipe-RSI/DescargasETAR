@@ -338,28 +338,31 @@ export default function TecnicoDashboard({ user, onLogout, notifications, onMark
 
         {/* Dropdown de Menu Mobile */}
         {mobileMenuOpen && (
-          <div className="mobile-menu-dropdown card">
-            <div style={{ paddingBottom: '0.5rem', borderBottom: '1px solid var(--border)', fontSize: '0.85rem', textAlign: 'left' }}>
-              <div style={{ fontWeight: 'bold', color: 'var(--text-main)' }}>{user.nome}</div>
-              <div style={{ color: 'var(--text-secondary)', fontSize: '0.75rem', marginTop: '2px' }}>
-                Téc. Laboratório
+          <>
+            <div className="mobile-menu-backdrop" onClick={() => setMobileMenuOpen(false)}></div>
+            <div className="mobile-menu-dropdown card">
+              <div style={{ paddingBottom: '0.5rem', borderBottom: '1px solid var(--border)', fontSize: '0.85rem', textAlign: 'left' }}>
+                <div style={{ fontWeight: 'bold', color: 'var(--text-main)' }}>{user.nome}</div>
+                <div style={{ color: 'var(--text-secondary)', fontSize: '0.75rem', marginTop: '2px' }}>
+                  Téc. Laboratório
+                </div>
               </div>
+              <button 
+                className="btn btn-secondary" 
+                style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center', fontSize: '0.85rem' }} 
+                onClick={() => { setMobileMenuOpen(false); onChangePassword(); }}
+              >
+                <Settings size={16} /> Configurações
+              </button>
+              <button 
+                className="btn btn-secondary" 
+                style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center', color: 'var(--danger)', fontSize: '0.85rem' }} 
+                onClick={() => { setMobileMenuOpen(false); onLogout(); }}
+              >
+                <LogOut size={16} /> Sair
+              </button>
             </div>
-            <button 
-              className="btn btn-secondary" 
-              style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center', fontSize: '0.85rem' }} 
-              onClick={() => { setMobileMenuOpen(false); onChangePassword(); }}
-            >
-              <Settings size={16} /> Configurações
-            </button>
-            <button 
-              className="btn btn-secondary" 
-              style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center', color: 'var(--danger)', fontSize: '0.85rem' }} 
-              onClick={() => { setMobileMenuOpen(false); onLogout(); }}
-            >
-              <LogOut size={16} /> Sair
-            </button>
-          </div>
+          </>
         )}
       </header>
 
