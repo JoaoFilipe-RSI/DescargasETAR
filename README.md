@@ -62,11 +62,9 @@ DescargasETAR/
 │   └── vite.config.js            # Vite + plugin PWA offline
 ├── SQL/
 │   ├── ER.png                    # Diagrama Entidade-Relação
-│   ├── schema_gestao_descargas.sql   # Esquema completo com todas as constraints
-│   ├── seed_gestao_descargas.sql     # Dados iniciais para testes
-│   ├── update_schema_qr_tokens.sql   # Migração QR codes
-│   ├── inserir_novos_utilizadores.sql
-│   └── add_missing_constraints.sql   # Constraints adicionadas na auditoria
+│   ├── db_descargas.sql          # Esquema completo da base de dados com todas as constraints
+│   ├── db_descargas_inserts.sql  # Registos de inserção de dados secundários e configurações
+│   └── seed_gestao_descargas.sql # Dados de teste e simulação de utilizadores/ETARs
 └── README.md
 ```
 
@@ -275,14 +273,14 @@ npm run dev       # Aplicação em http://localhost:5173
 
 ### Base de Dados
 ```sql
--- 1. Criar schema
-\i SQL/schema_gestao_descargas.sql
+-- 1. Criar base de dados e tabelas (Esquema Completo)
+\i SQL/db_descargas.sql
 
--- 2. Inserir dados iniciais
+-- 2. Inserir registos e relacionamentos estruturados
+\i SQL/db_descargas_inserts.sql
+
+-- 3. Opcional: Dados adicionais de simulação para testes rápidos
 \i SQL/seed_gestao_descargas.sql
-
--- 3. Aplicar constraints adicionais
-\i SQL/add_missing_constraints.sql
 ```
 
 ---

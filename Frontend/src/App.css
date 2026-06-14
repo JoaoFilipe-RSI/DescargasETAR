@@ -340,3 +340,113 @@
   object-fit: cover !important;
   border-radius: var(--radius-md);
 }
+
+/* Responsividade e Elementos Mobile PWA */
+.navbar-desktop-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.navbar-menu-mobile {
+  display: none;
+}
+
+/* Dropdown de menu flutuante em mobile */
+.mobile-menu-dropdown {
+  position: absolute;
+  top: 70px;
+  right: 1.5rem;
+  left: 1.5rem;
+  background-color: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 1.25rem;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  z-index: 1100;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  animation: slide-down-mobile-menu 0.2s ease-out;
+}
+
+@keyframes slide-down-mobile-menu {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Navegação por Tabs Horizontal/Vertical */
+.dashboard-actions-nav {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+}
+
+/* Container de Filtros Responsivo */
+.filters-container {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  padding: 0.75rem;
+  margin-bottom: 1.5rem;
+  align-items: flex-end;
+}
+
+.filters-container > div {
+  flex: 1 1 140px;
+  text-align: left;
+}
+
+.filters-container .btn-clear-wrapper {
+  margin-left: auto;
+  flex: 0 0 auto;
+}
+
+/* Media Queries para Tablets e Smartphones */
+@media (max-width: 768px) {
+  .navbar-desktop-actions {
+    display: none !important;
+  }
+
+  .navbar-menu-mobile {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .dashboard-actions-nav {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .dashboard-actions-nav button {
+    width: 100%;
+    padding: 0.75rem;
+    font-size: 0.95rem;
+  }
+
+  .filters-container {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .filters-container > div {
+    width: 100%;
+  }
+
+  .filters-container .btn-clear-wrapper {
+    margin-left: 0;
+    width: 100%;
+  }
+
+  .filters-container .btn-clear-wrapper button {
+    width: 100%;
+    padding: 0.6rem;
+  }
+}

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { amostraService } from '../services/api';
-import { FlaskConical, ClipboardList, ScanLine, Check, AlertCircle, LogOut, Settings } from 'lucide-react';
+import { FlaskConical, ClipboardList, ScanLine, Check, AlertCircle, LogOut, Settings, Menu, X } from 'lucide-react';
 import { webSocketService } from '../services/websocket';
 import NotificationBell from '../components/NotificationBell';
 import { Html5Qrcode } from 'html5-qrcode';
@@ -13,6 +13,7 @@ export default function TecnicoDashboard({ user, onLogout, notifications, onMark
   const [success, setSuccess] = useState('');
   const [cameraActive, setCameraActive] = useState(true);
   const [scannerError, setScannerError] = useState('');
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const html5QrCodeRef = useRef(null);
   
   // Amostras listadas
@@ -295,12 +296,14 @@ export default function TecnicoDashboard({ user, onLogout, notifications, onMark
 
   return (
     <div className="app-container">
-      <header className="navbar">
+      <header className="navbar" style={{ position: 'relative' }}>
         <div className="brand">
           <img src="/pwa-192x192.png" className="brand-logo" alt="Logo" />
           <span className="brand-name">DescargasETAR</span>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+        
+        {/* Ações clássicas para Desktop */}
+        <div className="navbar-desktop-actions">
           <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
             <strong>{user.nome}</strong> (Téc. Laboratório)
           </span>
@@ -316,16 +319,58 @@ export default function TecnicoDashboard({ user, onLogout, notifications, onMark
             <LogOut size={16} /> Sair
           </button>
         </div>
+
+        {/* Ações simplificadas para Mobile */}
+        <div className="navbar-menu-mobile">
+          <NotificationBell 
+            notifications={notifications} 
+            onMarkAsRead={onMarkAsRead} 
+            onMarkAllAsRead={onMarkAllAsRead} 
+          />
+          <button 
+            className="btn btn-secondary" 
+            style={{ padding: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }} 
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+          >
+            {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
+          </button>
+        </div>
+
+        {/* Dropdown de Menu Mobile */}
+        {mobileMenuOpen && (
+          <div className="mobile-menu-dropdown card">
+            <div style={{ paddingBottom: '0.5rem', borderBottom: '1px solid var(--border)', fontSize: '0.85rem', textAlign: 'left' }}>
+              <div style={{ fontWeight: 'bold', color: 'var(--text-main)' }}>{user.nome}</div>
+              <div style={{ color: 'var(--text-secondary)', fontSize: '0.75rem', marginTop: '2px' }}>
+                Téc. Laboratório
+              </div>
+            </div>
+            <button 
+              className="btn btn-secondary" 
+              style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center', fontSize: '0.85rem' }} 
+              onClick={() => { setMobileMenuOpen(false); onChangePassword(); }}
+            >
+              <Settings size={16} /> Configurações
+            </button>
+            <button 
+              className="btn btn-secondary" 
+              style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center', color: 'var(--danger)', fontSize: '0.85rem' }} 
+              onClick={() => { setMobileMenuOpen(false); onLogout(); }}
+            >
+              <LogOut size={16} /> Sair
+            </button>
+          </div>
+        )}
       </header>
 
       <main className="content-wrapper animate-fade-in" style={{ maxWidth: '1000px' }}>
         
         {/* Menu Rápido */}
-        <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem' }}>
-          <button className={`btn ${activeView === 'checkin' || activeView === 'triagem-res' ? 'btn-primary' : 'btn-secondary'}`} style={{ flex: 1 }} onClick={() => { setActiveView('checkin'); setError(''); setSuccess(''); setSampleTokenInput(''); setCameraActive(true); }}>
+        <div className="dashboard-actions-nav">
+          <button className={`btn ${activeView === 'checkin' || activeView === 'triagem-res' ? 'btn-primary' : 'btn-secondary'}`} style={{ flex: 1 }} onClick={() => { setActiveView('checkin'); setError(''); setSuccess(''); setSampleTokenInput(''); setCameraActive(true); setMobileMenuOpen(false); }}>
             <ScanLine size={16} /> Check-in de Frascos
           </button>
-          <button className={`btn ${activeView === 'lista' || activeView === 'bancada' ? 'btn-primary' : 'btn-secondary'}`} style={{ flex: 1 }} onClick={() => { setActiveView('lista'); setError(''); setSuccess(''); }}>
+          <button className={`btn ${activeView === 'lista' || activeView === 'bancada' ? 'btn-primary' : 'btn-secondary'}`} style={{ flex: 1 }} onClick={() => { setActiveView('lista'); setError(''); setSuccess(''); setMobileMenuOpen(false); }}>
             <ClipboardList size={16} /> Lista de amostras em análise
           </button>
         </div>

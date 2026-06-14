@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { descargaService } from '../services/api';
-import { Camera, Search, FileText, CheckCircle2, AlertTriangle, LogOut, Printer, Settings } from 'lucide-react';
+import { Camera, Search, FileText, CheckCircle2, AlertTriangle, LogOut, Printer, Settings, Menu, X } from 'lucide-react';
 import { webSocketService } from '../services/websocket';
 import NotificationBell from '../components/NotificationBell';
 import { Html5Qrcode } from 'html5-qrcode';
@@ -15,6 +15,7 @@ export default function OperadorDashboard({ user, onLogout, notifications, onMar
   const [success, setSuccess] = useState('');
   const [cameraActive, setCameraActive] = useState(true);
   const [scannerError, setScannerError] = useState('');
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const html5QrCodeRef = useRef(null);
   
   // Dados da descarga validada
@@ -303,12 +304,14 @@ export default function OperadorDashboard({ user, onLogout, notifications, onMar
 
   return (
     <div className="app-container">
-      <header className="navbar">
+      <header className="navbar" style={{ position: 'relative' }}>
         <div className="brand">
           <img src="/pwa-192x192.png" className="brand-logo" alt="Logo" />
           <span className="brand-name">DescargasETAR</span>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+        
+        {/* Ações clássicas para Desktop */}
+        <div className="navbar-desktop-actions">
           <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
             <strong>{user.nome}</strong> ({user.etar_nome || `Op. ETAR ${user.id_etar}`})
           </span>
@@ -324,21 +327,63 @@ export default function OperadorDashboard({ user, onLogout, notifications, onMar
             <LogOut size={16} /> Sair
           </button>
         </div>
+
+        {/* Ações simplificadas para Mobile */}
+        <div className="navbar-menu-mobile">
+          <NotificationBell 
+            notifications={notifications} 
+            onMarkAsRead={onMarkAsRead} 
+            onMarkAllAsRead={onMarkAllAsRead} 
+          />
+          <button 
+            className="btn btn-secondary" 
+            style={{ padding: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }} 
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+          >
+            {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
+          </button>
+        </div>
+
+        {/* Dropdown de Menu Mobile */}
+        {mobileMenuOpen && (
+          <div className="mobile-menu-dropdown card">
+            <div style={{ paddingBottom: '0.5rem', borderBottom: '1px solid var(--border)', fontSize: '0.85rem', textAlign: 'left' }}>
+              <div style={{ fontWeight: 'bold', color: 'var(--text-main)' }}>{user.nome}</div>
+              <div style={{ color: 'var(--text-secondary)', fontSize: '0.75rem', marginTop: '2px' }}>
+                {user.etar_nome || `Op. ETAR ${user.id_etar}`}
+              </div>
+            </div>
+            <button 
+              className="btn btn-secondary" 
+              style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center', fontSize: '0.85rem' }} 
+              onClick={() => { setMobileMenuOpen(false); onChangePassword(); }}
+            >
+              <Settings size={16} /> Configurações
+            </button>
+            <button 
+              className="btn btn-secondary" 
+              style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center', color: 'var(--danger)', fontSize: '0.85rem' }} 
+              onClick={() => { setMobileMenuOpen(false); onLogout(); }}
+            >
+              <LogOut size={16} /> Sair
+            </button>
+          </div>
+        )}
       </header>
 
       <main className="content-wrapper animate-fade-in" style={{ maxWidth: '1000px' }}>
         
         {/* Menu de Ações Rápido */}
-        <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem' }}>
+        <div className="dashboard-actions-nav">
           {user.perfil === 'RESPONSAVEL_ETAR' && (
-            <button className={`btn ${activeView === 'rececionadas' ? 'btn-primary' : 'btn-secondary'}`} style={{ flex: 1 }} onClick={() => { setActiveView('rececionadas'); setError(''); setSuccess(''); }}>
+            <button className={`btn ${activeView === 'rececionadas' ? 'btn-primary' : 'btn-secondary'}`} style={{ flex: 1 }} onClick={() => { setActiveView('rececionadas'); setError(''); setSuccess(''); setMobileMenuOpen(false); }}>
               <FileText size={16} /> Histórico de descargas
             </button>
           )}
-          <button className={`btn ${activeView === 'scanner' ? 'btn-primary' : 'btn-secondary'}`} style={{ flex: 1 }} onClick={() => { setActiveView('scanner'); setError(''); setSuccess(''); setQrInput(''); setCameraActive(true); }}>
+          <button className={`btn ${activeView === 'scanner' ? 'btn-primary' : 'btn-secondary'}`} style={{ flex: 1 }} onClick={() => { setActiveView('scanner'); setError(''); setSuccess(''); setQrInput(''); setCameraActive(true); setMobileMenuOpen(false); }}>
             <Camera size={16} /> Ler QR Code
           </button>
-          <button className={`btn ${activeView === 'agendados' ? 'btn-primary' : 'btn-secondary'}`} style={{ flex: 1 }} onClick={() => { setActiveView('agendados'); setError(''); setSuccess(''); }}>
+          <button className={`btn ${activeView === 'agendados' ? 'btn-primary' : 'btn-secondary'}`} style={{ flex: 1 }} onClick={() => { setActiveView('agendados'); setError(''); setSuccess(''); setMobileMenuOpen(false); }}>
             <Search size={16} /> Agendadas
           </button>
         </div>
@@ -553,10 +598,10 @@ export default function OperadorDashboard({ user, onLogout, notifications, onMar
             </h3>
             
             {/* Filtros de Mês, Ano e Período */}
-            <div className="card" style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', padding: '0.75rem', marginBottom: '1.5rem', alignItems: 'center' }}>
+            <div className="card filters-container">
               <div>
                 <label className="form-label" style={{ fontSize: '0.75rem' }}>Mês</label>
-                <select className="form-input" value={filtroMesEtar} onChange={(e) => setFiltroMesEtar(e.target.value)} style={{ padding: '0.35rem', minWidth: '120px' }}>
+                <select className="form-input" value={filtroMesEtar} onChange={(e) => setFiltroMesEtar(e.target.value)} style={{ padding: '0.35rem', width: '100%' }}>
                   <option value="all">-- Todos --</option>
                   <option value="1">Janeiro</option>
                   <option value="2">Fevereiro</option>
@@ -574,7 +619,7 @@ export default function OperadorDashboard({ user, onLogout, notifications, onMar
               </div>
               <div>
                 <label className="form-label" style={{ fontSize: '0.75rem' }}>Ano</label>
-                <select className="form-input" value={filtroAnoEtar} onChange={(e) => setFiltroAnoEtar(e.target.value)} style={{ padding: '0.35rem', minWidth: '100px' }}>
+                <select className="form-input" value={filtroAnoEtar} onChange={(e) => setFiltroAnoEtar(e.target.value)} style={{ padding: '0.35rem', width: '100%' }}>
                   <option value="all">-- Todos --</option>
                   <option value="2024">2024</option>
                   <option value="2025">2025</option>
@@ -584,13 +629,13 @@ export default function OperadorDashboard({ user, onLogout, notifications, onMar
               </div>
               <div>
                 <label className="form-label" style={{ fontSize: '0.75rem' }}>Período Início</label>
-                <input type="date" className="form-input" value={periodoInicioEtar} onChange={(e) => setPeriodoInicioEtar(e.target.value)} style={{ padding: '0.35rem' }} />
+                <input type="date" className="form-input" value={periodoInicioEtar} onChange={(e) => setPeriodoInicioEtar(e.target.value)} style={{ padding: '0.35rem', width: '100%' }} />
               </div>
               <div>
                 <label className="form-label" style={{ fontSize: '0.75rem' }}>Período Fim</label>
-                <input type="date" className="form-input" value={periodoFimEtar} onChange={(e) => setPeriodoFimEtar(e.target.value)} style={{ padding: '0.35rem' }} />
+                <input type="date" className="form-input" value={periodoFimEtar} onChange={(e) => setPeriodoFimEtar(e.target.value)} style={{ padding: '0.35rem', width: '100%' }} />
               </div>
-              <div style={{ display: 'flex', gap: '0.5rem', marginLeft: 'auto' }}>
+              <div className="btn-clear-wrapper">
                 <button
                   className="btn btn-secondary"
                   onClick={() => {
