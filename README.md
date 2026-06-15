@@ -157,12 +157,12 @@ DescargasETAR/
 - Visualização da Ficha de Descarga (PDF inline, sem download forçado)
 
 #### Operador da ETAR
-- Scanner virtual por token ou câmara simulada
+- Validação de entrada via QR Code (câmara real ou inserção manual do token)
 - Ficha de receção física (volume real, amostra recolhida, observações)
-- Lista de amostras recolhidas para check-in
+- Geração, visualização e impressão de etiqueta QR para acompanhamento da amostra
 
 #### Técnico de Laboratório
-- Check-in de amostras na entrada do laboratório
+- Check-in de amostras na entrada do laboratório (leitura QR por câmara ou através da lista de amostras aguardando check-in)
 - Grelha de resultados de ensaio por parâmetro (com/sem parâmetros contratuais adicionais)
 - Ocultação/ativação manual de ensaios não contratualizados com limpeza automática
 
