@@ -296,6 +296,27 @@ A plataforma encontra-se totalmente disponível e alojada em ambiente cloud desc
   * Certificado SSL automático e seguro gerado pelo **Certbot (Let's Encrypt)** através do subdomínio `15-188-63-77.sslip.io` para resolver as restrições de *Mixed Content* dos browsers.
 * **Base de Dados (PostgreSQL)**: Alojada em instância **AWS RDS (db-descargas-prod)** com isolamento de acessos de rede e redundância lógica.
 
+### 🔄 Procedimento de Atualização em Produção (Deployment & CI/CD)
+
+Ao efetuar um `git push` local para o repositório GitHub, a sincronização e atualização dos ambientes de produção decorre da seguinte forma:
+
+1. **Frontend (Vercel) — Automatizado (CI/CD)**:
+   * A Vercel deteta a alteração no ramo principal via *webhook*.
+   * Compila o React (com base nos ficheiros de visualização, estilos e componentes mais recentes) e atualiza o servidor automaticamente em segundos.
+
+2. **Backend API (AWS EC2) — Atualização Manual Segura**:
+   * Aceda ao terminal da instância AWS EC2 via **SSH** e execute a atualização:
+     ```bash
+     # Navegar para a pasta do Backend
+     cd /caminho/para/o/projeto/Backend
+
+     # Atualizar o código local com o GitHub
+     git pull origin main
+
+     # Reiniciar os processos sob gestão do PM2 para aplicar as mudanças
+     pm2 restart all
+     ```
+
 ---
 
 ## 📋 Próximas Etapas
