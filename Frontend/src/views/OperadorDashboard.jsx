@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { descargaService } from '../services/api';
-import { Camera, Search, FileText, CheckCircle2, AlertTriangle, LogOut, Printer, Settings, Menu, X } from 'lucide-react';
+import { Camera, Search, FileText, CheckCircle2, AlertTriangle, LogOut, Printer, Settings, Menu, X, Eye } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 import { webSocketService } from '../services/websocket';
 import NotificationBell from '../components/NotificationBell';
 import { Html5Qrcode } from 'html5-qrcode';
@@ -21,6 +22,7 @@ export default function OperadorDashboard({ user, onLogout, notifications, onMar
   // Dados da descarga validada
   const [validatedDescarga, setValidatedDescarga] = useState(null);
   const [rececaoResult, setRececaoResult] = useState(null);
+  const [showQrModal, setShowQrModal] = useState(false);
   
   // Inputs da receção
   const [rececaoData, setRececaoData] = useState({
@@ -512,9 +514,12 @@ export default function OperadorDashboard({ user, onLogout, notifications, onMar
                   {rececaoResult.amostra.qr_code_token}
                 </div>
 
-                <div>
-                  <button className="btn btn-primary" style={{ padding: '0.5rem 1rem', fontSize: '0.85rem' }} onClick={() => alert('Imprimindo Etiqueta Térmica... Código QR do Frasco de Teste.')}>
+                <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center', flexWrap: 'wrap', marginTop: '0.5rem' }}>
+                  <button className="btn btn-primary" style={{ padding: '0.5rem 1rem', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px' }} onClick={() => alert(`Imprimindo Etiqueta Térmica...\n\nEtiqueta:\nETAR: ${user.etar_nome || 'ETAR ' + user.id_etar}\nDescarga: #${validatedDescarga ? validatedDescarga.id_descarga : ''}\nTipo: ${validatedDescarga ? validatedDescarga.tipo_efluente : ''}\nAmostra: ${rececaoResult.amostra.qr_code_token}\nData: ${new Date().toLocaleString('pt-PT')}`)}>
                     <Printer size={16} /> Imprimir Etiqueta
+                  </button>
+                  <button className="btn btn-secondary" style={{ padding: '0.5rem 1rem', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: 'var(--primary)', color: '#ffffff' }} onClick={() => setShowQrModal(true)}>
+                    <Eye size={16} /> Visualizar QR Code
                   </button>
                 </div>
               </div>
@@ -732,6 +737,49 @@ export default function OperadorDashboard({ user, onLogout, notifications, onMar
                 </table>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Modal para Visualização de Código QR e Etiqueta Física */}
+        {showQrModal && rececaoResult && rececaoResult.amostra && (
+          <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 9999, padding: '1rem', backdropFilter: 'blur(4px)' }}>
+            <div className="card animate-fade-in" style={{ width: '100%', maxWidth: '420px', marginBottom: 0, backgroundColor: 'var(--bg-card)', padding: '1.5rem', textAlign: 'center', boxShadow: 'var(--shadow-lg)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.75rem' }}>
+                <h4 style={{ margin: 0, fontFamily: 'var(--font-title)', display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--primary)' }}>
+                  <Printer size={18} /> Etiqueta do Frasco
+                </h4>
+                <button type="button" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)' }} onClick={() => setShowQrModal(false)}>
+                  <X size={20} />
+                </button>
+              </div>
+
+              <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
+                Apresente este código no ecrã para que o Técnico de Laboratório o possa digitalizar na triagem/check-in.
+              </p>
+
+              {/* Etiqueta Térmica Simulada */}
+              <div style={{ backgroundColor: '#ffffff', color: '#111827', border: '2px solid #000000', borderRadius: '4px', padding: '1rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)', margin: '0.5rem auto 1.5rem auto', maxWidth: '280px' }}>
+                <div style={{ fontSize: '0.75rem', fontWeight: 'bold', borderBottom: '1px dashed #374151', width: '100%', paddingBottom: '3px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  DescargasETAR - Controlo de Amostra
+                </div>
+                
+                <div style={{ padding: '0.25rem', backgroundColor: '#ffffff' }}>
+                  <QRCodeSVG value={rececaoResult.amostra.qr_code_token} size={140} level="M" />
+                </div>
+
+                <div style={{ textAlign: 'left', width: '100%', fontSize: '0.75rem', fontFamily: 'monospace', lineHeight: '1.25' }}>
+                  <div><strong>ID AM.:</strong> {rececaoResult.amostra.qr_code_token}</div>
+                  <div><strong>ID DES.:</strong> #{validatedDescarga ? validatedDescarga.id_descarga : ''}</div>
+                  <div><strong>ETAR:</strong> {user.etar_nome || 'ETAR ' + user.id_etar}</div>
+                  <div><strong>TIPO:</strong> {validatedDescarga ? validatedDescarga.tipo_efluente : ''}</div>
+                  <div><strong>DATA:</strong> {new Date().toLocaleString('pt-PT')}</div>
+                </div>
+              </div>
+
+              <button className="btn btn-secondary" style={{ width: '100%' }} onClick={() => setShowQrModal(false)}>
+                Fechar Visualização
+              </button>
+            </div>
           </div>
         )}
       </main>

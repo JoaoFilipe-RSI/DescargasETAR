@@ -113,11 +113,15 @@ export default function App() {
             addNotification(`Nova amostra recolhida: ${data.qr_code_token} (Descarga #${data.id_descarga}).`);
           const handleAmostraAnalisada = (data) => 
             addNotification(`Resultados laboratoriais prontos para validação: Amostra ${data.qr_code_token}.`);
+          const handleNovoParametro = (data) =>
+            addNotification(data.mensagem || 'Novo parâmetro adicionado ao catálogo. Configure a metodologia e incerteza padrão.');
 
           webSocketService.on('nova-amostra', handleNovaAmostra);
           webSocketService.on('amostra-analisada', handleAmostraAnalisada);
+          webSocketService.on('novo-parametro', handleNovoParametro);
           handlers.push({ event: 'nova-amostra', cb: handleNovaAmostra });
           handlers.push({ event: 'amostra-analisada', cb: handleAmostraAnalisada });
+          handlers.push({ event: 'novo-parametro', cb: handleNovoParametro });
         } else if (user.perfil === 'GESTOR_CLIENTES' || user.perfil === 'GESTOR_ADMIN') {
           const handleNovoPedido = (data) => 
             addNotification(`Novo pedido pendente: Descarga #${data.id_descarga} (${data.cliente_nome} - ${data.quantidade}L).`);

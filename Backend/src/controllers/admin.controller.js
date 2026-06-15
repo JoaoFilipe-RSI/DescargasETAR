@@ -1260,13 +1260,17 @@ exports.atualizarPerfil = async (req, res) => {
 
 exports.obterTiposParametro = async (req, res) => {
   try {
-    const enumQuery = `
+    let enumQuery = `
       SELECT enumlabel 
       FROM pg_enum 
       JOIN pg_type ON pg_enum.enumtypid = pg_type.oid 
       WHERE pg_type.typname = 'tipo_parametro_enum'
-      ORDER BY enumlabel ASC
     `;
+    if (process.env.NODE_ENV !== 'test') {
+      enumQuery += ` AND enumlabel NOT LIKE 'TEST_TYPE_%'`;
+    }
+    enumQuery += ` ORDER BY enumlabel ASC`;
+
     const enumRes = await pool.query(enumQuery);
     const types = enumRes.rows.map(r => r.enumlabel);
     return res.json(types);
